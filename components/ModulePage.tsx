@@ -1,0 +1,666 @@
+"use client";
+
+import { AlertTriangle, Building2, FileText, Plus, Search, Store, Wrench } from "lucide-react";
+import { useMemo, useState } from "react";
+import { contractAlerts, serviceOrders } from "@/lib/data";
+import { brl, numberPt, percent } from "@/lib/metrics";
+import type { Enterprise, EnterpriseStatus, Store as StoreType, StoreStatus } from "@/lib/types";
+
+type ModulePageProps = {
+  module: string;
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  dataSource: "mock" | "supabase";
+  syncError: string | null;
+  onSaveEnterprise: (enterprise: Enterprise) => void | Promise<void>;
+  onSaveStore: (store: StoreType) => void | Promise<void>;
+};
+
+const statusLabel: Record<string, string> = {
+  ocupada: "Ocupada",
+  disponivel: "Disponivel",
+  negociacao: "Negociacao",
+  implantacao: "Implantacao",
+  em_obra: "Em obra",
+  inativa: "Inativa"
+};
+
+export function ModulePage({ module, enterprises, stores, dataSource, syncError, onSaveEnterprise, onSaveStore }: ModulePageProps) {
+  if (module === "Empreendimentos") {
+    return <EnterprisesPage enterprises={enterprises} dataSource={dataSource} syncError={syncError} onSaveEnterprise={onSaveEnterprise} />;
+  }
+
+  if (module === "Lojas") {
+    return <StoresPage enterprises={enterprises} stores={stores} dataSource={dataSource} syncError={syncError} onSaveStore={onSaveStore} />;
+  }
+
+  if (module === "Contratos") return <ContractsPage />;
+  if (module === "Inadimplencia") return <DelinquencyPage stores={stores} />;
+  if (module === "Operacoes") return <OperationsPage />;
+  if (module === "Financeiro") return <FinancePage />;
+  if (module === "Comercial") return <CommercialPage enterprises={enterprises} stores={stores} />;
+
+  return (
+    <Shell title={module} description="Modulo em estruturacao para a proxima sprint do Nexa OS.">
+      <div className="panel brand-angle bg-brand-dark p-8 text-white">
+        <h2 className="text-xl font-bold uppercase">Modulo preparado</h2>
+        <p className="mt-2 max-w-2xl text-sm text-white/75">
+          A arquitetura, permissoes, schema PostgreSQL e databases do Notion ja preveem este modulo.
+          A proxima etapa e conectar formularios, tabelas e automacoes ao Supabase.
+        </p>
+      </div>
+    </Shell>
+  );
+}
+
+function Shell({
+  title,
+  description,
+  action,
+  children
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <header className="border-b border-border bg-background/95 px-4 py-4 lg:px-7">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-xl font-bold uppercase leading-7 text-primary">{title}</h1>
+            <p className="text-sm text-muted-foreground">{description}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button className="control inline-flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Buscar
+            </button>
+            {action}
+          </div>
+        </div>
+      </header>
+      <div className="space-y-5 px-4 py-5 lg:px-7">{children}</div>
+    </div>
+  );
+}
+
+function EnterprisesPage({
+  enterprises,
+  dataSource,
+  syncError,
+  onSaveEnterprise
+}: {
+  enterprises: Enterprise[];
+  dataSource: "mock" | "supabase";
+  syncError: string | null;
+  onSaveEnterprise: (enterprise: Enterprise) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState<Enterprise | null>(null);
+  const totalAbl = enterprises.reduce((sum, item) => sum + item.abl, 0);
+
+  return (
+    <Shell
+      title="Empreendimentos"
+      description="Carteira multiempreendimento da Nexa Malls."
+      action={<NewButton onClick={() => setEditing(emptyEnterprise())} />}
+    >
+      <SyncBanner dataSource={dataSource} syncError={syncError} />
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Ativos cadastrados" value={numberPt(enterprises.length)} />
+        <Kpi label="ABL total" value={`${numberPt(totalAbl)} m2`} />
+        <Kpi label="Lojas planejadas" value={numberPt(enterprises.reduce((sum, item) => sum + item.lojas, 0))} />
+        <Kpi label="Vagas" value={numberPt(enterprises.reduce((sum, item) => sum + item.vagas, 0))} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-2">
+        {enterprises.map((enterprise) => (
+          <div key={enterprise.id} className="panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  <h2 className="font-bold uppercase">{enterprise.nome}</h2>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {enterprise.cidade} - {enterprise.estado}
+                </p>
+              </div>
+              <button onClick={() => setEditing(enterprise)}>
+                <Badge>{enterprise.status}</Badge>
+              </button>
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-3 text-sm">
+              <Mini label="ABL" value={`${numberPt(enterprise.abl)} m2`} />
+              <Mini label="Lojas" value={numberPt(enterprise.lojas)} />
+              <Mini label="Responsavel" value={enterprise.responsavel} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {editing ? (
+        <EnterpriseForm
+          enterprise={editing}
+          onClose={() => setEditing(null)}
+          onSave={(enterprise) => {
+            onSaveEnterprise(enterprise);
+            setEditing(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
+function StoresPage({
+  enterprises,
+  stores,
+  dataSource,
+  syncError,
+  onSaveStore
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  dataSource: "mock" | "supabase";
+  syncError: string | null;
+  onSaveStore: (store: StoreType) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState<StoreType | null>(null);
+
+  return (
+    <Shell
+      title="Lojas"
+      description="Cadastro de unidades, ABL, status e valores comerciais."
+      action={<NewButton onClick={() => setEditing(emptyStore(enterprises[0]?.id ?? ""))} />}
+    >
+      <SyncBanner dataSource={dataSource} syncError={syncError} />
+      <DataTable
+        columns={["Codigo", "Loja", "Empreendimento", "Segmento", "Status", "Area", "Aluguel", "Acoes"]}
+        rows={stores.map((store) => [
+          store.codigo,
+          store.nome,
+          enterprises.find((item) => item.id === store.empreendimentoId)?.nome ?? "-",
+          store.segmento,
+          statusLabel[store.status],
+          `${numberPt(store.areaTotal)} m2`,
+          brl(store.aluguel),
+          "Editar"
+        ])}
+        onAction={(rowIndex) => setEditing(stores[rowIndex])}
+      />
+      {editing ? (
+        <StoreForm
+          store={editing}
+          enterprises={enterprises}
+          onClose={() => setEditing(null)}
+          onSave={(store) => {
+            onSaveStore(store);
+            setEditing(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
+function ContractsPage() {
+  return (
+    <Shell title="Contratos" description="Alertas de vencimento e acompanhamento juridico-comercial.">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Alertas ativos" value={numberPt(contractAlerts.length)} tone="danger" />
+        <Kpi label="3 meses" value={numberPt(contractAlerts.filter((item) => item.meses === 3).length)} />
+        <Kpi label="6 meses" value={numberPt(contractAlerts.filter((item) => item.meses === 6).length)} />
+        <Kpi label="12+ meses" value={numberPt(contractAlerts.filter((item) => item.meses >= 12).length)} />
+      </div>
+      <DataTable
+        columns={["Loja", "Lojista", "Janela", "Vencimento", "Risco"]}
+        rows={contractAlerts.map((alert) => [
+          alert.loja,
+          alert.lojista,
+          `${alert.meses} meses`,
+          alert.vencimento,
+          alert.risco
+        ])}
+      />
+    </Shell>
+  );
+}
+
+function FinancePage() {
+  return (
+    <Shell title="Financeiro" description="Contas a receber, contas a pagar, saldo e receita por ativo.">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Receita imobiliaria" value="R$ 3.002.000" tone="success" />
+        <Kpi label="A receber" value="R$ 771.000" />
+        <Kpi label="Vencidas" value="R$ 253.000" tone="danger" />
+        <Kpi label="Saldo operacional" value="R$ 2.312.000" tone="success" />
+      </div>
+      <div className="panel p-5">
+        <h2 className="font-bold uppercase">Orcado x realizado</h2>
+        <div className="mt-4 h-3 overflow-hidden rounded-full bg-muted">
+          <div className="h-full w-[82%] bg-primary" />
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">Realizacao simulada em 82% para a competencia Maio/2026.</p>
+      </div>
+    </Shell>
+  );
+}
+
+function DelinquencyPage({ stores }: { stores: StoreType[] }) {
+  const lanes = ["5 dias", "15 dias", "30 dias", "60 dias", "90 dias"];
+
+  return (
+    <Shell title="Inadimplencia" description="Regua automatica e kanban de cobranca.">
+      <div className="grid gap-3 xl:grid-cols-5">
+        {lanes.map((lane, index) => (
+          <div key={lane} className="panel min-h-[360px] p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold uppercase">{lane}</h2>
+              <AlertTriangle className={index > 2 ? "h-4 w-4 text-danger" : "h-4 w-4 text-warning"} />
+            </div>
+            <div className="mt-4 space-y-3">
+              <KanbanCard title={stores[index % stores.length].codigo} subtitle={stores[index % stores.length].nome} value={brl((index + 1) * 18500)} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Shell>
+  );
+}
+
+function OperationsPage() {
+  const lanes = ["Aberta", "Em execucao", "Aguardando terceiro", "Concluida"];
+
+  return (
+    <Shell title="Operacoes" description="Ordens de servico, manutencao, prioridades e prazos.">
+      <div className="grid gap-3 xl:grid-cols-4">
+        {lanes.map((lane) => (
+          <div key={lane} className="panel min-h-[380px] p-4">
+            <div className="flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-primary" />
+              <h2 className="font-bold uppercase">{lane}</h2>
+            </div>
+            <div className="mt-4 space-y-3">
+              {serviceOrders
+                .filter((order) => lane === "Aberta" ? order.status === "aberta" : order.status.replaceAll("_", " ") === lane.toLowerCase())
+                .map((order) => (
+                  <KanbanCard key={order.id} title={order.loja} subtitle={order.categoria} value={order.prazo} />
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Shell>
+  );
+}
+
+function CommercialPage({ enterprises, stores }: { enterprises: Enterprise[]; stores: StoreType[] }) {
+  const pipeline = [
+    {
+      lane: "Disponivel",
+      cards: stores
+        .filter((store) => store.status === "disponivel")
+        .map((store) => ({
+          title: store.codigo,
+          subtitle: `${store.nome} | ${store.segmento}`,
+          value: brl(store.aluguel)
+        }))
+    },
+    {
+      lane: "Prospeccao",
+      cards: [
+        { title: "Academia boutique", subtitle: "Villa Viseu | Saude", value: "Proxima acao: contato" },
+        { title: "Pet center", subtitle: "Piazza Nicomedes | Servicos", value: "Proxima acao: curadoria" }
+      ]
+    },
+    {
+      lane: "Visita",
+      cards: [
+        { title: "Cafeteria regional", subtitle: "Villa Viseu | Alimentacao", value: "Agendada" }
+      ]
+    },
+    {
+      lane: "Proposta",
+      cards: [
+        { title: "Clinica de estetica", subtitle: "Boulevard Naves | Saude", value: "R$ 18.500" },
+        { title: "Wine bar", subtitle: "Bluemall Centro | Gastronomia", value: "R$ 22.000" }
+      ]
+    },
+    {
+      lane: "Negociacao",
+      cards: stores
+        .filter((store) => store.status === "negociacao")
+        .map((store) => ({
+          title: store.codigo,
+          subtitle: `${store.nome} | ${store.segmento}`,
+          value: brl(store.aluguel)
+        }))
+    },
+    {
+      lane: "Contrato",
+      cards: [
+        { title: "Mini mercado", subtitle: "Villa Viseu | Conveniencia", value: "Juridico" }
+      ]
+    },
+    {
+      lane: "Implantacao",
+      cards: stores
+        .filter((store) => store.status === "implantacao")
+        .map((store) => ({
+          title: store.codigo,
+          subtitle: `${store.nome} | ${store.segmento}`,
+          value: "Obra/fit-out"
+        }))
+    }
+  ];
+
+  const availableStores = stores.filter((store) => store.status === "disponivel").length;
+  const negotiatingStores = stores.filter((store) => store.status === "negociacao").length;
+  const pipelineTotal = pipeline.reduce((sum, lane) => sum + lane.cards.length, 0);
+
+  return (
+    <Shell title="Comercial" description="Pipeline de comercializacao, leads, visitas, propostas e contratos.">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Ativos no filtro" value={numberPt(enterprises.length)} />
+        <Kpi label="Lojas disponiveis" value={numberPt(availableStores)} />
+        <Kpi label="Em negociacao" value={numberPt(negotiatingStores)} tone="success" />
+        <Kpi label="Pipeline total" value={numberPt(pipelineTotal)} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-7">
+        {pipeline.map((lane) => (
+          <div key={lane.lane} className="panel min-h-[380px] p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold uppercase">{lane.lane}</h2>
+              <Badge>{numberPt(lane.cards.length)}</Badge>
+            </div>
+            <div className="mt-4 space-y-3">
+              {lane.cards.length ? (
+                lane.cards.map((card) => (
+                  <KanbanCard key={`${lane.lane}-${card.title}`} title={card.title} subtitle={card.subtitle} value={card.value} />
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-border p-3 text-xs font-medium text-muted-foreground">
+                  Sem oportunidades nesta etapa.
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Shell>
+  );
+}
+
+function DataTable({
+  columns,
+  rows,
+  onAction
+}: {
+  columns: string[];
+  rows: string[][];
+  onAction?: (rowIndex: number) => void;
+}) {
+  return (
+    <div className="panel overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+          <thead className="bg-muted text-xs uppercase text-muted-foreground">
+            <tr>
+              {columns.map((column) => (
+                <th key={column} className="px-4 py-3">{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={row.join("-")} className="border-t border-border">
+                {row.map((cell, cellIndex) => (
+                  <td key={`${cell}-${cellIndex}`} className="px-4 py-3 font-medium">
+                    {onAction && cellIndex === row.length - 1 ? (
+                      <button className="text-xs font-bold uppercase text-primary" onClick={() => onAction(rowIndex)}>
+                        {cell}
+                      </button>
+                    ) : (
+                      cell
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Kpi({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "success" | "danger" }) {
+  const toneClass = tone === "success" ? "text-success" : tone === "danger" ? "text-danger" : "text-foreground";
+
+  return (
+    <div className="panel p-4">
+      <div className="metric-label">{label}</div>
+      <div className={`mt-2 whitespace-nowrap text-[1.35rem] font-bold ${toneClass}`}>{value}</div>
+    </div>
+  );
+}
+
+function Mini({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="metric-label">{label}</div>
+      <div className="mt-1 font-bold">{value}</div>
+    </div>
+  );
+}
+
+function Badge({ children }: { children: React.ReactNode }) {
+  return <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold uppercase text-primary">{children}</span>;
+}
+
+function KanbanCard({ title, subtitle, value }: { title: string; subtitle: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-white p-3 shadow-sm">
+      <div className="font-bold">{title}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div>
+      <div className="mt-3 text-sm font-bold text-primary">{value}</div>
+    </div>
+  );
+}
+
+function SyncBanner({ dataSource, syncError }: { dataSource: "mock" | "supabase"; syncError: string | null }) {
+  return (
+    <div className="rounded-lg border border-border bg-white px-4 py-3 text-sm text-muted-foreground">
+      Fonte de dados: <span className="font-bold text-primary">{dataSource === "supabase" ? "Supabase" : "Mock local"}</span>
+      {syncError ? <span className="ml-2 text-danger">Erro: {syncError}</span> : null}
+    </div>
+  );
+}
+
+function NewButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={onClick}>
+      <Plus className="h-4 w-4" />
+      Novo registro
+    </button>
+  );
+}
+
+function EnterpriseForm({
+  enterprise,
+  onClose,
+  onSave
+}: {
+  enterprise: Enterprise;
+  onClose: () => void;
+  onSave: (enterprise: Enterprise) => void;
+}) {
+  const [draft, setDraft] = useState(enterprise);
+
+  return (
+    <Modal title="Empreendimento" onClose={onClose}>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label="Nome" value={draft.nome} onChange={(nome) => setDraft({ ...draft, nome })} />
+        <Field label="Cidade" value={draft.cidade} onChange={(cidade) => setDraft({ ...draft, cidade })} />
+        <Field label="Estado" value={draft.estado} onChange={(estado) => setDraft({ ...draft, estado: estado.toUpperCase().slice(0, 2) })} />
+        <SelectField
+          label="Status"
+          value={draft.status}
+          options={["ativo", "implantacao", "planejado"]}
+          onChange={(status) => setDraft({ ...draft, status: status as EnterpriseStatus })}
+        />
+        <NumberField label="ABL" value={draft.abl} onChange={(abl) => setDraft({ ...draft, abl })} />
+        <NumberField label="Lojas" value={draft.lojas} onChange={(lojas) => setDraft({ ...draft, lojas })} />
+        <NumberField label="Vagas" value={draft.vagas} onChange={(vagas) => setDraft({ ...draft, vagas })} />
+        <Field label="Responsavel" value={draft.responsavel} onChange={(responsavel) => setDraft({ ...draft, responsavel })} />
+      </div>
+      <FormActions onClose={onClose} onSave={() => onSave(draft)} />
+    </Modal>
+  );
+}
+
+function StoreForm({
+  store,
+  enterprises,
+  onClose,
+  onSave
+}: {
+  store: StoreType;
+  enterprises: Enterprise[];
+  onClose: () => void;
+  onSave: (store: StoreType) => void;
+}) {
+  const [draft, setDraft] = useState(store);
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+
+  return (
+    <Modal title="Loja" onClose={onClose}>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label="Codigo" value={draft.codigo} onChange={(codigo) => setDraft({ ...draft, codigo })} />
+        <Field label="Nome" value={draft.nome} onChange={(nome) => setDraft({ ...draft, nome })} />
+        <SelectField
+          label="Empreendimento"
+          value={draft.empreendimentoId}
+          options={enterpriseOptions}
+          optionLabels={Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome]))}
+          onChange={(empreendimentoId) => setDraft({ ...draft, empreendimentoId })}
+        />
+        <Field label="Segmento" value={draft.segmento} onChange={(segmento) => setDraft({ ...draft, segmento })} />
+        <SelectField
+          label="Status"
+          value={draft.status}
+          options={["ocupada", "disponivel", "negociacao", "implantacao", "em_obra", "inativa"]}
+          optionLabels={statusLabel}
+          onChange={(status) => setDraft({ ...draft, status: status as StoreStatus })}
+        />
+        <NumberField label="Area total" value={draft.areaTotal} onChange={(areaTotal) => setDraft({ ...draft, areaTotal })} />
+        <NumberField label="Aluguel" value={draft.aluguel} onChange={(aluguel) => setDraft({ ...draft, aluguel })} />
+        <NumberField label="Condominio" value={draft.condominio} onChange={(condominio) => setDraft({ ...draft, condominio })} />
+        <NumberField label="Fundo" value={draft.fundo} onChange={(fundo) => setDraft({ ...draft, fundo })} />
+      </div>
+      <FormActions onClose={onClose} onSave={() => onSave(draft)} />
+    </Modal>
+  );
+}
+
+function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+      <div className="panel max-h-[90vh] w-full max-w-3xl overflow-auto p-5">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-bold uppercase text-primary">{title}</h2>
+          <button className="text-sm font-bold text-muted-foreground" onClick={onClose}>Fechar</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="space-y-1">
+      <span className="metric-label">{label}</span>
+      <input className="control w-full" value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  return (
+    <label className="space-y-1">
+      <span className="metric-label">{label}</span>
+      <input
+        className="control w-full"
+        type="number"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  optionLabels,
+  onChange
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  optionLabels?: Record<string, string>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="space-y-1">
+      <span className="metric-label">{label}</span>
+      <select className="control w-full" value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => (
+          <option key={option} value={option}>{optionLabels?.[option] ?? option}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function FormActions({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
+  return (
+    <div className="mt-5 flex justify-end gap-2">
+      <button className="control" onClick={onClose}>Cancelar</button>
+      <button className="control bg-primary text-primary-foreground" onClick={onSave}>Salvar</button>
+    </div>
+  );
+}
+
+function emptyEnterprise(): Enterprise {
+  const id = crypto.randomUUID();
+
+  return {
+    id,
+    nome: "Novo empreendimento",
+    cidade: "Uberlandia",
+    estado: "MG",
+    status: "planejado",
+    abl: 0,
+    lojas: 0,
+    vagas: 0,
+    responsavel: "Nexa Malls"
+  };
+}
+
+function emptyStore(empreendimentoId: string): StoreType {
+  return {
+    id: crypto.randomUUID(),
+    codigo: "NOVO",
+    empreendimentoId,
+    nome: "Nova loja",
+    segmento: "Servicos",
+    status: "disponivel",
+    areaTotal: 0,
+    aluguel: 0,
+    condominio: 0,
+    fundo: 0
+  };
+}

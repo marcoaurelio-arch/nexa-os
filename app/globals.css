@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 96%;
+  --foreground: 228 70% 17%;
+  --surface: 0 0% 100%;
+  --muted: 228 28% 94%;
+  --muted-foreground: 228 16% 42%;
+  --border: 228 22% 88%;
+  --primary: 232 68% 36%;
+  --primary-foreground: 0 0% 100%;
+  --brand-dark: 228 70% 17%;
+  --brand-mid: 229 61% 43%;
+  --brand-cyan: 199 91% 64%;
+  --warning: 35 92% 43%;
+  --danger: 0 72% 51%;
+  --success: 142 71% 45%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: hsl(var(--background));
+}
+
+body {
+  margin: 0;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  font-family: "Chakra Petch", Arial, Helvetica, sans-serif;
+  letter-spacing: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+@layer components {
+  .panel {
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--surface));
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
+  }
+
+  .brand-angle {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .brand-angle::after {
+    position: absolute;
+    right: -26px;
+    bottom: -42px;
+    width: 108px;
+    height: 108px;
+    border: 1px solid hsl(var(--brand-cyan));
+    content: "";
+    opacity: 0.28;
+    transform: rotate(45deg);
+  }
+
+  .control {
+    height: 38px;
+    border-radius: 8px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--surface));
+    padding: 0 12px;
+    color: hsl(var(--foreground));
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .metric-label {
+    color: hsl(var(--muted-foreground));
+    font-size: 12px;
+    font-weight: 600;
+  }
+}

@@ -1,0 +1,65 @@
+export type EnterpriseStatus = "ativo" | "implantacao" | "planejado";
+export type StoreStatus =
+  | "ocupada"
+  | "disponivel"
+  | "negociacao"
+  | "implantacao"
+  | "em_obra"
+  | "inativa";
+
+export type Enterprise = {
+  id: string;
+  nome: string;
+  cidade: string;
+  estado: string;
+  status: EnterpriseStatus;
+  abl: number;
+  lojas: number;
+  vagas: number;
+  responsavel: string;
+};
+
+export type Store = {
+  id: string;
+  codigo: string;
+  empreendimentoId: string;
+  nome: string;
+  segmento: string;
+  status: StoreStatus;
+  areaTotal: number;
+  aluguel: number;
+  condominio: number;
+  fundo: number;
+};
+
+export type Revenue = {
+  empreendimentoId: string;
+  competencia: string;
+  aluguel: number;
+  condominio: number;
+  fundo: number;
+  fpp: number;
+  vencidas: number;
+  receber: number;
+  pagar: number;
+};
+
+export type ServiceOrder = {
+  id: string;
+  empreendimentoId: string;
+  loja: string;
+  categoria: string;
+  prioridade: "baixa" | "media" | "alta" | "critica";
+  status: "aberta" | "em_execucao" | "aguardando_terceiro" | "concluida";
+  prazo: string;
+};
+
+export type ContractAlert = {
+  id: string;
+  empreendimentoId: string;
+  loja: string;
+  lojista: string;
+  meses: 24 | 12 | 6 | 3;
+  vencimento: string;
+  risco: "baixo" | "medio" | "alto";
+};
