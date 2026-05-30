@@ -5,7 +5,14 @@ import { AppShell } from "@/components/AppShell";
 import { Dashboard } from "@/components/Dashboard";
 import { ModulePage } from "@/components/ModulePage";
 import { enterprises as seedEnterprises, stores as seedStores } from "@/lib/data";
-import { fetchAssetData, loadLocalAssetData, saveEnterprise, saveLocalAssetData, saveStore } from "@/lib/assets-repository";
+import {
+  fetchAssetData,
+  loadLocalAssetData,
+  resetLocalAssetData,
+  saveEnterprise,
+  saveLocalAssetData,
+  saveStore
+} from "@/lib/assets-repository";
 import type { Enterprise, Store } from "@/lib/types";
 
 export function NexaWorkspace() {
@@ -59,6 +66,13 @@ export function NexaWorkspace() {
           stores={storeRows}
           dataSource={dataSource}
           syncError={syncError}
+          onResetLocalData={() => {
+            resetLocalAssetData();
+            setEnterpriseRows(seedEnterprises);
+            setStoreRows(seedStores);
+            setDataSource("mock");
+            setSyncError(null);
+          }}
           onSaveEnterprise={async (enterprise) => {
             const saved = await saveEnterprise(enterprise).catch((error: unknown) => {
               setSyncError(error instanceof Error ? error.message : "Falha ao salvar empreendimento");
