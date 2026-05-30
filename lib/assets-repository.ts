@@ -39,6 +39,14 @@ export function saveLocalAssetData(data: AssetData) {
   window.localStorage.setItem(LOCAL_ASSET_DATA_KEY, JSON.stringify(data));
 }
 
+export function resetLocalAssetData() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(LOCAL_ASSET_DATA_KEY);
+}
+
 export async function fetchAssetData(): Promise<AssetData | null> {
   const supabase = createBrowserSupabaseClient();
 
