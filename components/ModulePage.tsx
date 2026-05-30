@@ -1,13 +1,13 @@
 "use client";
 
-import { AlertTriangle, Building2, FileText, Plus, Search, Store, Wrench } from "lucide-react";
+import { AlertTriangle, Building2, Mail, Phone, Plus, Search, Users, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { contractAlerts, serviceOrders } from "@/lib/data";
+import { contractAlerts, serviceOrders, tenants as seedTenants } from "@/lib/data";
 import { brl, numberPt, percent } from "@/lib/metrics";
-import type { Enterprise, EnterpriseStatus, Store as StoreType, StoreStatus } from "@/lib/types";
+import type { Enterprise, Store as StoreType, Tenant, TenantStatus } from "@/lib/types";
 
 type ModulePageProps = {
   module: string;
@@ -27,6 +27,13 @@ const statusLabel: Record<string, string> = {
   implantacao: "Implantacao",
   em_obra: "Em obra",
   inativa: "Inativa"
+};
+
+const tenantStatusLabel: Record<TenantStatus, string> = {
+  ativo: "Ativo",
+  implantacao: "Implantacao",
+  inadimplente: "Inadimplente",
+  inativo: "Inativo"
 };
 
 const enterpriseSchema = z.object({
@@ -54,8 +61,25 @@ const storeSchema = z.object({
   fundo: z.coerce.number().min(0, "Informe zero ou mais.")
 });
 
+const tenantSchema = z.object({
+  id: z.string().min(1),
+  nomeFantasia: z.string().trim().min(2, "Informe o nome fantasia."),
+  razaoSocial: z.string().trim().min(2, "Informe a razao social."),
+  cnpj: z.string().trim().min(14, "Informe o CNPJ."),
+  responsavelLegal: z.string().trim().min(2, "Informe o responsavel legal."),
+  telefone: z.string().trim().min(8, "Informe o telefone."),
+  whatsapp: z.string().trim().min(8, "Informe o WhatsApp."),
+  email: z.string().trim().email("Informe um e-mail valido."),
+  endereco: z.string().trim().min(4, "Informe o endereco."),
+  segmento: z.string().trim().min(2, "Informe o segmento."),
+  lojaId: z.string().trim().min(1, "Vincule uma loja."),
+  dataEntrada: z.string().trim().min(8, "Informe a data de entrada."),
+  status: z.enum(["ativo", "implantacao", "inadimplente", "inativo"])
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
+type TenantFormValues = z.infer<typeof tenantSchema>;
 
 export function ModulePage({
   module,
@@ -93,6 +117,7 @@ export function ModulePage({
   }
 
   if (module === "Contratos") return <ContractsPage />;
+  if (module === "Lojistas") return <TenantsPage stores={stores} />;
   if (module === "Inadimplencia") return <DelinquencyPage stores={stores} />;
   if (module === "Operacoes") return <OperationsPage />;
   if (module === "Financeiro") return <FinancePage />;
@@ -257,6 +282,79 @@ function StoresPage({
           onClose={() => setEditing(null)}
           onSave={async (store) => {
             await onSaveStore(store);
+            setEditing(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
+function TenantsPage({ stores }: { stores: StoreType[] }) {
+  const [tenantRows, setTenantRows] = useState<Tenant[]>(seedTenants);
+  const [editing, setEditing] = useState<Tenant | null>(null);
+  const activeTenants = tenantRows.filter((tenant) => tenant.status === "ativo").length;
+  const linkedStores = new Set(tenantRows.map((tenant) => tenant.lojaId)).size;
+  const segments = new Set(tenantRows.map((tenant) => tenant.segmento)).size;
+
+  return (
+    <Shell
+      title="Lojistas"
+      description="Cadastro de operadores, contatos, CNPJ, segmento e loja vinculada."
+      action={<NewButton onClick={() => setEditing(emptyTenant(stores[0]?.id ?? ""))} />}
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Lojistas cadastrados" value={numberPt(tenantRows.length)} />
+        <Kpi label="Ativos" value={numberPt(activeTenants)} tone="success" />
+        <Kpi label="Lojas vinculadas" value={numberPt(linkedStores)} />
+        <Kpi label="Segmentos" value={numberPt(segments)} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_340px]">
+        <DataTable
+          columns={["Nome fantasia", "Loja", "CNPJ", "Responsavel", "Status", "Entrada", "Acoes"]}
+          rows={tenantRows.map((tenant) => [
+            tenant.nomeFantasia,
+            storeLabel(stores, tenant.lojaId),
+            tenant.cnpj,
+            tenant.responsavelLegal,
+            tenantStatusLabel[tenant.status],
+            tenant.dataEntrada,
+            "Editar"
+          ])}
+          onAction={(rowIndex) => setEditing(tenantRows[rowIndex])}
+        />
+        <div className="panel p-5">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" />
+            <h2 className="font-bold uppercase">Relacionamento</h2>
+          </div>
+          <div className="mt-5 space-y-4">
+            {tenantRows.slice(0, 3).map((tenant) => (
+              <div key={tenant.id} className="rounded-lg border border-border p-3">
+                <div className="font-bold">{tenant.nomeFantasia}</div>
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Phone className="h-3.5 w-3.5" />
+                  {tenant.whatsapp}
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5" />
+                  {tenant.email}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {editing ? (
+        <TenantForm
+          tenant={editing}
+          stores={stores}
+          onClose={() => setEditing(null)}
+          onSave={(tenant) => {
+            setTenantRows((current) => {
+              const exists = current.some((item) => item.id === tenant.id);
+              return exists ? current.map((item) => item.id === tenant.id ? tenant : item) : [tenant, ...current];
+            });
             setEditing(null);
           }}
         />
@@ -660,6 +758,67 @@ function StoreForm({
   );
 }
 
+function TenantForm({
+  tenant,
+  stores,
+  onClose,
+  onSave
+}: {
+  tenant: Tenant;
+  stores: StoreType[];
+  onClose: () => void;
+  onSave: (tenant: Tenant) => void;
+}) {
+  const storeOptions = useMemo(() => stores.map((store) => store.id), [stores]);
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<TenantFormValues>({
+    resolver: zodResolver(tenantSchema),
+    defaultValues: tenant
+  });
+
+  return (
+    <Modal title="Lojista" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormInput label="Nome fantasia" error={errors.nomeFantasia?.message} {...register("nomeFantasia")} />
+          <FormInput label="Razao social" error={errors.razaoSocial?.message} {...register("razaoSocial")} />
+          <FormInput label="CNPJ" error={errors.cnpj?.message} {...register("cnpj")} />
+          <FormInput label="Responsavel legal" error={errors.responsavelLegal?.message} {...register("responsavelLegal")} />
+          <FormInput label="Telefone" error={errors.telefone?.message} {...register("telefone")} />
+          <FormInput label="WhatsApp" error={errors.whatsapp?.message} {...register("whatsapp")} />
+          <FormInput label="E-mail" type="email" error={errors.email?.message} {...register("email")} />
+          <FormInput label="Segmento" error={errors.segmento?.message} {...register("segmento")} />
+          <FormSelect
+            label="Loja vinculada"
+            error={errors.lojaId?.message}
+            options={storeOptions}
+            optionLabels={storeLabels}
+            {...register("lojaId")}
+          />
+          <FormInput label="Data entrada" type="date" error={errors.dataEntrada?.message} {...register("dataEntrada")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["ativo", "implantacao", "inadimplente", "inativo"]}
+            optionLabels={tenantStatusLabel}
+            {...register("status")}
+          />
+          <FormInput label="Endereco" error={errors.endereco?.message} {...register("endereco")} />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -730,6 +889,11 @@ function FormActions({ onClose, isSubmitting }: { onClose: () => void; isSubmitt
   );
 }
 
+function storeLabel(stores: StoreType[], lojaId: string) {
+  const store = stores.find((item) => item.id === lojaId);
+  return store ? `${store.codigo} - ${store.nome}` : "-";
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -743,6 +907,24 @@ function emptyEnterprise(): Enterprise {
     lojas: 0,
     vagas: 0,
     responsavel: "Nexa Malls"
+  };
+}
+
+function emptyTenant(lojaId: string): Tenant {
+  return {
+    id: crypto.randomUUID(),
+    nomeFantasia: "Novo lojista",
+    razaoSocial: "Nova empresa Ltda",
+    cnpj: "",
+    responsavelLegal: "",
+    telefone: "",
+    whatsapp: "",
+    email: "",
+    endereco: "",
+    segmento: "Servicos",
+    lojaId,
+    dataEntrada: new Date().toISOString().slice(0, 10),
+    status: "implantacao"
   };
 }
 
