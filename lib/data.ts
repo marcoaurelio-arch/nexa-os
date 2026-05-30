@@ -1,4 +1,4 @@
-import type { ContractAlert, Enterprise, Revenue, ServiceOrder, Store } from "./types";
+import type { ContractAlert, Enterprise, Revenue, ServiceOrder, Store, Tenant } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -67,6 +67,69 @@ export const stores: Store[] = [
   { id: "br-01", codigo: "BR-01", empreendimentoId: "bluemall-rondon", nome: "Smart Fit Hub", segmento: "Fitness", status: "ocupada", areaTotal: 620, aluguel: 52000, condominio: 12800, fundo: 4400 },
   { id: "bc-01", codigo: "BC-01", empreendimentoId: "bluemall-centro", nome: "Odonto Mais", segmento: "Saude", status: "ocupada", areaTotal: 150, aluguel: 18400, condominio: 4500, fundo: 1200 },
   { id: "bn-01", codigo: "BN-01", empreendimentoId: "boulevard-naves", nome: "Loja ancora", segmento: "Mercado", status: "negociacao", areaTotal: 900, aluguel: 73000, condominio: 18000, fundo: 6500 }
+];
+
+export const tenants: Tenant[] = [
+  {
+    id: "tenant-gastro-prime",
+    nomeFantasia: "Gastro Prime",
+    razaoSocial: "Gastro Prime Alimentacao Ltda",
+    cnpj: "12.345.678/0001-90",
+    responsavelLegal: "Marina Campos",
+    telefone: "(34) 3222-1001",
+    whatsapp: "(34) 99991-1001",
+    email: "financeiro@gastroprime.com.br",
+    endereco: "Av. dos Vinhedos, 1200 - Uberlandia/MG",
+    segmento: "Alimentacao",
+    lojaId: "vv-01",
+    dataEntrada: "2024-03-01",
+    status: "ativo"
+  },
+  {
+    id: "tenant-clinica-vida",
+    nomeFantasia: "Clinica Vida",
+    razaoSocial: "Clinica Vida Integrada Ltda",
+    cnpj: "23.456.789/0001-10",
+    responsavelLegal: "Renato Vieira",
+    telefone: "(34) 3222-1002",
+    whatsapp: "(34) 99991-1002",
+    email: "administrativo@clinicavida.com.br",
+    endereco: "Rua das Acacias, 88 - Uberlandia/MG",
+    segmento: "Saude",
+    lojaId: "vv-02",
+    dataEntrada: "2024-07-15",
+    status: "ativo"
+  },
+  {
+    id: "tenant-smart-fit-hub",
+    nomeFantasia: "Smart Fit Hub",
+    razaoSocial: "Hub Fitness Rondonopolis Ltda",
+    cnpj: "34.567.890/0001-55",
+    responsavelLegal: "Patricia Lima",
+    telefone: "(66) 3422-1003",
+    whatsapp: "(66) 99991-1003",
+    email: "gestao@hubfitness.com.br",
+    endereco: "Av. Rondon, 455 - Rondonopolis/MT",
+    segmento: "Fitness",
+    lojaId: "br-01",
+    dataEntrada: "2023-11-20",
+    status: "ativo"
+  },
+  {
+    id: "tenant-cafe-jardim",
+    nomeFantasia: "Cafe Jardim",
+    razaoSocial: "Cafe Jardim Nicomedes Ltda",
+    cnpj: "45.678.901/0001-22",
+    responsavelLegal: "Luiza Andrade",
+    telefone: "(34) 3222-1004",
+    whatsapp: "(34) 99991-1004",
+    email: "luiza@cafejardim.com.br",
+    endereco: "Av. Nicomedes Alves dos Santos, 1888 - Uberlandia/MG",
+    segmento: "Alimentacao",
+    lojaId: "pn-01",
+    dataEntrada: "2026-04-10",
+    status: "implantacao"
+  }
 ];
 
 export const revenues: Revenue[] = [
