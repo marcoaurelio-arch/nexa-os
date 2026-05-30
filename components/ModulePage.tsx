@@ -2,6 +2,9 @@
 
 import { AlertTriangle, Building2, FileText, Plus, Search, Store, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { contractAlerts, serviceOrders } from "@/lib/data";
 import { brl, numberPt, percent } from "@/lib/metrics";
 import type { Enterprise, EnterpriseStatus, Store as StoreType, StoreStatus } from "@/lib/types";
@@ -12,6 +15,7 @@ type ModulePageProps = {
   stores: StoreType[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
+  onResetLocalData: () => void;
   onSaveEnterprise: (enterprise: Enterprise) => void | Promise<void>;
   onSaveStore: (store: StoreType) => void | Promise<void>;
 };
@@ -25,13 +29,67 @@ const statusLabel: Record<string, string> = {
   inativa: "Inativa"
 };
 
-export function ModulePage({ module, enterprises, stores, dataSource, syncError, onSaveEnterprise, onSaveStore }: ModulePageProps) {
+const enterpriseSchema = z.object({
+  id: z.string().min(1),
+  nome: z.string().trim().min(2, "Informe o nome do empreendimento."),
+  cidade: z.string().trim().min(2, "Informe a cidade."),
+  estado: z.string().trim().length(2, "Use a sigla do estado com 2 letras.").transform((value) => value.toUpperCase()),
+  status: z.enum(["ativo", "implantacao", "planejado"]),
+  abl: z.coerce.number().min(1, "Informe uma ABL maior que zero."),
+  lojas: z.coerce.number().int("Use um numero inteiro.").min(1, "Informe ao menos uma loja."),
+  vagas: z.coerce.number().int("Use um numero inteiro.").min(0, "Informe zero ou mais vagas."),
+  responsavel: z.string().trim().min(2, "Informe o responsavel.")
+});
+
+const storeSchema = z.object({
+  id: z.string().min(1),
+  codigo: z.string().trim().min(2, "Informe o codigo da loja."),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  nome: z.string().trim().min(2, "Informe o nome da loja."),
+  segmento: z.string().trim().min(2, "Informe o segmento."),
+  status: z.enum(["ocupada", "disponivel", "negociacao", "implantacao", "em_obra", "inativa"]),
+  areaTotal: z.coerce.number().min(1, "Informe uma area maior que zero."),
+  aluguel: z.coerce.number().min(0, "Informe zero ou mais."),
+  condominio: z.coerce.number().min(0, "Informe zero ou mais."),
+  fundo: z.coerce.number().min(0, "Informe zero ou mais.")
+});
+
+type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
+type StoreFormValues = z.infer<typeof storeSchema>;
+
+export function ModulePage({
+  module,
+  enterprises,
+  stores,
+  dataSource,
+  syncError,
+  onResetLocalData,
+  onSaveEnterprise,
+  onSaveStore
+}: ModulePageProps) {
   if (module === "Empreendimentos") {
-    return <EnterprisesPage enterprises={enterprises} dataSource={dataSource} syncError={syncError} onSaveEnterprise={onSaveEnterprise} />;
+    return (
+      <EnterprisesPage
+        enterprises={enterprises}
+        dataSource={dataSource}
+        syncError={syncError}
+        onResetLocalData={onResetLocalData}
+        onSaveEnterprise={onSaveEnterprise}
+      />
+    );
   }
 
   if (module === "Lojas") {
-    return <StoresPage enterprises={enterprises} stores={stores} dataSource={dataSource} syncError={syncError} onSaveStore={onSaveStore} />;
+    return (
+      <StoresPage
+        enterprises={enterprises}
+        stores={stores}
+        dataSource={dataSource}
+        syncError={syncError}
+        onResetLocalData={onResetLocalData}
+        onSaveStore={onSaveStore}
+      />
+    );
   }
 
   if (module === "Contratos") return <ContractsPage />;
@@ -90,11 +148,13 @@ function EnterprisesPage({
   enterprises,
   dataSource,
   syncError,
+  onResetLocalData,
   onSaveEnterprise
 }: {
   enterprises: Enterprise[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
+  onResetLocalData: () => void;
   onSaveEnterprise: (enterprise: Enterprise) => void | Promise<void>;
 }) {
   const [editing, setEditing] = useState<Enterprise | null>(null);
@@ -106,7 +166,7 @@ function EnterprisesPage({
       description="Carteira multiempreendimento da Nexa Malls."
       action={<NewButton onClick={() => setEditing(emptyEnterprise())} />}
     >
-      <SyncBanner dataSource={dataSource} syncError={syncError} />
+      <SyncBanner dataSource={dataSource} syncError={syncError} onResetLocalData={onResetLocalData} />
       <div className="grid gap-3 md:grid-cols-4">
         <Kpi label="Ativos cadastrados" value={numberPt(enterprises.length)} />
         <Kpi label="ABL total" value={`${numberPt(totalAbl)} m2`} />
@@ -142,8 +202,8 @@ function EnterprisesPage({
         <EnterpriseForm
           enterprise={editing}
           onClose={() => setEditing(null)}
-          onSave={(enterprise) => {
-            onSaveEnterprise(enterprise);
+          onSave={async (enterprise) => {
+            await onSaveEnterprise(enterprise);
             setEditing(null);
           }}
         />
@@ -157,12 +217,14 @@ function StoresPage({
   stores,
   dataSource,
   syncError,
+  onResetLocalData,
   onSaveStore
 }: {
   enterprises: Enterprise[];
   stores: StoreType[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
+  onResetLocalData: () => void;
   onSaveStore: (store: StoreType) => void | Promise<void>;
 }) {
   const [editing, setEditing] = useState<StoreType | null>(null);
@@ -173,7 +235,7 @@ function StoresPage({
       description="Cadastro de unidades, ABL, status e valores comerciais."
       action={<NewButton onClick={() => setEditing(emptyStore(enterprises[0]?.id ?? ""))} />}
     >
-      <SyncBanner dataSource={dataSource} syncError={syncError} />
+      <SyncBanner dataSource={dataSource} syncError={syncError} onResetLocalData={onResetLocalData} />
       <DataTable
         columns={["Codigo", "Loja", "Empreendimento", "Segmento", "Status", "Area", "Aluguel", "Acoes"]}
         rows={stores.map((store) => [
@@ -193,8 +255,8 @@ function StoresPage({
           store={editing}
           enterprises={enterprises}
           onClose={() => setEditing(null)}
-          onSave={(store) => {
-            onSaveStore(store);
+          onSave={async (store) => {
+            await onSaveStore(store);
             setEditing(null);
           }}
         />
@@ -468,11 +530,26 @@ function KanbanCard({ title, subtitle, value }: { title: string; subtitle: strin
   );
 }
 
-function SyncBanner({ dataSource, syncError }: { dataSource: "mock" | "supabase"; syncError: string | null }) {
+function SyncBanner({
+  dataSource,
+  syncError,
+  onResetLocalData
+}: {
+  dataSource: "mock" | "supabase";
+  syncError: string | null;
+  onResetLocalData: () => void;
+}) {
   return (
-    <div className="rounded-lg border border-border bg-white px-4 py-3 text-sm text-muted-foreground">
-      Fonte de dados: <span className="font-bold text-primary">{dataSource === "supabase" ? "Supabase" : "Mock local"}</span>
-      {syncError ? <span className="ml-2 text-danger">Erro: {syncError}</span> : null}
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-white px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+      <div>
+        Fonte de dados: <span className="font-bold text-primary">{dataSource === "supabase" ? "Supabase" : "Mock local"}</span>
+        {syncError ? <span className="ml-2 text-danger">Erro: {syncError}</span> : null}
+      </div>
+      {dataSource === "mock" ? (
+        <button className="text-left text-xs font-bold uppercase text-primary" onClick={onResetLocalData}>
+          Resetar dados locais
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -495,26 +572,36 @@ function EnterpriseForm({
   onClose: () => void;
   onSave: (enterprise: Enterprise) => void;
 }) {
-  const [draft, setDraft] = useState(enterprise);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<EnterpriseFormValues>({
+    resolver: zodResolver(enterpriseSchema),
+    defaultValues: enterprise
+  });
 
   return (
     <Modal title="Empreendimento" onClose={onClose}>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Nome" value={draft.nome} onChange={(nome) => setDraft({ ...draft, nome })} />
-        <Field label="Cidade" value={draft.cidade} onChange={(cidade) => setDraft({ ...draft, cidade })} />
-        <Field label="Estado" value={draft.estado} onChange={(estado) => setDraft({ ...draft, estado: estado.toUpperCase().slice(0, 2) })} />
-        <SelectField
-          label="Status"
-          value={draft.status}
-          options={["ativo", "implantacao", "planejado"]}
-          onChange={(status) => setDraft({ ...draft, status: status as EnterpriseStatus })}
-        />
-        <NumberField label="ABL" value={draft.abl} onChange={(abl) => setDraft({ ...draft, abl })} />
-        <NumberField label="Lojas" value={draft.lojas} onChange={(lojas) => setDraft({ ...draft, lojas })} />
-        <NumberField label="Vagas" value={draft.vagas} onChange={(vagas) => setDraft({ ...draft, vagas })} />
-        <Field label="Responsavel" value={draft.responsavel} onChange={(responsavel) => setDraft({ ...draft, responsavel })} />
-      </div>
-      <FormActions onClose={onClose} onSave={() => onSave(draft)} />
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormInput label="Nome" error={errors.nome?.message} {...register("nome")} />
+          <FormInput label="Cidade" error={errors.cidade?.message} {...register("cidade")} />
+          <FormInput label="Estado" maxLength={2} error={errors.estado?.message} {...register("estado")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["ativo", "implantacao", "planejado"]}
+            {...register("status")}
+          />
+          <FormInput label="ABL" type="number" error={errors.abl?.message} {...register("abl")} />
+          <FormInput label="Lojas" type="number" error={errors.lojas?.message} {...register("lojas")} />
+          <FormInput label="Vagas" type="number" error={errors.vagas?.message} {...register("vagas")} />
+          <FormInput label="Responsavel" error={errors.responsavel?.message} {...register("responsavel")} />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
     </Modal>
   );
 }
@@ -530,35 +617,45 @@ function StoreForm({
   onClose: () => void;
   onSave: (store: StoreType) => void;
 }) {
-  const [draft, setDraft] = useState(store);
   const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<StoreFormValues>({
+    resolver: zodResolver(storeSchema),
+    defaultValues: store
+  });
 
   return (
     <Modal title="Loja" onClose={onClose}>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Codigo" value={draft.codigo} onChange={(codigo) => setDraft({ ...draft, codigo })} />
-        <Field label="Nome" value={draft.nome} onChange={(nome) => setDraft({ ...draft, nome })} />
-        <SelectField
-          label="Empreendimento"
-          value={draft.empreendimentoId}
-          options={enterpriseOptions}
-          optionLabels={Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome]))}
-          onChange={(empreendimentoId) => setDraft({ ...draft, empreendimentoId })}
-        />
-        <Field label="Segmento" value={draft.segmento} onChange={(segmento) => setDraft({ ...draft, segmento })} />
-        <SelectField
-          label="Status"
-          value={draft.status}
-          options={["ocupada", "disponivel", "negociacao", "implantacao", "em_obra", "inativa"]}
-          optionLabels={statusLabel}
-          onChange={(status) => setDraft({ ...draft, status: status as StoreStatus })}
-        />
-        <NumberField label="Area total" value={draft.areaTotal} onChange={(areaTotal) => setDraft({ ...draft, areaTotal })} />
-        <NumberField label="Aluguel" value={draft.aluguel} onChange={(aluguel) => setDraft({ ...draft, aluguel })} />
-        <NumberField label="Condominio" value={draft.condominio} onChange={(condominio) => setDraft({ ...draft, condominio })} />
-        <NumberField label="Fundo" value={draft.fundo} onChange={(fundo) => setDraft({ ...draft, fundo })} />
-      </div>
-      <FormActions onClose={onClose} onSave={() => onSave(draft)} />
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormInput label="Codigo" error={errors.codigo?.message} {...register("codigo")} />
+          <FormInput label="Nome" error={errors.nome?.message} {...register("nome")} />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome]))}
+            {...register("empreendimentoId")}
+          />
+          <FormInput label="Segmento" error={errors.segmento?.message} {...register("segmento")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["ocupada", "disponivel", "negociacao", "implantacao", "em_obra", "inativa"]}
+            optionLabels={statusLabel}
+            {...register("status")}
+          />
+          <FormInput label="Area total" type="number" error={errors.areaTotal?.message} {...register("areaTotal")} />
+          <FormInput label="Aluguel" type="number" error={errors.aluguel?.message} {...register("aluguel")} />
+          <FormInput label="Condominio" type="number" error={errors.condominio?.message} {...register("condominio")} />
+          <FormInput label="Fundo" type="number" error={errors.fundo?.message} {...register("fundo")} />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
     </Modal>
   );
 }
@@ -577,59 +674,58 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <label className="space-y-1">
-      <span className="metric-label">{label}</span>
-      <input className="control w-full" value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
-  );
-}
-
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
-  return (
-    <label className="space-y-1">
-      <span className="metric-label">{label}</span>
-      <input
-        className="control w-full"
-        type="number"
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  );
-}
-
-function SelectField({
+function FormInput({
   label,
-  value,
-  options,
-  optionLabels,
-  onChange
-}: {
+  error,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & {
   label: string;
-  value: string;
-  options: string[];
-  optionLabels?: Record<string, string>;
-  onChange: (value: string) => void;
+  error?: string;
 }) {
   return (
     <label className="space-y-1">
       <span className="metric-label">{label}</span>
-      <select className="control w-full" value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option} value={option}>{optionLabels?.[option] ?? option}</option>
-        ))}
-      </select>
+      <input
+        className={`control w-full ${error ? "border-danger bg-red-50/50" : ""}`}
+        {...props}
+      />
+      {error ? <span className="block text-xs font-semibold text-danger">{error}</span> : null}
     </label>
   );
 }
 
-function FormActions({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
+function FormSelect({
+  label,
+  error,
+  options,
+  optionLabels,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement> & {
+  label: string;
+  error?: string;
+  options: string[];
+  optionLabels?: Record<string, string>;
+}) {
+  return (
+    <label className="space-y-1">
+      <span className="metric-label">{label}</span>
+      <select className={`control w-full ${error ? "border-danger bg-red-50/50" : ""}`} {...props}>
+        {options.map((option) => (
+          <option key={option} value={option}>{optionLabels?.[option] ?? option}</option>
+        ))}
+      </select>
+      {error ? <span className="block text-xs font-semibold text-danger">{error}</span> : null}
+    </label>
+  );
+}
+
+function FormActions({ onClose, isSubmitting }: { onClose: () => void; isSubmitting?: boolean }) {
   return (
     <div className="mt-5 flex justify-end gap-2">
-      <button className="control" onClick={onClose}>Cancelar</button>
-      <button className="control bg-primary text-primary-foreground" onClick={onSave}>Salvar</button>
+      <button className="control" type="button" onClick={onClose}>Cancelar</button>
+      <button className="control bg-primary text-primary-foreground" type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Salvando..." : "Salvar"}
+      </button>
     </div>
   );
 }
