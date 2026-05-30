@@ -52,8 +52,28 @@ create table if not exists lojas (
   unique (empreendimento_id, codigo)
 );
 
+create table if not exists lojistas (
+  id uuid primary key default gen_random_uuid(),
+  nome_fantasia text not null,
+  razao_social text not null,
+  cnpj text not null unique,
+  responsavel_legal text,
+  telefone text,
+  whatsapp text,
+  email text,
+  endereco text,
+  segmento text,
+  loja_id uuid references lojas(id),
+  data_entrada date,
+  status text not null default 'ativo',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 create index if not exists idx_empreendimentos_status on empreendimentos (status) where deleted_at is null;
 create index if not exists idx_lojas_empreendimento_status on lojas (empreendimento_id, status) where deleted_at is null;
+create index if not exists idx_lojistas_loja_status on lojistas (loja_id, status) where deleted_at is null;
 
 drop trigger if exists trg_empreendimentos_updated_at on empreendimentos;
 create trigger trg_empreendimentos_updated_at
@@ -63,6 +83,11 @@ for each row execute function set_updated_at();
 drop trigger if exists trg_lojas_updated_at on lojas;
 create trigger trg_lojas_updated_at
 before update on lojas
+for each row execute function set_updated_at();
+
+drop trigger if exists trg_lojistas_updated_at on lojistas;
+create trigger trg_lojistas_updated_at
+before update on lojistas
 for each row execute function set_updated_at();
 
 insert into empreendimentos (id, nome, cidade, estado, status, abl_m2, numero_lojas, numero_vagas)
@@ -109,3 +134,73 @@ on conflict (empreendimento_id, codigo) do update set
   valor_aluguel = excluded.valor_aluguel,
   valor_condominio = excluded.valor_condominio,
   valor_fundo_promocao = excluded.valor_fundo_promocao;
+
+insert into lojistas (
+  nome_fantasia,
+  razao_social,
+  cnpj,
+  responsavel_legal,
+  telefone,
+  whatsapp,
+  email,
+  endereco,
+  segmento,
+  loja_id,
+  data_entrada,
+  status
+)
+values
+  (
+    'Gastro Prime',
+    'Gastro Prime Alimentacao Ltda',
+    '12.345.678/0001-90',
+    'Marina Campos',
+    '(34) 3222-1001',
+    '(34) 99991-1001',
+    'financeiro@gastroprime.com.br',
+    'Av. dos Vinhedos, 1200 - Uberlandia/MG',
+    'Alimentacao',
+    (select id from lojas where codigo = 'VV-01' limit 1),
+    '2024-03-01',
+    'ativo'
+  ),
+  (
+    'Clinica Vida',
+    'Clinica Vida Integrada Ltda',
+    '23.456.789/0001-10',
+    'Renato Vieira',
+    '(34) 3222-1002',
+    '(34) 99991-1002',
+    'administrativo@clinicavida.com.br',
+    'Rua das Acacias, 88 - Uberlandia/MG',
+    'Saude',
+    (select id from lojas where codigo = 'VV-02' limit 1),
+    '2024-07-15',
+    'ativo'
+  ),
+  (
+    'Smart Fit Hub',
+    'Hub Fitness Rondonopolis Ltda',
+    '34.567.890/0001-55',
+    'Patricia Lima',
+    '(66) 3422-1003',
+    '(66) 99991-1003',
+    'gestao@hubfitness.com.br',
+    'Av. Rondon, 455 - Rondonopolis/MT',
+    'Fitness',
+    (select id from lojas where codigo = 'BR-01' limit 1),
+    '2023-11-20',
+    'ativo'
+  )
+on conflict (cnpj) do update set
+  nome_fantasia = excluded.nome_fantasia,
+  razao_social = excluded.razao_social,
+  responsavel_legal = excluded.responsavel_legal,
+  telefone = excluded.telefone,
+  whatsapp = excluded.whatsapp,
+  email = excluded.email,
+  endereco = excluded.endereco,
+  segmento = excluded.segmento,
+  loja_id = excluded.loja_id,
+  data_entrada = excluded.data_entrada,
+  status = excluded.status;
