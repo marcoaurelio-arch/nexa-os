@@ -32,6 +32,24 @@ export type Store = {
   fundo: number;
 };
 
+export type TenantStatus = "ativo" | "implantacao" | "inadimplente" | "inativo";
+
+export type Tenant = {
+  id: string;
+  nomeFantasia: string;
+  razaoSocial: string;
+  cnpj: string;
+  responsavelLegal: string;
+  telefone: string;
+  whatsapp: string;
+  email: string;
+  endereco: string;
+  segmento: string;
+  lojaId: string;
+  dataEntrada: string;
+  status: TenantStatus;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;
