@@ -8,6 +8,7 @@ import {
   contracts as seedContracts,
   delinquencyRecords as seedDelinquencyRecords,
   enterprises as seedEnterprises,
+  fppRecords as seedFppRecords,
   payables as seedPayables,
   receivables as seedReceivables,
   stores as seedStores,
@@ -20,13 +21,14 @@ import {
   saveContract,
   saveDelinquencyRecord,
   saveEnterprise,
+  saveFppRecord,
   saveLocalAssetData,
   savePayable,
   saveReceivable,
   saveStore,
   saveTenant
 } from "@/lib/assets-repository";
-import type { Contract, DelinquencyRecord, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
+import type { Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Store, Tenant } from "@/lib/types";
 
 export function NexaWorkspace() {
   const [activeModule, setActiveModule] = useState("Dashboard");
@@ -37,6 +39,7 @@ export function NexaWorkspace() {
   const [receivableRows, setReceivableRows] = useState<Receivable[]>(seedReceivables);
   const [payableRows, setPayableRows] = useState<Payable[]>(seedPayables);
   const [delinquencyRows, setDelinquencyRows] = useState<DelinquencyRecord[]>(seedDelinquencyRecords);
+  const [fppRows, setFppRows] = useState<FppRecord[]>(seedFppRecords);
   const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
   const [syncError, setSyncError] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
@@ -53,6 +56,7 @@ export function NexaWorkspace() {
       setReceivableRows(mergeSeedRows(seedReceivables, localData.receivables));
       setPayableRows(mergeSeedRows(seedPayables, localData.payables));
       setDelinquencyRows(mergeSeedRows(seedDelinquencyRecords, localData.delinquencyRecords));
+      setFppRows(mergeSeedRows(seedFppRecords, localData.fppRecords));
     }
     setStorageReady(true);
 
@@ -66,6 +70,7 @@ export function NexaWorkspace() {
         setReceivableRows(data.receivables);
         setPayableRows(data.payables);
         setDelinquencyRows(data.delinquencyRecords);
+        setFppRows(data.fppRecords);
         setDataSource("supabase");
       })
       .catch((error: unknown) => {
@@ -86,10 +91,11 @@ export function NexaWorkspace() {
         contracts: contractRows,
         receivables: receivableRows,
         payables: payableRows,
-        delinquencyRecords: delinquencyRows
+        delinquencyRecords: delinquencyRows,
+        fppRecords: fppRows
       });
     }
-  }, [contractRows, dataSource, delinquencyRows, enterpriseRows, payableRows, receivableRows, storageReady, storeRows, tenantRows]);
+  }, [contractRows, dataSource, delinquencyRows, enterpriseRows, fppRows, payableRows, receivableRows, storageReady, storeRows, tenantRows]);
 
   return (
     <AppShell activeModule={activeModule} onModuleChange={setActiveModule}>
@@ -105,6 +111,7 @@ export function NexaWorkspace() {
           receivables={receivableRows}
           payables={payableRows}
           delinquencyRecords={delinquencyRows}
+          fppRecords={fppRows}
           dataSource={dataSource}
           syncError={syncError}
           onResetLocalData={() => {
@@ -116,6 +123,7 @@ export function NexaWorkspace() {
             setReceivableRows(seedReceivables);
             setPayableRows(seedPayables);
             setDelinquencyRows(seedDelinquencyRecords);
+            setFppRows(seedFppRecords);
             setDataSource("mock");
             setSyncError(null);
           }}
@@ -192,6 +200,17 @@ export function NexaWorkspace() {
             });
 
             setDelinquencyRows((current) => {
+              const exists = current.some((item) => item.id === record.id);
+              return exists ? current.map((item) => item.id === record.id ? saved : item) : [saved, ...current];
+            });
+          }}
+          onSaveFppRecord={async (record) => {
+            const saved = await saveFppRecord(record).catch((error: unknown) => {
+              setSyncError(error instanceof Error ? error.message : "Falha ao salvar FPP");
+              return record;
+            });
+
+            setFppRows((current) => {
               const exists = current.some((item) => item.id === record.id);
               return exists ? current.map((item) => item.id === record.id ? saved : item) : [saved, ...current];
             });

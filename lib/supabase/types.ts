@@ -219,6 +219,36 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["inadimplencias"]["Insert"]>;
       };
+      fpp: {
+        Row: {
+          id: string;
+          loja_id: string;
+          contrato_id: string | null;
+          empreendimento_id: string;
+          competencia: string;
+          percentual: number;
+          aluguel_minimo: number;
+          faturamento_informado: number;
+          faturamento_auditado: number;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loja_id: string;
+          contrato_id?: string | null;
+          empreendimento_id: string;
+          competencia: string;
+          percentual?: number;
+          aluguel_minimo?: number;
+          faturamento_informado?: number;
+          faturamento_auditado?: number;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["fpp"]["Insert"]>;
+      };
     };
   };
 };

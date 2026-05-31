@@ -1,4 +1,4 @@
-import type { Contract, ContractAlert, DelinquencyRecord, Enterprise, Payable, Receivable, Revenue, ServiceOrder, Store, Tenant } from "./types";
+import type { Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, ServiceOrder, Store, Tenant } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -249,6 +249,45 @@ export const delinquencyRecords: DelinquencyRecord[] = [
     negociacao: "A acompanhar na proxima semana.",
     responsavel: "Financeiro",
     status: "regua"
+  }
+];
+
+export const fppRecords: FppRecord[] = [
+  {
+    id: "fpp-vv-01-2026-05",
+    lojaId: "vv-01",
+    contratoId: "contract-gastro-prime",
+    empreendimentoId: "villa-viseu",
+    competencia: "2026-05",
+    percentual: 6,
+    aluguelMinimo: 25000,
+    faturamentoInformado: 520000,
+    faturamentoAuditado: 548000,
+    status: "aberto"
+  },
+  {
+    id: "fpp-vv-02-2026-05",
+    lojaId: "vv-02",
+    contratoId: "contract-clinica-vida",
+    empreendimentoId: "villa-viseu",
+    competencia: "2026-05",
+    percentual: 4.5,
+    aluguelMinimo: 31000,
+    faturamentoInformado: 610000,
+    faturamentoAuditado: 604000,
+    status: "pago"
+  },
+  {
+    id: "fpp-br-01-2026-05",
+    lojaId: "br-01",
+    contratoId: "contract-smart-fit-hub",
+    empreendimentoId: "bluemall-rondon",
+    competencia: "2026-05",
+    percentual: 7,
+    aluguelMinimo: 52000,
+    faturamentoInformado: 880000,
+    faturamentoAuditado: 912000,
+    status: "aberto"
   }
 ];
 

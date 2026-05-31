@@ -108,6 +108,19 @@ export type DelinquencyRecord = {
   status: "regua" | "negociacao" | "juridico" | "regularizado";
 };
 
+export type FppRecord = {
+  id: string;
+  lojaId: string;
+  contratoId: string;
+  empreendimentoId: string;
+  competencia: string;
+  percentual: number;
+  aluguelMinimo: number;
+  faturamentoInformado: number;
+  faturamentoAuditado: number;
+  status: FinancialStatus;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;

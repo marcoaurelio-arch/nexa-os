@@ -136,6 +136,22 @@ create table if not exists inadimplencias (
   deleted_at timestamptz
 );
 
+create table if not exists fpp (
+  id uuid primary key default gen_random_uuid(),
+  loja_id uuid not null references lojas(id),
+  contrato_id uuid references contratos(id),
+  empreendimento_id uuid not null references empreendimentos(id),
+  competencia text not null,
+  percentual numeric(8,4) not null default 0,
+  aluguel_minimo numeric(14,2) not null default 0,
+  faturamento_informado numeric(14,2) not null default 0,
+  faturamento_auditado numeric(14,2) not null default 0,
+  status text not null default 'aberto',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 create index if not exists idx_empreendimentos_status on empreendimentos (status) where deleted_at is null;
 create index if not exists idx_lojas_empreendimento_status on lojas (empreendimento_id, status) where deleted_at is null;
 create index if not exists idx_lojistas_loja_status on lojistas (loja_id, status) where deleted_at is null;
@@ -146,6 +162,8 @@ create index if not exists idx_despesas_competencia_status on despesas (competen
 create index if not exists idx_despesas_empreendimento_vencimento on despesas (empreendimento_id, vencimento) where deleted_at is null;
 create index if not exists idx_inadimplencias_loja_status on inadimplencias (loja_id, status) where deleted_at is null;
 create index if not exists idx_inadimplencias_dias_atraso on inadimplencias (dias_atraso desc) where deleted_at is null;
+create index if not exists idx_fpp_empreendimento_competencia on fpp (empreendimento_id, competencia) where deleted_at is null;
+create index if not exists idx_fpp_loja_status on fpp (loja_id, status) where deleted_at is null;
 
 drop trigger if exists trg_empreendimentos_updated_at on empreendimentos;
 create trigger trg_empreendimentos_updated_at
@@ -180,6 +198,11 @@ for each row execute function set_updated_at();
 drop trigger if exists trg_inadimplencias_updated_at on inadimplencias;
 create trigger trg_inadimplencias_updated_at
 before update on inadimplencias
+for each row execute function set_updated_at();
+
+drop trigger if exists trg_fpp_updated_at on fpp;
+create trigger trg_fpp_updated_at
+before update on fpp
 for each row execute function set_updated_at();
 
 insert into empreendimentos (id, nome, cidade, estado, status, abl_m2, numero_lojas, numero_vagas)
@@ -724,4 +747,64 @@ on conflict (id) do update set
   historico = excluded.historico,
   negociacao = excluded.negociacao,
   responsavel = excluded.responsavel,
+  status = excluded.status;
+
+insert into fpp (
+  id,
+  loja_id,
+  contrato_id,
+  empreendimento_id,
+  competencia,
+  percentual,
+  aluguel_minimo,
+  faturamento_informado,
+  faturamento_auditado,
+  status
+)
+values
+  (
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+    (select id from lojas where codigo = 'VV-01' limit 1),
+    '66666666-6666-4666-8666-666666666661',
+    '11111111-1111-4111-8111-111111111111',
+    '2026-05',
+    6,
+    25000,
+    520000,
+    548000,
+    'aberto'
+  ),
+  (
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+    (select id from lojas where codigo = 'VV-02' limit 1),
+    '66666666-6666-4666-8666-666666666662',
+    '11111111-1111-4111-8111-111111111111',
+    '2026-05',
+    4.5,
+    31000,
+    610000,
+    604000,
+    'pago'
+  ),
+  (
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3',
+    (select id from lojas where codigo = 'BR-01' limit 1),
+    '66666666-6666-4666-8666-666666666663',
+    '33333333-3333-4333-8333-333333333333',
+    '2026-05',
+    7,
+    52000,
+    880000,
+    912000,
+    'aberto'
+  )
+on conflict (id) do update set
+  loja_id = excluded.loja_id,
+  contrato_id = excluded.contrato_id,
+  empreendimento_id = excluded.empreendimento_id,
+  competencia = excluded.competencia,
+  percentual = excluded.percentual,
+  aluguel_minimo = excluded.aluguel_minimo,
+  faturamento_informado = excluded.faturamento_informado,
+  faturamento_auditado = excluded.faturamento_auditado,
   status = excluded.status;

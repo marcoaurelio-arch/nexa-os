@@ -3,12 +3,13 @@ import {
   mapContractRow,
   mapDelinquencyRow,
   mapEnterpriseRow,
+  mapFppRow,
   mapPayableRow,
   mapReceivableRow,
   mapStoreRow,
   mapTenantRow
 } from "@/lib/supabase/mappers";
-import type { Contract, DelinquencyRecord, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
+import type { Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Store, Tenant } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
@@ -18,6 +19,7 @@ export type AssetData = {
   receivables: Receivable[];
   payables: Payable[];
   delinquencyRecords: DelinquencyRecord[];
+  fppRecords: FppRecord[];
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -45,7 +47,8 @@ export function loadLocalAssetData(): AssetData | null {
       contracts: Array.isArray(parsed.contracts) ? parsed.contracts : [],
       receivables: Array.isArray(parsed.receivables) ? parsed.receivables : [],
       payables: Array.isArray(parsed.payables) ? parsed.payables : [],
-      delinquencyRecords: Array.isArray(parsed.delinquencyRecords) ? parsed.delinquencyRecords : []
+      delinquencyRecords: Array.isArray(parsed.delinquencyRecords) ? parsed.delinquencyRecords : [],
+      fppRecords: Array.isArray(parsed.fppRecords) ? parsed.fppRecords : []
     };
   } catch {
     return null;
@@ -77,7 +80,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -112,7 +115,12 @@ export async function fetchAssetData(): Promise<AssetData | null> {
       .from("inadimplencias")
       .select("*")
       .is("deleted_at", null)
-      .order("dias_atraso", { ascending: false })
+      .order("dias_atraso", { ascending: false }),
+    client
+      .from("fpp")
+      .select("*")
+      .is("deleted_at", null)
+      .order("competencia", { ascending: false })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
@@ -122,6 +130,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
   if (receivableResult.error) throw receivableResult.error;
   if (payableResult.error) throw payableResult.error;
   if (delinquencyResult.error) throw delinquencyResult.error;
+  if (fppResult.error) throw fppResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
@@ -130,7 +139,8 @@ export async function fetchAssetData(): Promise<AssetData | null> {
     contracts: contractResult.data.map(mapContractRow),
     receivables: receivableResult.data.map(mapReceivableRow),
     payables: payableResult.data.map(mapPayableRow),
-    delinquencyRecords: delinquencyResult.data.map(mapDelinquencyRow)
+    delinquencyRecords: delinquencyResult.data.map(mapDelinquencyRow),
+    fppRecords: fppResult.data.map(mapFppRow)
   };
 }
 
@@ -337,6 +347,35 @@ export async function saveDelinquencyRecord(record: DelinquencyRecord) {
 
   if (error) throw error;
   return mapDelinquencyRow(data);
+}
+
+export async function saveFppRecord(record: FppRecord) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return record;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("fpp")
+    .upsert({
+      ...(isUuid(record.id) ? { id: record.id } : {}),
+      loja_id: record.lojaId,
+      contrato_id: isUuid(record.contratoId) ? record.contratoId : null,
+      empreendimento_id: record.empreendimentoId,
+      competencia: record.competencia,
+      percentual: record.percentual,
+      aluguel_minimo: record.aluguelMinimo,
+      faturamento_informado: record.faturamentoInformado,
+      faturamento_auditado: record.faturamentoAuditado,
+      status: record.status
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapFppRow(data);
 }
 
 function isUuid(value: string) {

@@ -14,6 +14,7 @@ import type {
   DelinquencyRecord,
   Enterprise,
   FinancialStatus,
+  FppRecord,
   Payable,
   Receivable,
   RevenueType,
@@ -31,6 +32,7 @@ type ModulePageProps = {
   receivables: Receivable[];
   payables: Payable[];
   delinquencyRecords: DelinquencyRecord[];
+  fppRecords: FppRecord[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -41,6 +43,7 @@ type ModulePageProps = {
   onSaveReceivable: (receivable: Receivable) => void | Promise<void>;
   onSavePayable: (payable: Payable) => void | Promise<void>;
   onSaveDelinquencyRecord: (record: DelinquencyRecord) => void | Promise<void>;
+  onSaveFppRecord: (record: FppRecord) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -184,6 +187,19 @@ const delinquencySchema = z.object({
   status: z.enum(["regua", "negociacao", "juridico", "regularizado"])
 });
 
+const fppSchema = z.object({
+  id: z.string().min(1),
+  lojaId: z.string().trim().min(1, "Selecione a loja."),
+  contratoId: z.string().trim().min(1, "Selecione o contrato."),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  competencia: z.string().trim().min(7, "Informe a competencia."),
+  percentual: z.coerce.number().min(0, "Informe zero ou mais."),
+  aluguelMinimo: z.coerce.number().min(0, "Informe zero ou mais."),
+  faturamentoInformado: z.coerce.number().min(0, "Informe zero ou mais."),
+  faturamentoAuditado: z.coerce.number().min(0, "Informe zero ou mais."),
+  status: z.enum(["aberto", "vencido", "pago", "cancelado"])
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
@@ -191,6 +207,7 @@ type ContractFormValues = z.infer<typeof contractSchema>;
 type ReceivableFormValues = z.infer<typeof receivableSchema>;
 type PayableFormValues = z.infer<typeof payableSchema>;
 type DelinquencyFormValues = z.infer<typeof delinquencySchema>;
+type FppFormValues = z.infer<typeof fppSchema>;
 
 export function ModulePage({
   module,
@@ -201,6 +218,7 @@ export function ModulePage({
   receivables,
   payables,
   delinquencyRecords,
+  fppRecords,
   dataSource,
   syncError,
   onResetLocalData,
@@ -210,7 +228,8 @@ export function ModulePage({
   onSaveContract,
   onSaveReceivable,
   onSavePayable,
-  onSaveDelinquencyRecord
+  onSaveDelinquencyRecord,
+  onSaveFppRecord
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -271,6 +290,18 @@ export function ModulePage({
         payables={payables}
         onSaveReceivable={onSaveReceivable}
         onSavePayable={onSavePayable}
+      />
+    );
+  }
+  if (module === "FPP") {
+    return (
+      <FppPage
+        enterprises={enterprises}
+        stores={stores}
+        contracts={contracts}
+        tenants={tenants}
+        fppRecords={fppRecords}
+        onSaveFppRecord={onSaveFppRecord}
       />
     );
   }
@@ -1124,6 +1155,119 @@ function PromotionFundPage({
   );
 }
 
+function FppPage({
+  enterprises,
+  stores,
+  contracts,
+  tenants,
+  fppRecords,
+  onSaveFppRecord
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  contracts: Contract[];
+  tenants: Tenant[];
+  fppRecords: FppRecord[];
+  onSaveFppRecord: (record: FppRecord) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [editingRecord, setEditingRecord] = useState<FppRecord | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedRecords = fppRecords.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const billingRows = selectedRecords.map((record) => ({ record, billing: fppBilling(record) }));
+  const auditedRevenue = selectedRecords.reduce((sum, record) => sum + fppRevenueBase(record), 0);
+  const percentageRevenue = billingRows.reduce((sum, item) => sum + item.billing.valorPercentual, 0);
+  const complementaryRevenue = billingRows.reduce((sum, item) => sum + item.billing.valorComplementar, 0);
+  const billingTotal = billingRows.reduce((sum, item) => sum + item.billing.valorCobrado, 0);
+  const percentageRuleCount = billingRows.filter((item) => item.billing.regra === "percentual").length;
+  const firstStore = selectedStores[0] ?? stores[0];
+
+  return (
+    <Shell
+      title="FPP"
+      description="Aluguel complementar com faturamento informado, auditado e cobranca automatica entre percentual e minimo."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => setEditingRecord(emptyFppRecord(firstStore, contracts))}>
+            <Plus className="h-4 w-4" />
+            Lancamento
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Faturamento auditado" value={brl(auditedRevenue)} />
+        <Kpi label="Valor percentual" value={brl(percentageRevenue)} />
+        <Kpi label="Complementar" value={brl(complementaryRevenue)} tone="success" />
+        <Kpi label="Cobranca FPP" value={brl(billingTotal)} tone="success" />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div>
+          <h2 className="mb-3 font-bold uppercase">Contratos percentuais</h2>
+          <DataTable
+            columns={["Loja", "Lojista", "%", "Minimo", "Fat. auditado", "Valor %", "Complementar", "Cobrar", "Status", "Acoes"]}
+            rows={billingRows.map(({ record, billing }) => [
+              storeLabel(stores, record.lojaId),
+              tenantByStore(tenants, record.lojaId),
+              `${numberPt(record.percentual)}%`,
+              brl(record.aluguelMinimo),
+              brl(fppRevenueBase(record)),
+              brl(billing.valorPercentual),
+              brl(billing.valorComplementar),
+              brl(billing.valorCobrado),
+              financialStatusLabel[record.status],
+              "Editar"
+            ])}
+            onAction={(rowIndex) => setEditingRecord(billingRows[rowIndex].record)}
+          />
+        </div>
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Regra de cobranca</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            O sistema compara o valor percentual sobre o faturamento auditado com o aluguel minimo e cobra o maior valor.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Base auditada" value={brl(auditedRevenue)} />
+            <Mini label="Regra percentual" value={`${percentageRuleCount} contratos`} />
+            <Mini label="Regra minimo" value={`${Math.max(billingRows.length - percentageRuleCount, 0)} contratos`} />
+          </div>
+          <h3 className="mt-6 text-sm font-bold uppercase">Alertas</h3>
+          <div className="mt-3 space-y-2">
+            {billingRows
+              .filter(({ record }) => Math.abs(record.faturamentoAuditado - record.faturamentoInformado) / Math.max(record.faturamentoInformado, 1) > 0.05)
+              .map(({ record }) => (
+                <div key={record.id} className="rounded-lg border border-border px-3 py-2 text-sm">
+                  <p className="font-bold text-primary">{storeLabel(stores, record.lojaId)}</p>
+                  <p className="text-muted-foreground">Divergencia acima de 5% entre informado e auditado.</p>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+      {editingRecord ? (
+        <FppForm
+          record={editingRecord}
+          stores={stores}
+          enterprises={enterprises}
+          contracts={contracts}
+          onClose={() => setEditingRecord(null)}
+          onSave={async (record) => {
+            await onSaveFppRecord(record);
+            setEditingRecord(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
 function OperationsPage() {
   const lanes = ["Aberta", "Em execucao", "Aguardando terceiro", "Concluida"];
 
@@ -1768,6 +1912,97 @@ function DelinquencyForm({
   );
 }
 
+function FppForm({
+  record,
+  stores,
+  enterprises,
+  contracts,
+  onClose,
+  onSave
+}: {
+  record: FppRecord;
+  stores: StoreType[];
+  enterprises: Enterprise[];
+  contracts: Contract[];
+  onClose: () => void;
+  onSave: (record: FppRecord) => void;
+}) {
+  const storeOptions = useMemo(() => stores.map((store) => store.id), [stores]);
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const contractOptions = useMemo(() => contracts.map((contract) => contract.id), [contracts]);
+  const contractLabels = useMemo(
+    () => Object.fromEntries(contracts.map((contract) => [contract.id, `${storeLabel(stores, contract.lojaId)} - ${contract.indiceReajuste}`])),
+    [contracts, stores]
+  );
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting }
+  } = useForm<FppFormValues>({
+    resolver: zodResolver(fppSchema),
+    defaultValues: record
+  });
+  const preview = fppBilling({
+    ...record,
+    percentual: Number(watch("percentual") ?? record.percentual),
+    aluguelMinimo: Number(watch("aluguelMinimo") ?? record.aluguelMinimo),
+    faturamentoInformado: Number(watch("faturamentoInformado") ?? record.faturamentoInformado),
+    faturamentoAuditado: Number(watch("faturamentoAuditado") ?? record.faturamentoAuditado)
+  });
+
+  return (
+    <Modal title="Aluguel complementar FPP" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect label="Loja" error={errors.lojaId?.message} options={storeOptions} optionLabels={storeLabels} {...register("lojaId")} />
+          <FormSelect
+            label="Contrato"
+            error={errors.contratoId?.message}
+            options={contractOptions}
+            optionLabels={contractLabels}
+            {...register("contratoId")}
+          />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormInput label="Competencia" placeholder="2026-05" error={errors.competencia?.message} {...register("competencia")} />
+          <FormInput label="Percentual" type="number" step="0.01" error={errors.percentual?.message} {...register("percentual")} />
+          <FormInput label="Aluguel minimo" type="number" error={errors.aluguelMinimo?.message} {...register("aluguelMinimo")} />
+          <FormInput label="Faturamento informado" type="number" error={errors.faturamentoInformado?.message} {...register("faturamentoInformado")} />
+          <FormInput label="Faturamento auditado" type="number" error={errors.faturamentoAuditado?.message} {...register("faturamentoAuditado")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["aberto", "vencido", "pago", "cancelado"]}
+            optionLabels={financialStatusLabel}
+            {...register("status")}
+          />
+          <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+            <p className="metric-label">Previa de cobranca</p>
+            <p className="mt-1 font-bold text-primary">{brl(preview.valorCobrado)}</p>
+            <p className="text-muted-foreground">Complementar: {brl(preview.valorComplementar)}</p>
+          </div>
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -1928,6 +2163,22 @@ function promotionFundExpenseCategories(payables: Payable[]) {
     .filter((row) => row.value > 0);
 }
 
+function fppRevenueBase(record: FppRecord) {
+  return record.faturamentoAuditado > 0 ? record.faturamentoAuditado : record.faturamentoInformado;
+}
+
+function fppBilling(record: FppRecord) {
+  const valorPercentual = fppRevenueBase(record) * (record.percentual / 100);
+  const valorCobrado = Math.max(valorPercentual, record.aluguelMinimo);
+
+  return {
+    valorPercentual,
+    valorComplementar: Math.max(valorPercentual - record.aluguelMinimo, 0),
+    valorCobrado,
+    regra: valorPercentual > record.aluguelMinimo ? "percentual" : "minimo"
+  };
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -2042,6 +2293,23 @@ function emptyPromotionFundPayable(empreendimentoId: string): Payable {
     ...emptyPayable(empreendimentoId),
     categoria: "Marketing",
     centroCusto: "Fundo promocao"
+  };
+}
+
+function emptyFppRecord(store: StoreType | undefined, contracts: Contract[]): FppRecord {
+  const contract = contracts.find((item) => item.lojaId === store?.id) ?? contracts[0];
+
+  return {
+    id: crypto.randomUUID(),
+    lojaId: store?.id ?? contract?.lojaId ?? "",
+    contratoId: contract?.id ?? "",
+    empreendimentoId: store?.empreendimentoId ?? "",
+    competencia: new Date().toISOString().slice(0, 7),
+    percentual: 6,
+    aluguelMinimo: contract?.aluguelMinimo ?? store?.aluguel ?? 0,
+    faturamentoInformado: 0,
+    faturamentoAuditado: 0,
+    status: "aberto"
   };
 }
 
