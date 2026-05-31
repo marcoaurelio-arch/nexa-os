@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { contractAlerts, serviceOrders, tenants as seedTenants } from "@/lib/data";
+import { contractAlerts, serviceOrders } from "@/lib/data";
 import { brl, numberPt, percent } from "@/lib/metrics";
 import type { Enterprise, Store as StoreType, Tenant, TenantStatus } from "@/lib/types";
 
@@ -13,11 +13,13 @@ type ModulePageProps = {
   module: string;
   enterprises: Enterprise[];
   stores: StoreType[];
+  tenants: Tenant[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
   onSaveEnterprise: (enterprise: Enterprise) => void | Promise<void>;
   onSaveStore: (store: StoreType) => void | Promise<void>;
+  onSaveTenant: (tenant: Tenant) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -85,11 +87,13 @@ export function ModulePage({
   module,
   enterprises,
   stores,
+  tenants,
   dataSource,
   syncError,
   onResetLocalData,
   onSaveEnterprise,
-  onSaveStore
+  onSaveStore,
+  onSaveTenant
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -117,7 +121,7 @@ export function ModulePage({
   }
 
   if (module === "Contratos") return <ContractsPage />;
-  if (module === "Lojistas") return <TenantsPage stores={stores} />;
+  if (module === "Lojistas") return <TenantsPage stores={stores} tenants={tenants} onSaveTenant={onSaveTenant} />;
   if (module === "Inadimplencia") return <DelinquencyPage stores={stores} />;
   if (module === "Operacoes") return <OperationsPage />;
   if (module === "Financeiro") return <FinancePage />;
@@ -290,12 +294,19 @@ function StoresPage({
   );
 }
 
-function TenantsPage({ stores }: { stores: StoreType[] }) {
-  const [tenantRows, setTenantRows] = useState<Tenant[]>(seedTenants);
+function TenantsPage({
+  stores,
+  tenants,
+  onSaveTenant
+}: {
+  stores: StoreType[];
+  tenants: Tenant[];
+  onSaveTenant: (tenant: Tenant) => void | Promise<void>;
+}) {
   const [editing, setEditing] = useState<Tenant | null>(null);
-  const activeTenants = tenantRows.filter((tenant) => tenant.status === "ativo").length;
-  const linkedStores = new Set(tenantRows.map((tenant) => tenant.lojaId)).size;
-  const segments = new Set(tenantRows.map((tenant) => tenant.segmento)).size;
+  const activeTenants = tenants.filter((tenant) => tenant.status === "ativo").length;
+  const linkedStores = new Set(tenants.map((tenant) => tenant.lojaId)).size;
+  const segments = new Set(tenants.map((tenant) => tenant.segmento)).size;
 
   return (
     <Shell
@@ -304,7 +315,7 @@ function TenantsPage({ stores }: { stores: StoreType[] }) {
       action={<NewButton onClick={() => setEditing(emptyTenant(stores[0]?.id ?? ""))} />}
     >
       <div className="grid gap-3 md:grid-cols-4">
-        <Kpi label="Lojistas cadastrados" value={numberPt(tenantRows.length)} />
+        <Kpi label="Lojistas cadastrados" value={numberPt(tenants.length)} />
         <Kpi label="Ativos" value={numberPt(activeTenants)} tone="success" />
         <Kpi label="Lojas vinculadas" value={numberPt(linkedStores)} />
         <Kpi label="Segmentos" value={numberPt(segments)} />
@@ -312,7 +323,7 @@ function TenantsPage({ stores }: { stores: StoreType[] }) {
       <div className="grid gap-3 xl:grid-cols-[1fr_340px]">
         <DataTable
           columns={["Nome fantasia", "Loja", "CNPJ", "Responsavel", "Status", "Entrada", "Acoes"]}
-          rows={tenantRows.map((tenant) => [
+          rows={tenants.map((tenant) => [
             tenant.nomeFantasia,
             storeLabel(stores, tenant.lojaId),
             tenant.cnpj,
@@ -321,7 +332,7 @@ function TenantsPage({ stores }: { stores: StoreType[] }) {
             tenant.dataEntrada,
             "Editar"
           ])}
-          onAction={(rowIndex) => setEditing(tenantRows[rowIndex])}
+          onAction={(rowIndex) => setEditing(tenants[rowIndex])}
         />
         <div className="panel p-5">
           <div className="flex items-center gap-2">
@@ -329,7 +340,7 @@ function TenantsPage({ stores }: { stores: StoreType[] }) {
             <h2 className="font-bold uppercase">Relacionamento</h2>
           </div>
           <div className="mt-5 space-y-4">
-            {tenantRows.slice(0, 3).map((tenant) => (
+            {tenants.slice(0, 3).map((tenant) => (
               <div key={tenant.id} className="rounded-lg border border-border p-3">
                 <div className="font-bold">{tenant.nomeFantasia}</div>
                 <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -350,11 +361,8 @@ function TenantsPage({ stores }: { stores: StoreType[] }) {
           tenant={editing}
           stores={stores}
           onClose={() => setEditing(null)}
-          onSave={(tenant) => {
-            setTenantRows((current) => {
-              const exists = current.some((item) => item.id === tenant.id);
-              return exists ? current.map((item) => item.id === tenant.id ? tenant : item) : [tenant, ...current];
-            });
+          onSave={async (tenant) => {
+            await onSaveTenant(tenant);
             setEditing(null);
           }}
         />
