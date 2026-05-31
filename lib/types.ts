@@ -50,6 +50,24 @@ export type Tenant = {
   status: TenantStatus;
 };
 
+export type ContractStatus = "ativo" | "vencendo" | "renovacao" | "encerrado" | "minuta";
+
+export type Contract = {
+  id: string;
+  lojaId: string;
+  lojistaId: string;
+  dataInicio: string;
+  dataTermino: string;
+  prazoMeses: number;
+  aluguelMinimo: number;
+  indiceReajuste: string;
+  garantia: string;
+  seguro: string;
+  contratoUrl: string;
+  aditivos: number;
+  status: ContractStatus;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;

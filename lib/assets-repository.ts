@@ -1,11 +1,12 @@
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { mapEnterpriseRow, mapStoreRow, mapTenantRow } from "@/lib/supabase/mappers";
-import type { Enterprise, Store, Tenant } from "@/lib/types";
+import { mapContractRow, mapEnterpriseRow, mapStoreRow, mapTenantRow } from "@/lib/supabase/mappers";
+import type { Contract, Enterprise, Store, Tenant } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
   stores: Store[];
   tenants: Tenant[];
+  contracts: Contract[];
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -29,7 +30,8 @@ export function loadLocalAssetData(): AssetData | null {
     return {
       enterprises: parsed.enterprises,
       stores: parsed.stores,
-      tenants: Array.isArray(parsed.tenants) ? parsed.tenants : []
+      tenants: Array.isArray(parsed.tenants) ? parsed.tenants : [],
+      contracts: Array.isArray(parsed.contracts) ? parsed.contracts : []
     };
   } catch {
     return null;
@@ -61,7 +63,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -76,17 +78,24 @@ export async function fetchAssetData(): Promise<AssetData | null> {
       .from("lojistas")
       .select("*")
       .is("deleted_at", null)
-      .order("nome_fantasia", { ascending: true })
+      .order("nome_fantasia", { ascending: true }),
+    client
+      .from("contratos")
+      .select("*")
+      .is("deleted_at", null)
+      .order("data_termino", { ascending: true })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
   if (storeResult.error) throw storeResult.error;
   if (tenantResult.error) throw tenantResult.error;
+  if (contractResult.error) throw contractResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
     stores: storeResult.data.map(mapStoreRow),
-    tenants: tenantResult.data.map(mapTenantRow)
+    tenants: tenantResult.data.map(mapTenantRow),
+    contracts: contractResult.data.map(mapContractRow)
   };
 }
 
@@ -176,6 +185,38 @@ export async function saveTenant(tenant: Tenant) {
 
   if (error) throw error;
   return mapTenantRow(data);
+}
+
+export async function saveContract(contract: Contract) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return contract;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("contratos")
+    .upsert({
+      ...(isUuid(contract.id) ? { id: contract.id } : {}),
+      loja_id: contract.lojaId,
+      lojista_id: contract.lojistaId,
+      data_inicio: contract.dataInicio,
+      data_termino: contract.dataTermino,
+      prazo_meses: contract.prazoMeses,
+      aluguel_minimo: contract.aluguelMinimo,
+      indice_reajuste: contract.indiceReajuste,
+      garantia: contract.garantia,
+      seguro: contract.seguro,
+      contrato_url: contract.contratoUrl || null,
+      aditivos: contract.aditivos,
+      status: contract.status
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapContractRow(data);
 }
 
 function isUuid(value: string) {

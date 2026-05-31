@@ -1,25 +1,28 @@
 "use client";
 
-import { AlertTriangle, Building2, Mail, Phone, Plus, Search, Users, Wrench } from "lucide-react";
+import { AlertTriangle, Building2, FileText, Mail, Phone, Plus, Search, Users, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { contractAlerts, serviceOrders } from "@/lib/data";
+import { buildContractAlerts } from "@/lib/contracts";
+import { serviceOrders } from "@/lib/data";
 import { brl, numberPt, percent } from "@/lib/metrics";
-import type { Enterprise, Store as StoreType, Tenant, TenantStatus } from "@/lib/types";
+import type { Contract, ContractStatus, Enterprise, Store as StoreType, Tenant, TenantStatus } from "@/lib/types";
 
 type ModulePageProps = {
   module: string;
   enterprises: Enterprise[];
   stores: StoreType[];
   tenants: Tenant[];
+  contracts: Contract[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
   onSaveEnterprise: (enterprise: Enterprise) => void | Promise<void>;
   onSaveStore: (store: StoreType) => void | Promise<void>;
   onSaveTenant: (tenant: Tenant) => void | Promise<void>;
+  onSaveContract: (contract: Contract) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -36,6 +39,14 @@ const tenantStatusLabel: Record<TenantStatus, string> = {
   implantacao: "Implantacao",
   inadimplente: "Inadimplente",
   inativo: "Inativo"
+};
+
+const contractStatusLabel: Record<ContractStatus, string> = {
+  ativo: "Ativo",
+  vencendo: "Vencendo",
+  renovacao: "Renovacao",
+  encerrado: "Encerrado",
+  minuta: "Minuta"
 };
 
 const enterpriseSchema = z.object({
@@ -79,21 +90,40 @@ const tenantSchema = z.object({
   status: z.enum(["ativo", "implantacao", "inadimplente", "inativo"])
 });
 
+const contractSchema = z.object({
+  id: z.string().min(1),
+  lojaId: z.string().trim().min(1, "Selecione a loja."),
+  lojistaId: z.string().trim().min(1, "Selecione o lojista."),
+  dataInicio: z.string().trim().min(8, "Informe a data de inicio."),
+  dataTermino: z.string().trim().min(8, "Informe a data de termino."),
+  prazoMeses: z.coerce.number().int("Use um numero inteiro.").min(1, "Informe o prazo."),
+  aluguelMinimo: z.coerce.number().min(0, "Informe zero ou mais."),
+  indiceReajuste: z.string().trim().min(2, "Informe o indice."),
+  garantia: z.string().trim().min(2, "Informe a garantia."),
+  seguro: z.string().trim().min(2, "Informe o seguro."),
+  contratoUrl: z.string().trim(),
+  aditivos: z.coerce.number().int("Use um numero inteiro.").min(0, "Informe zero ou mais."),
+  status: z.enum(["ativo", "vencendo", "renovacao", "encerrado", "minuta"])
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
+type ContractFormValues = z.infer<typeof contractSchema>;
 
 export function ModulePage({
   module,
   enterprises,
   stores,
   tenants,
+  contracts,
   dataSource,
   syncError,
   onResetLocalData,
   onSaveEnterprise,
   onSaveStore,
-  onSaveTenant
+  onSaveTenant,
+  onSaveContract
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -120,7 +150,7 @@ export function ModulePage({
     );
   }
 
-  if (module === "Contratos") return <ContractsPage />;
+  if (module === "Contratos") return <ContractsPage stores={stores} tenants={tenants} contracts={contracts} onSaveContract={onSaveContract} />;
   if (module === "Lojistas") return <TenantsPage stores={stores} tenants={tenants} onSaveTenant={onSaveTenant} />;
   if (module === "Inadimplencia") return <DelinquencyPage stores={stores} />;
   if (module === "Operacoes") return <OperationsPage />;
@@ -371,25 +401,82 @@ function TenantsPage({
   );
 }
 
-function ContractsPage() {
+function ContractsPage({
+  stores,
+  tenants,
+  contracts,
+  onSaveContract
+}: {
+  stores: StoreType[];
+  tenants: Tenant[];
+  contracts: Contract[];
+  onSaveContract: (contract: Contract) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState<Contract | null>(null);
+  const alerts = buildContractAlerts(contracts, stores, tenants);
+  const activeContracts = contracts.filter((contract) => contract.status === "ativo").length;
+
   return (
-    <Shell title="Contratos" description="Alertas de vencimento e acompanhamento juridico-comercial.">
+    <Shell
+      title="Contratos"
+      description="Alertas de vencimento, renovacoes, garantias e acompanhamento juridico-comercial."
+      action={<NewButton onClick={() => setEditing(emptyContract(stores[0]?.id ?? "", tenants[0]?.id ?? ""))} />}
+    >
       <div className="grid gap-3 md:grid-cols-4">
-        <Kpi label="Alertas ativos" value={numberPt(contractAlerts.length)} tone="danger" />
-        <Kpi label="3 meses" value={numberPt(contractAlerts.filter((item) => item.meses === 3).length)} />
-        <Kpi label="6 meses" value={numberPt(contractAlerts.filter((item) => item.meses === 6).length)} />
-        <Kpi label="12+ meses" value={numberPt(contractAlerts.filter((item) => item.meses >= 12).length)} />
+        <Kpi label="Contratos" value={numberPt(contracts.length)} />
+        <Kpi label="Ativos" value={numberPt(activeContracts)} tone="success" />
+        <Kpi label="Alertas ativos" value={numberPt(alerts.length)} tone="danger" />
+        <Kpi label="3 meses" value={numberPt(alerts.filter((item) => item.meses === 3).length)} />
       </div>
-      <DataTable
-        columns={["Loja", "Lojista", "Janela", "Vencimento", "Risco"]}
-        rows={contractAlerts.map((alert) => [
-          alert.loja,
-          alert.lojista,
-          `${alert.meses} meses`,
-          alert.vencimento,
-          alert.risco
-        ])}
-      />
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <DataTable
+          columns={["Loja", "Lojista", "Inicio", "Termino", "Aluguel", "Status", "Acoes"]}
+          rows={contracts.map((contract) => [
+            storeLabel(stores, contract.lojaId),
+            tenantLabel(tenants, contract.lojistaId),
+            contract.dataInicio,
+            contract.dataTermino,
+            brl(contract.aluguelMinimo),
+            contractStatusLabel[contract.status],
+            "Editar"
+          ])}
+          onAction={(rowIndex) => setEditing(contracts[rowIndex])}
+        />
+        <div className="panel p-5">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
+            <h2 className="font-bold uppercase">Alertas automaticos</h2>
+          </div>
+          <div className="mt-5 space-y-3">
+            {alerts.length ? (
+              alerts.map((alert) => (
+                <KanbanCard
+                  key={alert.id}
+                  title={`${alert.meses} meses | ${alert.loja}`}
+                  subtitle={alert.lojista}
+                  value={`${alert.vencimento} | risco ${alert.risco}`}
+                />
+              ))
+            ) : (
+              <div className="rounded-lg border border-dashed border-border p-3 text-xs font-medium text-muted-foreground">
+                Nenhum contrato dentro das janelas de alerta.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      {editing ? (
+        <ContractForm
+          contract={editing}
+          stores={stores}
+          tenants={tenants}
+          onClose={() => setEditing(null)}
+          onSave={async (contract) => {
+            await onSaveContract(contract);
+            setEditing(null);
+          }}
+        />
+      ) : null}
     </Shell>
   );
 }
@@ -827,6 +914,80 @@ function TenantForm({
   );
 }
 
+function ContractForm({
+  contract,
+  stores,
+  tenants,
+  onClose,
+  onSave
+}: {
+  contract: Contract;
+  stores: StoreType[];
+  tenants: Tenant[];
+  onClose: () => void;
+  onSave: (contract: Contract) => void;
+}) {
+  const storeOptions = useMemo(() => stores.map((store) => store.id), [stores]);
+  const tenantOptions = useMemo(() => tenants.map((tenant) => tenant.id), [tenants]);
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const tenantLabels = useMemo(
+    () => Object.fromEntries(tenants.map((tenant) => [tenant.id, tenant.nomeFantasia])),
+    [tenants]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<ContractFormValues>({
+    resolver: zodResolver(contractSchema),
+    defaultValues: contract
+  });
+
+  return (
+    <Modal title="Contrato" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect
+            label="Loja"
+            error={errors.lojaId?.message}
+            options={storeOptions}
+            optionLabels={storeLabels}
+            {...register("lojaId")}
+          />
+          <FormSelect
+            label="Lojista"
+            error={errors.lojistaId?.message}
+            options={tenantOptions}
+            optionLabels={tenantLabels}
+            {...register("lojistaId")}
+          />
+          <FormInput label="Data inicio" type="date" error={errors.dataInicio?.message} {...register("dataInicio")} />
+          <FormInput label="Data termino" type="date" error={errors.dataTermino?.message} {...register("dataTermino")} />
+          <FormInput label="Prazo meses" type="number" error={errors.prazoMeses?.message} {...register("prazoMeses")} />
+          <FormInput label="Aluguel minimo" type="number" error={errors.aluguelMinimo?.message} {...register("aluguelMinimo")} />
+          <FormInput label="Indice reajuste" error={errors.indiceReajuste?.message} {...register("indiceReajuste")} />
+          <FormInput label="Garantia" error={errors.garantia?.message} {...register("garantia")} />
+          <FormInput label="Seguro" error={errors.seguro?.message} {...register("seguro")} />
+          <FormInput label="Aditivos" type="number" error={errors.aditivos?.message} {...register("aditivos")} />
+          <FormInput label="Contrato URL" error={errors.contratoUrl?.message} {...register("contratoUrl")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["ativo", "vencendo", "renovacao", "encerrado", "minuta"]}
+            optionLabels={contractStatusLabel}
+            {...register("status")}
+          />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -902,6 +1063,11 @@ function storeLabel(stores: StoreType[], lojaId: string) {
   return store ? `${store.codigo} - ${store.nome}` : "-";
 }
 
+function tenantLabel(tenants: Tenant[], lojistaId: string) {
+  const tenant = tenants.find((item) => item.id === lojistaId);
+  return tenant?.nomeFantasia ?? "-";
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -933,6 +1099,28 @@ function emptyTenant(lojaId: string): Tenant {
     lojaId,
     dataEntrada: new Date().toISOString().slice(0, 10),
     status: "implantacao"
+  };
+}
+
+function emptyContract(lojaId: string, lojistaId: string): Contract {
+  const now = new Date();
+  const termination = new Date(now);
+  termination.setMonth(termination.getMonth() + 60);
+
+  return {
+    id: crypto.randomUUID(),
+    lojaId,
+    lojistaId,
+    dataInicio: now.toISOString().slice(0, 10),
+    dataTermino: termination.toISOString().slice(0, 10),
+    prazoMeses: 60,
+    aluguelMinimo: 0,
+    indiceReajuste: "IPCA",
+    garantia: "",
+    seguro: "",
+    contratoUrl: "",
+    aditivos: 0,
+    status: "minuta"
   };
 }
 

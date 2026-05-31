@@ -97,6 +97,42 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["lojistas"]["Insert"]>;
       };
+      contratos: {
+        Row: {
+          id: string;
+          loja_id: string;
+          lojista_id: string;
+          data_inicio: string;
+          data_termino: string;
+          prazo_meses: number;
+          aluguel_minimo: number;
+          indice_reajuste: string | null;
+          garantia: string | null;
+          seguro: string | null;
+          contrato_url: string | null;
+          aditivos: number;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loja_id: string;
+          lojista_id: string;
+          data_inicio: string;
+          data_termino: string;
+          prazo_meses?: number;
+          aluguel_minimo?: number;
+          indice_reajuste?: string | null;
+          garantia?: string | null;
+          seguro?: string | null;
+          contrato_url?: string | null;
+          aditivos?: number;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["contratos"]["Insert"]>;
+      };
     };
   };
 };

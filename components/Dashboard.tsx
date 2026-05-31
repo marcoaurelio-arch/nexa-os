@@ -24,9 +24,10 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { contractAlerts, enterprises, serviceOrders } from "@/lib/data";
+import { buildContractAlerts } from "@/lib/contracts";
+import { contracts, enterprises, serviceOrders, tenants } from "@/lib/data";
 import { brl, chartRows, filterByEnterprise, getDashboardMetrics, numberPt, percent } from "@/lib/metrics";
-import type { Enterprise, Store } from "@/lib/types";
+import type { Contract, Enterprise, Store, Tenant } from "@/lib/types";
 
 type MetricCardProps = {
   label: string;
@@ -65,15 +66,19 @@ function SectionTitle({ title, action }: { title: string; action?: string }) {
 
 export function Dashboard({
   enterpriseRows = enterprises,
-  storeRows
+  storeRows,
+  tenantRows = tenants,
+  contractRows = contracts
 }: {
   enterpriseRows?: Enterprise[];
   storeRows: Store[];
+  tenantRows?: Tenant[];
+  contractRows?: Contract[];
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
   const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows), [enterpriseId, enterpriseRows, storeRows]);
   const filteredOrders = filterByEnterprise(serviceOrders, enterpriseId);
-  const filteredAlerts = filterByEnterprise(contractAlerts, enterpriseId);
+  const filteredAlerts = filterByEnterprise(buildContractAlerts(contractRows, storeRows, tenantRows), enterpriseId);
   const charts = chartRows(enterpriseRows, storeRows);
 
   return (

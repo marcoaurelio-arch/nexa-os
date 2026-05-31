@@ -1,4 +1,4 @@
-import type { ContractAlert, Enterprise, Revenue, ServiceOrder, Store, Tenant } from "./types";
+import type { Contract, ContractAlert, Enterprise, Revenue, ServiceOrder, Store, Tenant } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -129,6 +129,54 @@ export const tenants: Tenant[] = [
     lojaId: "pn-01",
     dataEntrada: "2026-04-10",
     status: "implantacao"
+  }
+];
+
+export const contracts: Contract[] = [
+  {
+    id: "contract-gastro-prime",
+    lojaId: "vv-01",
+    lojistaId: "tenant-gastro-prime",
+    dataInicio: "2024-03-01",
+    dataTermino: "2026-11-30",
+    prazoMeses: 33,
+    aluguelMinimo: 25000,
+    indiceReajuste: "IPCA",
+    garantia: "Fianca bancaria",
+    seguro: "Seguro empresarial ativo",
+    contratoUrl: "",
+    aditivos: 1,
+    status: "vencendo"
+  },
+  {
+    id: "contract-clinica-vida",
+    lojaId: "vv-02",
+    lojistaId: "tenant-clinica-vida",
+    dataInicio: "2024-07-15",
+    dataTermino: "2027-05-28",
+    prazoMeses: 34,
+    aluguelMinimo: 31000,
+    indiceReajuste: "IGP-M",
+    garantia: "Caucao",
+    seguro: "Seguro empresarial ativo",
+    contratoUrl: "",
+    aditivos: 0,
+    status: "ativo"
+  },
+  {
+    id: "contract-smart-fit-hub",
+    lojaId: "br-01",
+    lojistaId: "tenant-smart-fit-hub",
+    dataInicio: "2023-11-20",
+    dataTermino: "2026-08-29",
+    prazoMeses: 33,
+    aluguelMinimo: 52000,
+    indiceReajuste: "IPCA",
+    garantia: "Seguro garantia",
+    seguro: "Seguro empresarial ativo",
+    contratoUrl: "",
+    aditivos: 2,
+    status: "renovacao"
   }
 ];
 

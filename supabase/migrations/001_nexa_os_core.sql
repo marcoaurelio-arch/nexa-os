@@ -71,9 +71,29 @@ create table if not exists lojistas (
   deleted_at timestamptz
 );
 
+create table if not exists contratos (
+  id uuid primary key default gen_random_uuid(),
+  loja_id uuid not null references lojas(id),
+  lojista_id uuid not null references lojistas(id),
+  data_inicio date not null,
+  data_termino date not null,
+  prazo_meses integer not null default 0,
+  aluguel_minimo numeric(14,2) not null default 0,
+  indice_reajuste text,
+  garantia text,
+  seguro text,
+  contrato_url text,
+  aditivos integer not null default 0,
+  status text not null default 'ativo',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 create index if not exists idx_empreendimentos_status on empreendimentos (status) where deleted_at is null;
 create index if not exists idx_lojas_empreendimento_status on lojas (empreendimento_id, status) where deleted_at is null;
 create index if not exists idx_lojistas_loja_status on lojistas (loja_id, status) where deleted_at is null;
+create index if not exists idx_contratos_termino_status on contratos (data_termino, status) where deleted_at is null;
 
 drop trigger if exists trg_empreendimentos_updated_at on empreendimentos;
 create trigger trg_empreendimentos_updated_at
@@ -88,6 +108,11 @@ for each row execute function set_updated_at();
 drop trigger if exists trg_lojistas_updated_at on lojistas;
 create trigger trg_lojistas_updated_at
 before update on lojistas
+for each row execute function set_updated_at();
+
+drop trigger if exists trg_contratos_updated_at on contratos;
+create trigger trg_contratos_updated_at
+before update on contratos
 for each row execute function set_updated_at();
 
 insert into empreendimentos (id, nome, cidade, estado, status, abl_m2, numero_lojas, numero_vagas)
@@ -203,4 +228,79 @@ on conflict (cnpj) do update set
   segmento = excluded.segmento,
   loja_id = excluded.loja_id,
   data_entrada = excluded.data_entrada,
+  status = excluded.status;
+
+insert into contratos (
+  id,
+  loja_id,
+  lojista_id,
+  data_inicio,
+  data_termino,
+  prazo_meses,
+  aluguel_minimo,
+  indice_reajuste,
+  garantia,
+  seguro,
+  contrato_url,
+  aditivos,
+  status
+)
+values
+  (
+    '66666666-6666-4666-8666-666666666661',
+    (select id from lojas where codigo = 'VV-01' limit 1),
+    (select id from lojistas where cnpj = '12.345.678/0001-90' limit 1),
+    '2024-03-01',
+    '2026-11-30',
+    33,
+    25000,
+    'IPCA',
+    'Fianca bancaria',
+    'Seguro empresarial ativo',
+    '',
+    1,
+    'vencendo'
+  ),
+  (
+    '66666666-6666-4666-8666-666666666662',
+    (select id from lojas where codigo = 'VV-02' limit 1),
+    (select id from lojistas where cnpj = '23.456.789/0001-10' limit 1),
+    '2024-07-15',
+    '2027-05-28',
+    34,
+    31000,
+    'IGP-M',
+    'Caucao',
+    'Seguro empresarial ativo',
+    '',
+    0,
+    'ativo'
+  ),
+  (
+    '66666666-6666-4666-8666-666666666663',
+    (select id from lojas where codigo = 'BR-01' limit 1),
+    (select id from lojistas where cnpj = '34.567.890/0001-55' limit 1),
+    '2023-11-20',
+    '2026-08-29',
+    33,
+    52000,
+    'IPCA',
+    'Seguro garantia',
+    'Seguro empresarial ativo',
+    '',
+    2,
+    'renovacao'
+  )
+on conflict (id) do update set
+  loja_id = excluded.loja_id,
+  lojista_id = excluded.lojista_id,
+  data_inicio = excluded.data_inicio,
+  data_termino = excluded.data_termino,
+  prazo_meses = excluded.prazo_meses,
+  aluguel_minimo = excluded.aluguel_minimo,
+  indice_reajuste = excluded.indice_reajuste,
+  garantia = excluded.garantia,
+  seguro = excluded.seguro,
+  contrato_url = excluded.contrato_url,
+  aditivos = excluded.aditivos,
   status = excluded.status;
