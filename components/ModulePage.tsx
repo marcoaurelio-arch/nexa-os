@@ -262,6 +262,18 @@ export function ModulePage({
       />
     );
   }
+  if (module === "Fundo") {
+    return (
+      <PromotionFundPage
+        enterprises={enterprises}
+        stores={stores}
+        receivables={receivables}
+        payables={payables}
+        onSaveReceivable={onSaveReceivable}
+        onSavePayable={onSavePayable}
+      />
+    );
+  }
   if (module === "Operacoes") return <OperationsPage />;
   if (module === "Financeiro") {
     return (
@@ -922,6 +934,157 @@ function CondominiumPage({
             <Mini label="Orcado" value={brl(budget)} />
             <Mini label="Despesas pagas" value={brl(paidExpenses)} />
             <Mini label="Saldo acumulado" value={brl(received - paidExpenses)} />
+          </div>
+          <h3 className="mt-6 text-sm font-bold uppercase">Categorias</h3>
+          <div className="mt-3 space-y-2">
+            {categoryRows.map((row) => (
+              <div key={row.category} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span className="font-medium">{row.category}</span>
+                <span className="font-bold text-primary">{brl(row.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {editingReceivable ? (
+        <ReceivableForm
+          receivable={editingReceivable}
+          stores={stores}
+          enterprises={enterprises}
+          onClose={() => setEditingReceivable(null)}
+          onSave={async (receivable) => {
+            await onSaveReceivable(receivable);
+            setEditingReceivable(null);
+          }}
+        />
+      ) : null}
+      {editingPayable ? (
+        <PayableForm
+          payable={editingPayable}
+          enterprises={enterprises}
+          onClose={() => setEditingPayable(null)}
+          onSave={async (payable) => {
+            await onSavePayable(payable);
+            setEditingPayable(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
+function PromotionFundPage({
+  enterprises,
+  stores,
+  receivables,
+  payables,
+  onSaveReceivable,
+  onSavePayable
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  receivables: Receivable[];
+  payables: Payable[];
+  onSaveReceivable: (receivable: Receivable) => void | Promise<void>;
+  onSavePayable: (payable: Payable) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [editingReceivable, setEditingReceivable] = useState<Receivable | null>(null);
+  const [editingPayable, setEditingPayable] = useState<Payable | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const fundReceivables = receivables.filter(
+    (item) => selectedEnterpriseIds.has(item.empreendimentoId) && item.receita === "fundo_promocao"
+  );
+  const fundPayables = payables.filter(
+    (item) => selectedEnterpriseIds.has(item.empreendimentoId) && item.centroCusto.toLowerCase().includes("fundo")
+  );
+  const collected = fundReceivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const openRevenue = fundReceivables
+    .filter((item) => item.status === "aberto" || item.status === "vencido")
+    .reduce((sum, item) => sum + item.valor, 0);
+  const expenses = fundPayables.filter((item) => item.status !== "cancelado").reduce((sum, item) => sum + item.valor, 0);
+  const paidExpenses = fundPayables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const balance = collected - paidExpenses;
+  const utilization = collected > 0 ? Math.round((paidExpenses / collected) * 100) : 0;
+  const categoryRows = promotionFundExpenseCategories(fundPayables);
+  const firstStore = selectedStores[0] ?? stores[0];
+  const firstEnterpriseId = enterpriseId === "all" ? enterprises[0]?.id ?? "" : enterpriseId;
+
+  return (
+    <Shell
+      title="Fundo de Promocao"
+      description="Arrecadacao, utilizacao, saldo e despesas de marketing por empreendimento."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => setEditingReceivable(emptyPromotionFundReceivable(firstStore))}>
+            <Plus className="h-4 w-4" />
+            Receita
+          </button>
+          <button className="control inline-flex items-center gap-2" onClick={() => setEditingPayable(emptyPromotionFundPayable(firstEnterpriseId))}>
+            <Plus className="h-4 w-4" />
+            Despesa
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Arrecadacao" value={brl(collected)} tone="success" />
+        <Kpi label="A receber" value={brl(openRevenue)} />
+        <Kpi label="Utilizacao" value={`${utilization}%`} />
+        <Kpi label="Saldo" value={brl(balance)} tone={balance >= 0 ? "success" : "danger"} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div className="space-y-3">
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Arrecadacao do fundo</h2>
+            <DataTable
+              columns={["Loja", "Competencia", "Valor", "Vencimento", "Status", "Acoes"]}
+              rows={fundReceivables.map((item) => [
+                storeLabel(stores, item.lojaId),
+                item.competencia,
+                brl(item.valor),
+                item.vencimento,
+                financialStatusLabel[item.status],
+                "Editar"
+              ])}
+              onAction={(rowIndex) => setEditingReceivable(fundReceivables[rowIndex])}
+            />
+          </div>
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Despesas promocionais</h2>
+            <DataTable
+              columns={["Fornecedor", "Categoria", "Valor", "Vencimento", "Status", "Acoes"]}
+              rows={fundPayables.map((item) => [
+                item.fornecedor,
+                item.categoria,
+                brl(item.valor),
+                item.vencimento,
+                financialStatusLabel[item.status],
+                "Editar"
+              ])}
+              onAction={(rowIndex) => setEditingPayable(fundPayables[rowIndex])}
+            />
+          </div>
+        </div>
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Utilizacao do fundo</h2>
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-primary" style={{ width: `${Math.min(utilization, 100)}%` }} />
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {utilization}% do fundo arrecadado ja foi utilizado em acoes promocionais pagas.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Arrecadado" value={brl(collected)} />
+            <Mini label="Despesas lancadas" value={brl(expenses)} />
+            <Mini label="Despesas pagas" value={brl(paidExpenses)} />
           </div>
           <h3 className="mt-6 text-sm font-bold uppercase">Categorias</h3>
           <div className="mt-3 space-y-2">
@@ -1752,6 +1915,19 @@ function condominiumExpenseCategories(payables: Payable[]) {
     .filter((row) => row.value > 0);
 }
 
+function promotionFundExpenseCategories(payables: Payable[]) {
+  const categories = ["Marketing", "Eventos", "Trafego pago", "Redes sociais", "Producao audiovisual", "Decoracao", "Material grafico"];
+
+  return categories
+    .map((category) => ({
+      category,
+      value: payables
+        .filter((payable) => payable.categoria.toLowerCase() === category.toLowerCase())
+        .reduce((sum, payable) => sum + payable.valor, 0)
+    }))
+    .filter((row) => row.value > 0);
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -1850,6 +2026,22 @@ function emptyCondominiumPayable(empreendimentoId: string): Payable {
     ...emptyPayable(empreendimentoId),
     categoria: "Limpeza",
     centroCusto: "Condominio"
+  };
+}
+
+function emptyPromotionFundReceivable(store?: StoreType): Receivable {
+  return {
+    ...emptyReceivable(store),
+    receita: "fundo_promocao",
+    valor: store?.fundo ?? 0
+  };
+}
+
+function emptyPromotionFundPayable(empreendimentoId: string): Payable {
+  return {
+    ...emptyPayable(empreendimentoId),
+    categoria: "Marketing",
+    centroCusto: "Fundo promocao"
   };
 }
 
