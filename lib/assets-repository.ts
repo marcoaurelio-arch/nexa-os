@@ -1,10 +1,11 @@
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { mapEnterpriseRow, mapStoreRow } from "@/lib/supabase/mappers";
-import type { Enterprise, Store } from "@/lib/types";
+import { mapEnterpriseRow, mapStoreRow, mapTenantRow } from "@/lib/supabase/mappers";
+import type { Enterprise, Store, Tenant } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
   stores: Store[];
+  tenants: Tenant[];
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -25,7 +26,11 @@ export function loadLocalAssetData(): AssetData | null {
       return null;
     }
 
-    return parsed;
+    return {
+      enterprises: parsed.enterprises,
+      stores: parsed.stores,
+      tenants: Array.isArray(parsed.tenants) ? parsed.tenants : []
+    };
   } catch {
     return null;
   }
@@ -56,7 +61,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -66,15 +71,22 @@ export async function fetchAssetData(): Promise<AssetData | null> {
       .from("lojas")
       .select("*")
       .is("deleted_at", null)
-      .order("codigo", { ascending: true })
+      .order("codigo", { ascending: true }),
+    client
+      .from("lojistas")
+      .select("*")
+      .is("deleted_at", null)
+      .order("nome_fantasia", { ascending: true })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
   if (storeResult.error) throw storeResult.error;
+  if (tenantResult.error) throw tenantResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
-    stores: storeResult.data.map(mapStoreRow)
+    stores: storeResult.data.map(mapStoreRow),
+    tenants: tenantResult.data.map(mapTenantRow)
   };
 }
 
@@ -132,6 +144,38 @@ export async function saveStore(store: Store) {
 
   if (error) throw error;
   return mapStoreRow(data);
+}
+
+export async function saveTenant(tenant: Tenant) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return tenant;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("lojistas")
+    .upsert({
+      ...(isUuid(tenant.id) ? { id: tenant.id } : {}),
+      nome_fantasia: tenant.nomeFantasia,
+      razao_social: tenant.razaoSocial,
+      cnpj: tenant.cnpj,
+      responsavel_legal: tenant.responsavelLegal,
+      telefone: tenant.telefone,
+      whatsapp: tenant.whatsapp,
+      email: tenant.email,
+      endereco: tenant.endereco,
+      segmento: tenant.segmento,
+      loja_id: tenant.lojaId || null,
+      data_entrada: tenant.dataEntrada || null,
+      status: tenant.status
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapTenantRow(data);
 }
 
 function isUuid(value: string) {
