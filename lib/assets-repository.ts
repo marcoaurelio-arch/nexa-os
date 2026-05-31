@@ -1,12 +1,14 @@
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { mapContractRow, mapEnterpriseRow, mapStoreRow, mapTenantRow } from "@/lib/supabase/mappers";
-import type { Contract, Enterprise, Store, Tenant } from "@/lib/types";
+import { mapContractRow, mapEnterpriseRow, mapPayableRow, mapReceivableRow, mapStoreRow, mapTenantRow } from "@/lib/supabase/mappers";
+import type { Contract, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
   stores: Store[];
   tenants: Tenant[];
   contracts: Contract[];
+  receivables: Receivable[];
+  payables: Payable[];
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -31,7 +33,9 @@ export function loadLocalAssetData(): AssetData | null {
       enterprises: parsed.enterprises,
       stores: parsed.stores,
       tenants: Array.isArray(parsed.tenants) ? parsed.tenants : [],
-      contracts: Array.isArray(parsed.contracts) ? parsed.contracts : []
+      contracts: Array.isArray(parsed.contracts) ? parsed.contracts : [],
+      receivables: Array.isArray(parsed.receivables) ? parsed.receivables : [],
+      payables: Array.isArray(parsed.payables) ? parsed.payables : []
     };
   } catch {
     return null;
@@ -63,7 +67,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -83,19 +87,33 @@ export async function fetchAssetData(): Promise<AssetData | null> {
       .from("contratos")
       .select("*")
       .is("deleted_at", null)
-      .order("data_termino", { ascending: true })
+      .order("data_termino", { ascending: true }),
+    client
+      .from("receitas")
+      .select("*")
+      .is("deleted_at", null)
+      .order("vencimento", { ascending: true }),
+    client
+      .from("despesas")
+      .select("*")
+      .is("deleted_at", null)
+      .order("vencimento", { ascending: true })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
   if (storeResult.error) throw storeResult.error;
   if (tenantResult.error) throw tenantResult.error;
   if (contractResult.error) throw contractResult.error;
+  if (receivableResult.error) throw receivableResult.error;
+  if (payableResult.error) throw payableResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
     stores: storeResult.data.map(mapStoreRow),
     tenants: tenantResult.data.map(mapTenantRow),
-    contracts: contractResult.data.map(mapContractRow)
+    contracts: contractResult.data.map(mapContractRow),
+    receivables: receivableResult.data.map(mapReceivableRow),
+    payables: payableResult.data.map(mapPayableRow)
   };
 }
 
@@ -217,6 +235,63 @@ export async function saveContract(contract: Contract) {
 
   if (error) throw error;
   return mapContractRow(data);
+}
+
+export async function saveReceivable(receivable: Receivable) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return receivable;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("receitas")
+    .upsert({
+      ...(isUuid(receivable.id) ? { id: receivable.id } : {}),
+      loja_id: receivable.lojaId,
+      empreendimento_id: receivable.empreendimentoId,
+      competencia: receivable.competencia,
+      receita: receivable.receita,
+      valor: receivable.valor,
+      vencimento: receivable.vencimento,
+      recebimento: receivable.recebimento || null,
+      status: receivable.status
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapReceivableRow(data);
+}
+
+export async function savePayable(payable: Payable) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return payable;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("despesas")
+    .upsert({
+      ...(isUuid(payable.id) ? { id: payable.id } : {}),
+      empreendimento_id: payable.empreendimentoId,
+      fornecedor: payable.fornecedor,
+      categoria: payable.categoria,
+      competencia: payable.competencia,
+      valor: payable.valor,
+      vencimento: payable.vencimento,
+      pagamento: payable.pagamento || null,
+      centro_custo: payable.centroCusto,
+      status: payable.status
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapPayableRow(data);
 }
 
 function isUuid(value: string) {

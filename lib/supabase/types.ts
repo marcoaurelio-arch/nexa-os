@@ -133,6 +133,64 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["contratos"]["Insert"]>;
       };
+      receitas: {
+        Row: {
+          id: string;
+          loja_id: string;
+          empreendimento_id: string;
+          competencia: string;
+          receita: string;
+          valor: number;
+          vencimento: string;
+          recebimento: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loja_id: string;
+          empreendimento_id: string;
+          competencia: string;
+          receita: string;
+          valor?: number;
+          vencimento: string;
+          recebimento?: string | null;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["receitas"]["Insert"]>;
+      };
+      despesas: {
+        Row: {
+          id: string;
+          empreendimento_id: string;
+          fornecedor: string;
+          categoria: string;
+          competencia: string;
+          valor: number;
+          vencimento: string;
+          pagamento: string | null;
+          centro_custo: string;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          empreendimento_id: string;
+          fornecedor: string;
+          categoria: string;
+          competencia: string;
+          valor?: number;
+          vencimento: string;
+          pagamento?: string | null;
+          centro_custo: string;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["despesas"]["Insert"]>;
+      };
     };
   };
 };

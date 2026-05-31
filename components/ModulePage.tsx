@@ -8,7 +8,18 @@ import { z } from "zod";
 import { buildContractAlerts } from "@/lib/contracts";
 import { serviceOrders } from "@/lib/data";
 import { brl, numberPt, percent } from "@/lib/metrics";
-import type { Contract, ContractStatus, Enterprise, Store as StoreType, Tenant, TenantStatus } from "@/lib/types";
+import type {
+  Contract,
+  ContractStatus,
+  Enterprise,
+  FinancialStatus,
+  Payable,
+  Receivable,
+  RevenueType,
+  Store as StoreType,
+  Tenant,
+  TenantStatus
+} from "@/lib/types";
 
 type ModulePageProps = {
   module: string;
@@ -16,6 +27,8 @@ type ModulePageProps = {
   stores: StoreType[];
   tenants: Tenant[];
   contracts: Contract[];
+  receivables: Receivable[];
+  payables: Payable[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -23,6 +36,8 @@ type ModulePageProps = {
   onSaveStore: (store: StoreType) => void | Promise<void>;
   onSaveTenant: (tenant: Tenant) => void | Promise<void>;
   onSaveContract: (contract: Contract) => void | Promise<void>;
+  onSaveReceivable: (receivable: Receivable) => void | Promise<void>;
+  onSavePayable: (payable: Payable) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -47,6 +62,22 @@ const contractStatusLabel: Record<ContractStatus, string> = {
   renovacao: "Renovacao",
   encerrado: "Encerrado",
   minuta: "Minuta"
+};
+
+const financialStatusLabel: Record<FinancialStatus, string> = {
+  aberto: "Aberto",
+  vencido: "Vencido",
+  pago: "Pago",
+  cancelado: "Cancelado"
+};
+
+const revenueTypeLabel: Record<RevenueType, string> = {
+  aluguel: "Aluguel",
+  condominio: "Condominio",
+  fundo_promocao: "Fundo promocao",
+  fpp: "FPP",
+  multa: "Multa",
+  juros: "Juros"
 };
 
 const enterpriseSchema = z.object({
@@ -106,10 +137,37 @@ const contractSchema = z.object({
   status: z.enum(["ativo", "vencendo", "renovacao", "encerrado", "minuta"])
 });
 
+const receivableSchema = z.object({
+  id: z.string().min(1),
+  lojaId: z.string().trim().min(1, "Selecione a loja."),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  competencia: z.string().trim().min(7, "Informe a competencia."),
+  receita: z.enum(["aluguel", "condominio", "fundo_promocao", "fpp", "multa", "juros"]),
+  valor: z.coerce.number().min(0, "Informe zero ou mais."),
+  vencimento: z.string().trim().min(8, "Informe o vencimento."),
+  recebimento: z.string().trim(),
+  status: z.enum(["aberto", "vencido", "pago", "cancelado"])
+});
+
+const payableSchema = z.object({
+  id: z.string().min(1),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  fornecedor: z.string().trim().min(2, "Informe o fornecedor."),
+  categoria: z.string().trim().min(2, "Informe a categoria."),
+  competencia: z.string().trim().min(7, "Informe a competencia."),
+  valor: z.coerce.number().min(0, "Informe zero ou mais."),
+  vencimento: z.string().trim().min(8, "Informe o vencimento."),
+  pagamento: z.string().trim(),
+  centroCusto: z.string().trim().min(2, "Informe o centro de custo."),
+  status: z.enum(["aberto", "vencido", "pago", "cancelado"])
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
 type ContractFormValues = z.infer<typeof contractSchema>;
+type ReceivableFormValues = z.infer<typeof receivableSchema>;
+type PayableFormValues = z.infer<typeof payableSchema>;
 
 export function ModulePage({
   module,
@@ -117,13 +175,17 @@ export function ModulePage({
   stores,
   tenants,
   contracts,
+  receivables,
+  payables,
   dataSource,
   syncError,
   onResetLocalData,
   onSaveEnterprise,
   onSaveStore,
   onSaveTenant,
-  onSaveContract
+  onSaveContract,
+  onSaveReceivable,
+  onSavePayable
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -154,7 +216,18 @@ export function ModulePage({
   if (module === "Lojistas") return <TenantsPage stores={stores} tenants={tenants} onSaveTenant={onSaveTenant} />;
   if (module === "Inadimplencia") return <DelinquencyPage stores={stores} />;
   if (module === "Operacoes") return <OperationsPage />;
-  if (module === "Financeiro") return <FinancePage />;
+  if (module === "Financeiro") {
+    return (
+      <FinancePage
+        enterprises={enterprises}
+        stores={stores}
+        receivables={receivables}
+        payables={payables}
+        onSaveReceivable={onSaveReceivable}
+        onSavePayable={onSavePayable}
+      />
+    );
+  }
   if (module === "Comercial") return <CommercialPage enterprises={enterprises} stores={stores} />;
 
   return (
@@ -481,22 +554,134 @@ function ContractsPage({
   );
 }
 
-function FinancePage() {
+function FinancePage({
+  enterprises,
+  stores,
+  receivables,
+  payables,
+  onSaveReceivable,
+  onSavePayable
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  receivables: Receivable[];
+  payables: Payable[];
+  onSaveReceivable: (receivable: Receivable) => void | Promise<void>;
+  onSavePayable: (payable: Payable) => void | Promise<void>;
+}) {
+  const [editingReceivable, setEditingReceivable] = useState<Receivable | null>(null);
+  const [editingPayable, setEditingPayable] = useState<Payable | null>(null);
+  const receivableTotal = receivables.filter((item) => item.status !== "cancelado").reduce((sum, item) => sum + item.valor, 0);
+  const receivedTotal = receivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const openReceivables = receivables
+    .filter((item) => item.status === "aberto" || item.status === "vencido")
+    .reduce((sum, item) => sum + item.valor, 0);
+  const overdueReceivables = receivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const paidPayables = payables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const openPayables = payables
+    .filter((item) => item.status === "aberto" || item.status === "vencido")
+    .reduce((sum, item) => sum + item.valor, 0);
+  const progress = receivableTotal > 0 ? Math.round((receivedTotal / receivableTotal) * 100) : 0;
+
   return (
-    <Shell title="Financeiro" description="Contas a receber, contas a pagar, saldo e receita por ativo.">
-      <div className="grid gap-3 md:grid-cols-4">
-        <Kpi label="Receita imobiliaria" value="R$ 3.002.000" tone="success" />
-        <Kpi label="A receber" value="R$ 771.000" />
-        <Kpi label="Vencidas" value="R$ 253.000" tone="danger" />
-        <Kpi label="Saldo operacional" value="R$ 2.312.000" tone="success" />
-      </div>
-      <div className="panel p-5">
-        <h2 className="font-bold uppercase">Orcado x realizado</h2>
-        <div className="mt-4 h-3 overflow-hidden rounded-full bg-muted">
-          <div className="h-full w-[82%] bg-primary" />
+    <Shell
+      title="Financeiro"
+      description="Contas a receber, contas a pagar, saldo e receita por ativo."
+      action={
+        <div className="flex gap-2">
+          <button
+            className="control inline-flex items-center gap-2 bg-primary text-primary-foreground"
+            onClick={() => setEditingReceivable(emptyReceivable(stores[0]))}
+          >
+            <Plus className="h-4 w-4" />
+            Receita
+          </button>
+          <button className="control inline-flex items-center gap-2" onClick={() => setEditingPayable(emptyPayable(enterprises[0]?.id ?? ""))}>
+            <Plus className="h-4 w-4" />
+            Despesa
+          </button>
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">Realizacao simulada em 82% para a competencia Maio/2026.</p>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Recebido" value={brl(receivedTotal)} tone="success" />
+        <Kpi label="A receber" value={brl(openReceivables)} />
+        <Kpi label="Vencidas" value={brl(overdueReceivables)} tone="danger" />
+        <Kpi label="A pagar" value={brl(openPayables)} />
       </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div className="space-y-3">
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Contas a receber</h2>
+            <DataTable
+              columns={["Loja", "Competencia", "Receita", "Valor", "Vencimento", "Status", "Acoes"]}
+              rows={receivables.map((item) => [
+                storeLabel(stores, item.lojaId),
+                item.competencia,
+                revenueTypeLabel[item.receita],
+                brl(item.valor),
+                item.vencimento,
+                financialStatusLabel[item.status],
+                "Editar"
+              ])}
+              onAction={(rowIndex) => setEditingReceivable(receivables[rowIndex])}
+            />
+          </div>
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Contas a pagar</h2>
+            <DataTable
+              columns={["Fornecedor", "Empreendimento", "Categoria", "Valor", "Vencimento", "Status", "Acoes"]}
+              rows={payables.map((item) => [
+                item.fornecedor,
+                enterpriseLabel(enterprises, item.empreendimentoId),
+                item.categoria,
+                brl(item.valor),
+                item.vencimento,
+                financialStatusLabel[item.status],
+                "Editar"
+              ])}
+              onAction={(rowIndex) => setEditingPayable(payables[rowIndex])}
+            />
+          </div>
+        </div>
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Orcado x realizado</h2>
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {progress}% realizado sobre receitas cadastradas para a carteira.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Receita prevista" value={brl(receivableTotal)} />
+            <Mini label="Despesas pagas" value={brl(paidPayables)} />
+            <Mini label="Saldo operacional" value={brl(receivedTotal - paidPayables)} />
+          </div>
+        </div>
+      </div>
+      {editingReceivable ? (
+        <ReceivableForm
+          receivable={editingReceivable}
+          stores={stores}
+          enterprises={enterprises}
+          onClose={() => setEditingReceivable(null)}
+          onSave={async (receivable) => {
+            await onSaveReceivable(receivable);
+            setEditingReceivable(null);
+          }}
+        />
+      ) : null}
+      {editingPayable ? (
+        <PayableForm
+          payable={editingPayable}
+          enterprises={enterprises}
+          onClose={() => setEditingPayable(null)}
+          onSave={async (payable) => {
+            await onSavePayable(payable);
+            setEditingPayable(null);
+          }}
+        />
+      ) : null}
     </Shell>
   );
 }
@@ -988,6 +1173,134 @@ function ContractForm({
   );
 }
 
+function ReceivableForm({
+  receivable,
+  stores,
+  enterprises,
+  onClose,
+  onSave
+}: {
+  receivable: Receivable;
+  stores: StoreType[];
+  enterprises: Enterprise[];
+  onClose: () => void;
+  onSave: (receivable: Receivable) => void;
+}) {
+  const storeOptions = useMemo(() => stores.map((store) => store.id), [stores]);
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<ReceivableFormValues>({
+    resolver: zodResolver(receivableSchema),
+    defaultValues: receivable
+  });
+
+  return (
+    <Modal title="Conta a receber" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect label="Loja" error={errors.lojaId?.message} options={storeOptions} optionLabels={storeLabels} {...register("lojaId")} />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormInput label="Competencia" placeholder="2026-05" error={errors.competencia?.message} {...register("competencia")} />
+          <FormSelect
+            label="Receita"
+            error={errors.receita?.message}
+            options={["aluguel", "condominio", "fundo_promocao", "fpp", "multa", "juros"]}
+            optionLabels={revenueTypeLabel}
+            {...register("receita")}
+          />
+          <FormInput label="Valor" type="number" error={errors.valor?.message} {...register("valor")} />
+          <FormInput label="Vencimento" type="date" error={errors.vencimento?.message} {...register("vencimento")} />
+          <FormInput label="Recebimento" type="date" error={errors.recebimento?.message} {...register("recebimento")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["aberto", "vencido", "pago", "cancelado"]}
+            optionLabels={financialStatusLabel}
+            {...register("status")}
+          />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
+function PayableForm({
+  payable,
+  enterprises,
+  onClose,
+  onSave
+}: {
+  payable: Payable;
+  enterprises: Enterprise[];
+  onClose: () => void;
+  onSave: (payable: Payable) => void;
+}) {
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<PayableFormValues>({
+    resolver: zodResolver(payableSchema),
+    defaultValues: payable
+  });
+
+  return (
+    <Modal title="Conta a pagar" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormInput label="Fornecedor" error={errors.fornecedor?.message} {...register("fornecedor")} />
+          <FormInput label="Categoria" error={errors.categoria?.message} {...register("categoria")} />
+          <FormInput label="Competencia" placeholder="2026-05" error={errors.competencia?.message} {...register("competencia")} />
+          <FormInput label="Valor" type="number" error={errors.valor?.message} {...register("valor")} />
+          <FormInput label="Vencimento" type="date" error={errors.vencimento?.message} {...register("vencimento")} />
+          <FormInput label="Pagamento" type="date" error={errors.pagamento?.message} {...register("pagamento")} />
+          <FormInput label="Centro de custo" error={errors.centroCusto?.message} {...register("centroCusto")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["aberto", "vencido", "pago", "cancelado"]}
+            optionLabels={financialStatusLabel}
+            {...register("status")}
+          />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -1063,6 +1376,10 @@ function storeLabel(stores: StoreType[], lojaId: string) {
   return store ? `${store.codigo} - ${store.nome}` : "-";
 }
 
+function enterpriseLabel(enterprises: Enterprise[], empreendimentoId: string) {
+  return enterprises.find((item) => item.id === empreendimentoId)?.nome ?? "-";
+}
+
 function tenantLabel(tenants: Tenant[], lojistaId: string) {
   const tenant = tenants.find((item) => item.id === lojistaId);
   return tenant?.nomeFantasia ?? "-";
@@ -1121,6 +1438,35 @@ function emptyContract(lojaId: string, lojistaId: string): Contract {
     contratoUrl: "",
     aditivos: 0,
     status: "minuta"
+  };
+}
+
+function emptyReceivable(store?: StoreType): Receivable {
+  return {
+    id: crypto.randomUUID(),
+    lojaId: store?.id ?? "",
+    empreendimentoId: store?.empreendimentoId ?? "",
+    competencia: new Date().toISOString().slice(0, 7),
+    receita: "aluguel",
+    valor: 0,
+    vencimento: new Date().toISOString().slice(0, 10),
+    recebimento: "",
+    status: "aberto"
+  };
+}
+
+function emptyPayable(empreendimentoId: string): Payable {
+  return {
+    id: crypto.randomUUID(),
+    empreendimentoId,
+    fornecedor: "",
+    categoria: "Administracao",
+    competencia: new Date().toISOString().slice(0, 7),
+    valor: 0,
+    vencimento: new Date().toISOString().slice(0, 10),
+    pagamento: "",
+    centroCusto: "Condominio",
+    status: "aberto"
   };
 }
 

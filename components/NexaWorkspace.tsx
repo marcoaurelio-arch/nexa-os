@@ -4,7 +4,14 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Dashboard } from "@/components/Dashboard";
 import { ModulePage } from "@/components/ModulePage";
-import { contracts as seedContracts, enterprises as seedEnterprises, stores as seedStores, tenants as seedTenants } from "@/lib/data";
+import {
+  contracts as seedContracts,
+  enterprises as seedEnterprises,
+  payables as seedPayables,
+  receivables as seedReceivables,
+  stores as seedStores,
+  tenants as seedTenants
+} from "@/lib/data";
 import {
   fetchAssetData,
   loadLocalAssetData,
@@ -12,10 +19,12 @@ import {
   saveContract,
   saveEnterprise,
   saveLocalAssetData,
+  savePayable,
+  saveReceivable,
   saveStore,
   saveTenant
 } from "@/lib/assets-repository";
-import type { Contract, Enterprise, Store, Tenant } from "@/lib/types";
+import type { Contract, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
 
 export function NexaWorkspace() {
   const [activeModule, setActiveModule] = useState("Dashboard");
@@ -23,6 +32,8 @@ export function NexaWorkspace() {
   const [storeRows, setStoreRows] = useState<Store[]>(seedStores);
   const [tenantRows, setTenantRows] = useState<Tenant[]>(seedTenants);
   const [contractRows, setContractRows] = useState<Contract[]>(seedContracts);
+  const [receivableRows, setReceivableRows] = useState<Receivable[]>(seedReceivables);
+  const [payableRows, setPayableRows] = useState<Payable[]>(seedPayables);
   const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
   const [syncError, setSyncError] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
@@ -36,6 +47,8 @@ export function NexaWorkspace() {
       setStoreRows(localData.stores);
       setTenantRows(localData.tenants.length ? localData.tenants : seedTenants);
       setContractRows(localData.contracts.length ? localData.contracts : seedContracts);
+      setReceivableRows(localData.receivables.length ? localData.receivables : seedReceivables);
+      setPayableRows(localData.payables.length ? localData.payables : seedPayables);
     }
     setStorageReady(true);
 
@@ -46,6 +59,8 @@ export function NexaWorkspace() {
         setStoreRows(data.stores);
         setTenantRows(data.tenants);
         setContractRows(data.contracts);
+        setReceivableRows(data.receivables);
+        setPayableRows(data.payables);
         setDataSource("supabase");
       })
       .catch((error: unknown) => {
@@ -59,9 +74,16 @@ export function NexaWorkspace() {
 
   useEffect(() => {
     if (storageReady && dataSource === "mock") {
-      saveLocalAssetData({ enterprises: enterpriseRows, stores: storeRows, tenants: tenantRows, contracts: contractRows });
+      saveLocalAssetData({
+        enterprises: enterpriseRows,
+        stores: storeRows,
+        tenants: tenantRows,
+        contracts: contractRows,
+        receivables: receivableRows,
+        payables: payableRows
+      });
     }
-  }, [contractRows, dataSource, enterpriseRows, storageReady, storeRows, tenantRows]);
+  }, [contractRows, dataSource, enterpriseRows, payableRows, receivableRows, storageReady, storeRows, tenantRows]);
 
   return (
     <AppShell activeModule={activeModule} onModuleChange={setActiveModule}>
@@ -74,6 +96,8 @@ export function NexaWorkspace() {
           stores={storeRows}
           tenants={tenantRows}
           contracts={contractRows}
+          receivables={receivableRows}
+          payables={payableRows}
           dataSource={dataSource}
           syncError={syncError}
           onResetLocalData={() => {
@@ -82,6 +106,8 @@ export function NexaWorkspace() {
             setStoreRows(seedStores);
             setTenantRows(seedTenants);
             setContractRows(seedContracts);
+            setReceivableRows(seedReceivables);
+            setPayableRows(seedPayables);
             setDataSource("mock");
             setSyncError(null);
           }}
@@ -127,6 +153,28 @@ export function NexaWorkspace() {
             setContractRows((current) => {
               const exists = current.some((item) => item.id === contract.id);
               return exists ? current.map((item) => item.id === contract.id ? saved : item) : [saved, ...current];
+            });
+          }}
+          onSaveReceivable={async (receivable) => {
+            const saved = await saveReceivable(receivable).catch((error: unknown) => {
+              setSyncError(error instanceof Error ? error.message : "Falha ao salvar conta a receber");
+              return receivable;
+            });
+
+            setReceivableRows((current) => {
+              const exists = current.some((item) => item.id === receivable.id);
+              return exists ? current.map((item) => item.id === receivable.id ? saved : item) : [saved, ...current];
+            });
+          }}
+          onSavePayable={async (payable) => {
+            const saved = await savePayable(payable).catch((error: unknown) => {
+              setSyncError(error instanceof Error ? error.message : "Falha ao salvar conta a pagar");
+              return payable;
+            });
+
+            setPayableRows((current) => {
+              const exists = current.some((item) => item.id === payable.id);
+              return exists ? current.map((item) => item.id === payable.id ? saved : item) : [saved, ...current];
             });
           }}
         />

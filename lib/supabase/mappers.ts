@@ -1,10 +1,12 @@
-import type { Contract, Enterprise, Store, Tenant } from "@/lib/types";
+import type { Contract, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
 type StoreRow = Database["public"]["Tables"]["lojas"]["Row"];
 type TenantRow = Database["public"]["Tables"]["lojistas"]["Row"];
 type ContractRow = Database["public"]["Tables"]["contratos"]["Row"];
+type ReceivableRow = Database["public"]["Tables"]["receitas"]["Row"];
+type PayableRow = Database["public"]["Tables"]["despesas"]["Row"];
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -68,5 +70,34 @@ export function mapContractRow(row: ContractRow): Contract {
     contratoUrl: row.contrato_url ?? "",
     aditivos: row.aditivos,
     status: row.status as Contract["status"]
+  };
+}
+
+export function mapReceivableRow(row: ReceivableRow): Receivable {
+  return {
+    id: row.id,
+    lojaId: row.loja_id,
+    empreendimentoId: row.empreendimento_id,
+    competencia: row.competencia,
+    receita: row.receita as Receivable["receita"],
+    valor: row.valor,
+    vencimento: row.vencimento,
+    recebimento: row.recebimento ?? "",
+    status: row.status as Receivable["status"]
+  };
+}
+
+export function mapPayableRow(row: PayableRow): Payable {
+  return {
+    id: row.id,
+    empreendimentoId: row.empreendimento_id,
+    fornecedor: row.fornecedor,
+    categoria: row.categoria,
+    competencia: row.competencia,
+    valor: row.valor,
+    vencimento: row.vencimento,
+    pagamento: row.pagamento ?? "",
+    centroCusto: row.centro_custo,
+    status: row.status as Payable["status"]
   };
 }

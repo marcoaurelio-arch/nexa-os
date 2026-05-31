@@ -90,10 +90,45 @@ create table if not exists contratos (
   deleted_at timestamptz
 );
 
+create table if not exists receitas (
+  id uuid primary key default gen_random_uuid(),
+  loja_id uuid not null references lojas(id),
+  empreendimento_id uuid not null references empreendimentos(id),
+  competencia text not null,
+  receita text not null,
+  valor numeric(14,2) not null default 0,
+  vencimento date not null,
+  recebimento date,
+  status text not null default 'aberto',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create table if not exists despesas (
+  id uuid primary key default gen_random_uuid(),
+  empreendimento_id uuid not null references empreendimentos(id),
+  fornecedor text not null,
+  categoria text not null,
+  competencia text not null,
+  valor numeric(14,2) not null default 0,
+  vencimento date not null,
+  pagamento date,
+  centro_custo text not null,
+  status text not null default 'aberto',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 create index if not exists idx_empreendimentos_status on empreendimentos (status) where deleted_at is null;
 create index if not exists idx_lojas_empreendimento_status on lojas (empreendimento_id, status) where deleted_at is null;
 create index if not exists idx_lojistas_loja_status on lojistas (loja_id, status) where deleted_at is null;
 create index if not exists idx_contratos_termino_status on contratos (data_termino, status) where deleted_at is null;
+create index if not exists idx_receitas_competencia_status on receitas (competencia, status) where deleted_at is null;
+create index if not exists idx_receitas_loja_vencimento on receitas (loja_id, vencimento) where deleted_at is null;
+create index if not exists idx_despesas_competencia_status on despesas (competencia, status) where deleted_at is null;
+create index if not exists idx_despesas_empreendimento_vencimento on despesas (empreendimento_id, vencimento) where deleted_at is null;
 
 drop trigger if exists trg_empreendimentos_updated_at on empreendimentos;
 create trigger trg_empreendimentos_updated_at
@@ -113,6 +148,16 @@ for each row execute function set_updated_at();
 drop trigger if exists trg_contratos_updated_at on contratos;
 create trigger trg_contratos_updated_at
 before update on contratos
+for each row execute function set_updated_at();
+
+drop trigger if exists trg_receitas_updated_at on receitas;
+create trigger trg_receitas_updated_at
+before update on receitas
+for each row execute function set_updated_at();
+
+drop trigger if exists trg_despesas_updated_at on despesas;
+create trigger trg_despesas_updated_at
+before update on despesas
 for each row execute function set_updated_at();
 
 insert into empreendimentos (id, nome, cidade, estado, status, abl_m2, numero_lojas, numero_vagas)
@@ -303,4 +348,153 @@ on conflict (id) do update set
   seguro = excluded.seguro,
   contrato_url = excluded.contrato_url,
   aditivos = excluded.aditivos,
+  status = excluded.status;
+
+insert into receitas (
+  id,
+  loja_id,
+  empreendimento_id,
+  competencia,
+  receita,
+  valor,
+  vencimento,
+  recebimento,
+  status
+)
+values
+  (
+    '77777777-7777-4777-8777-777777777771',
+    (select id from lojas where codigo = 'VV-01' limit 1),
+    '11111111-1111-4111-8111-111111111111',
+    '2026-05',
+    'aluguel',
+    25000,
+    '2026-05-10',
+    '2026-05-09',
+    'pago'
+  ),
+  (
+    '77777777-7777-4777-8777-777777777772',
+    (select id from lojas where codigo = 'VV-01' limit 1),
+    '11111111-1111-4111-8111-111111111111',
+    '2026-05',
+    'condominio',
+    6800,
+    '2026-05-10',
+    null,
+    'aberto'
+  ),
+  (
+    '77777777-7777-4777-8777-777777777773',
+    (select id from lojas where codigo = 'VV-02' limit 1),
+    '11111111-1111-4111-8111-111111111111',
+    '2026-05',
+    'aluguel',
+    31000,
+    '2026-05-10',
+    null,
+    'vencido'
+  ),
+  (
+    '77777777-7777-4777-8777-777777777774',
+    (select id from lojas where codigo = 'BR-01' limit 1),
+    '33333333-3333-4333-8333-333333333333',
+    '2026-05',
+    'aluguel',
+    52000,
+    '2026-05-12',
+    '2026-05-12',
+    'pago'
+  ),
+  (
+    '77777777-7777-4777-8777-777777777775',
+    (select id from lojas where codigo = 'PN-01' limit 1),
+    '22222222-2222-4222-8222-222222222222',
+    '2026-05',
+    'fundo_promocao',
+    1800,
+    '2026-05-15',
+    null,
+    'aberto'
+  )
+on conflict (id) do update set
+  loja_id = excluded.loja_id,
+  empreendimento_id = excluded.empreendimento_id,
+  competencia = excluded.competencia,
+  receita = excluded.receita,
+  valor = excluded.valor,
+  vencimento = excluded.vencimento,
+  recebimento = excluded.recebimento,
+  status = excluded.status;
+
+insert into despesas (
+  id,
+  empreendimento_id,
+  fornecedor,
+  categoria,
+  competencia,
+  valor,
+  vencimento,
+  pagamento,
+  centro_custo,
+  status
+)
+values
+  (
+    '88888888-8888-4888-8888-888888888881',
+    '11111111-1111-4111-8111-111111111111',
+    'Limpeza Triangulo',
+    'Limpeza',
+    '2026-05',
+    28400,
+    '2026-05-18',
+    '2026-05-18',
+    'Condominio',
+    'pago'
+  ),
+  (
+    '88888888-8888-4888-8888-888888888882',
+    '11111111-1111-4111-8111-111111111111',
+    'Seguranca Prime',
+    'Seguranca',
+    '2026-05',
+    42000,
+    '2026-05-25',
+    null,
+    'Condominio',
+    'aberto'
+  ),
+  (
+    '88888888-8888-4888-8888-888888888883',
+    '11111111-1111-4111-8111-111111111111',
+    'Agencia Criar',
+    'Marketing',
+    '2026-05',
+    18500,
+    '2026-05-20',
+    null,
+    'Fundo promocao',
+    'vencido'
+  ),
+  (
+    '88888888-8888-4888-8888-888888888884',
+    '33333333-3333-4333-8333-333333333333',
+    'Concessionaria energia',
+    'Energia',
+    '2026-05',
+    31500,
+    '2026-05-22',
+    '2026-05-22',
+    'Operacoes',
+    'pago'
+  )
+on conflict (id) do update set
+  empreendimento_id = excluded.empreendimento_id,
+  fornecedor = excluded.fornecedor,
+  categoria = excluded.categoria,
+  competencia = excluded.competencia,
+  valor = excluded.valor,
+  vencimento = excluded.vencimento,
+  pagamento = excluded.pagamento,
+  centro_custo = excluded.centro_custo,
   status = excluded.status;

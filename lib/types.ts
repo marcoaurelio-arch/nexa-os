@@ -68,6 +68,34 @@ export type Contract = {
   status: ContractStatus;
 };
 
+export type FinancialStatus = "aberto" | "vencido" | "pago" | "cancelado";
+export type RevenueType = "aluguel" | "condominio" | "fundo_promocao" | "fpp" | "multa" | "juros";
+
+export type Receivable = {
+  id: string;
+  lojaId: string;
+  empreendimentoId: string;
+  competencia: string;
+  receita: RevenueType;
+  valor: number;
+  vencimento: string;
+  recebimento: string;
+  status: FinancialStatus;
+};
+
+export type Payable = {
+  id: string;
+  empreendimentoId: string;
+  fornecedor: string;
+  categoria: string;
+  competencia: string;
+  valor: number;
+  vencimento: string;
+  pagamento: string;
+  centroCusto: string;
+  status: FinancialStatus;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;
