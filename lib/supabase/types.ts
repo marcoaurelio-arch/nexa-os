@@ -61,6 +61,42 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["lojas"]["Insert"]>;
       };
+      lojistas: {
+        Row: {
+          id: string;
+          nome_fantasia: string;
+          razao_social: string;
+          cnpj: string;
+          responsavel_legal: string | null;
+          telefone: string | null;
+          whatsapp: string | null;
+          email: string | null;
+          endereco: string | null;
+          segmento: string | null;
+          loja_id: string | null;
+          data_entrada: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          nome_fantasia: string;
+          razao_social: string;
+          cnpj: string;
+          responsavel_legal?: string | null;
+          telefone?: string | null;
+          whatsapp?: string | null;
+          email?: string | null;
+          endereco?: string | null;
+          segmento?: string | null;
+          loja_id?: string | null;
+          data_entrada?: string | null;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["lojistas"]["Insert"]>;
+      };
     };
   };
 };
