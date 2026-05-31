@@ -17,6 +17,8 @@ import type {
   FppRecord,
   Payable,
   Receivable,
+  RevenueAuditRecord,
+  RevenueAuditStatus,
   RevenueType,
   Store as StoreType,
   Tenant,
@@ -33,6 +35,7 @@ type ModulePageProps = {
   payables: Payable[];
   delinquencyRecords: DelinquencyRecord[];
   fppRecords: FppRecord[];
+  revenueAuditRecords: RevenueAuditRecord[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -44,6 +47,7 @@ type ModulePageProps = {
   onSavePayable: (payable: Payable) => void | Promise<void>;
   onSaveDelinquencyRecord: (record: DelinquencyRecord) => void | Promise<void>;
   onSaveFppRecord: (record: FppRecord) => void | Promise<void>;
+  onSaveRevenueAuditRecord: (record: RevenueAuditRecord) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -91,6 +95,13 @@ const delinquencyStatusLabel: Record<DelinquencyRecord["status"], string> = {
   negociacao: "Negociacao",
   juridico: "Juridico",
   regularizado: "Regularizado"
+};
+
+const revenueAuditStatusLabel: Record<RevenueAuditStatus, string> = {
+  pendente: "Pendente",
+  conciliado: "Conciliado",
+  divergente: "Divergente",
+  critico: "Critico"
 };
 
 const enterpriseSchema = z.object({
@@ -200,6 +211,23 @@ const fppSchema = z.object({
   status: z.enum(["aberto", "vencido", "pago", "cancelado"])
 });
 
+const revenueAuditSchema = z.object({
+  id: z.string().min(1),
+  lojaId: z.string().trim().min(1, "Selecione a loja."),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  competencia: z.string().trim().min(7, "Informe a competencia."),
+  relatorioErp: z.coerce.number().min(0, "Informe zero ou mais."),
+  relatorioPdv: z.coerce.number().min(0, "Informe zero ou mais."),
+  stone: z.coerce.number().min(0, "Informe zero ou mais."),
+  rede: z.coerce.number().min(0, "Informe zero ou mais."),
+  cielo: z.coerce.number().min(0, "Informe zero ou mais."),
+  pix: z.coerce.number().min(0, "Informe zero ou mais."),
+  ifood: z.coerce.number().min(0, "Informe zero ou mais."),
+  delivery: z.coerce.number().min(0, "Informe zero ou mais."),
+  faturamentoAnterior: z.coerce.number().min(0, "Informe zero ou mais."),
+  status: z.enum(["pendente", "conciliado", "divergente", "critico"])
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
@@ -208,6 +236,7 @@ type ReceivableFormValues = z.infer<typeof receivableSchema>;
 type PayableFormValues = z.infer<typeof payableSchema>;
 type DelinquencyFormValues = z.infer<typeof delinquencySchema>;
 type FppFormValues = z.infer<typeof fppSchema>;
+type RevenueAuditFormValues = z.infer<typeof revenueAuditSchema>;
 
 export function ModulePage({
   module,
@@ -219,6 +248,7 @@ export function ModulePage({
   payables,
   delinquencyRecords,
   fppRecords,
+  revenueAuditRecords,
   dataSource,
   syncError,
   onResetLocalData,
@@ -229,7 +259,8 @@ export function ModulePage({
   onSaveReceivable,
   onSavePayable,
   onSaveDelinquencyRecord,
-  onSaveFppRecord
+  onSaveFppRecord,
+  onSaveRevenueAuditRecord
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -302,6 +333,17 @@ export function ModulePage({
         tenants={tenants}
         fppRecords={fppRecords}
         onSaveFppRecord={onSaveFppRecord}
+      />
+    );
+  }
+  if (module === "Auditoria") {
+    return (
+      <RevenueAuditPage
+        enterprises={enterprises}
+        stores={stores}
+        contracts={contracts}
+        records={revenueAuditRecords}
+        onSaveRecord={onSaveRevenueAuditRecord}
       />
     );
   }
@@ -1268,6 +1310,136 @@ function FppPage({
   );
 }
 
+function RevenueAuditPage({
+  enterprises,
+  stores,
+  contracts,
+  records,
+  onSaveRecord
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  contracts: Contract[];
+  records: RevenueAuditRecord[];
+  onSaveRecord: (record: RevenueAuditRecord) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [editingRecord, setEditingRecord] = useState<RevenueAuditRecord | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedRecords = records.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const auditedRevenue = selectedRecords.reduce((sum, record) => sum + auditPaymentTotal(record), 0);
+  const erpRevenue = selectedRecords.reduce((sum, record) => sum + record.relatorioErp, 0);
+  const rentRevenue = selectedRecords.reduce((sum, record) => sum + (stores.find((store) => store.id === record.lojaId)?.aluguel ?? 0), 0);
+  const averageDivergence = erpRevenue > 0 ? Math.abs(erpRevenue - auditedRevenue) / erpRevenue : 0;
+  const selectedArea = selectedRecords.reduce((sum, record) => sum + (stores.find((store) => store.id === record.lojaId)?.areaTotal ?? 0), 0);
+  const revenuePerSquareMeter = selectedArea > 0 ? auditedRevenue / selectedArea : 0;
+  const occupancyRent = auditedRevenue > 0 ? rentRevenue / auditedRevenue : 0;
+  const alerts = selectedRecords.flatMap((record) => auditAlerts(record, stores));
+  const segmentRows = auditRevenueBySegment(selectedRecords, stores);
+  const firstStore = selectedStores[0] ?? stores[0];
+
+  return (
+    <Shell
+      title="Auditoria de Faturamento"
+      description="Concilia ERP, PDV, adquirentes, PIX e delivery com alertas de divergencia e queda."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => setEditingRecord(emptyRevenueAuditRecord(firstStore))}>
+            <Plus className="h-4 w-4" />
+            Auditoria
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Divergencia media" value={percent(averageDivergence)} tone={averageDivergence > 0.1 ? "danger" : averageDivergence <= 0.05 ? "success" : "default"} />
+        <Kpi label="Faturamento auditado" value={brl(auditedRevenue)} tone="success" />
+        <Kpi label="Faturamento por m2" value={brl(revenuePerSquareMeter)} />
+        <Kpi label="Aluguel ocupacional" value={percent(occupancyRent)} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div className="space-y-3">
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Conferencia de fontes</h2>
+            <DataTable
+              columns={["Loja", "ERP", "PDV", "Cartoes/PIX", "iFood", "Delivery", "Divergencia", "Queda", "Status", "Acoes"]}
+              rows={selectedRecords.map((record) => {
+                const alert = auditAlertLevel(record);
+                return [
+                  storeLabel(stores, record.lojaId),
+                  brl(record.relatorioErp),
+                  brl(record.relatorioPdv),
+                  brl(auditCardPixTotal(record)),
+                  brl(record.ifood),
+                  brl(record.delivery),
+                  percent(auditDivergence(record)),
+                  percent(auditDrop(record)),
+                  alert === "critico" ? "Critico" : revenueAuditStatusLabel[record.status],
+                  "Editar"
+                ];
+              })}
+              onAction={(rowIndex) => setEditingRecord(selectedRecords[rowIndex])}
+            />
+          </div>
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Receita por segmento</h2>
+            <DataTable
+              columns={["Segmento", "Lojas", "Faturamento", "Faturamento por m2"]}
+              rows={segmentRows.map((row) => [
+                row.segmento,
+                String(row.lojas),
+                brl(row.faturamento),
+                brl(row.area > 0 ? row.faturamento / row.area : 0)
+              ])}
+            />
+          </div>
+        </div>
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Alertas automaticos</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Divergencias acima de 5% entram em atencao, acima de 10% viram criticas e quedas acima de 20% entram na pauta comercial.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Lojas auditadas" value={`${selectedRecords.length}`} />
+            <Mini label="Alertas ativos" value={`${alerts.length}`} />
+            <Mini label="Contratos vinculados" value={`${contracts.filter((contract) => selectedRecords.some((record) => record.lojaId === contract.lojaId)).length}`} />
+          </div>
+          <div className="mt-5 space-y-2">
+            {alerts.map((alert) => (
+              <div key={`${alert.recordId}-${alert.label}`} className="rounded-lg border border-border px-3 py-2 text-sm">
+                <div className="flex items-center gap-2 font-bold text-primary">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>{alert.label}</span>
+                </div>
+                <p className="mt-1 text-muted-foreground">{alert.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {editingRecord ? (
+        <RevenueAuditForm
+          record={editingRecord}
+          stores={stores}
+          enterprises={enterprises}
+          onClose={() => setEditingRecord(null)}
+          onSave={async (record) => {
+            await onSaveRecord(record);
+            setEditingRecord(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
 function OperationsPage() {
   const lanes = ["Aberta", "Em execucao", "Aguardando terceiro", "Concluida"];
 
@@ -2003,6 +2175,94 @@ function FppForm({
   );
 }
 
+function RevenueAuditForm({
+  record,
+  stores,
+  enterprises,
+  onClose,
+  onSave
+}: {
+  record: RevenueAuditRecord;
+  stores: StoreType[];
+  enterprises: Enterprise[];
+  onClose: () => void;
+  onSave: (record: RevenueAuditRecord) => void;
+}) {
+  const storeOptions = useMemo(() => stores.map((store) => store.id), [stores]);
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting }
+  } = useForm<RevenueAuditFormValues>({
+    resolver: zodResolver(revenueAuditSchema),
+    defaultValues: record
+  });
+  const previewRecord: RevenueAuditRecord = {
+    ...record,
+    relatorioErp: Number(watch("relatorioErp") ?? record.relatorioErp),
+    relatorioPdv: Number(watch("relatorioPdv") ?? record.relatorioPdv),
+    stone: Number(watch("stone") ?? record.stone),
+    rede: Number(watch("rede") ?? record.rede),
+    cielo: Number(watch("cielo") ?? record.cielo),
+    pix: Number(watch("pix") ?? record.pix),
+    ifood: Number(watch("ifood") ?? record.ifood),
+    delivery: Number(watch("delivery") ?? record.delivery),
+    faturamentoAnterior: Number(watch("faturamentoAnterior") ?? record.faturamentoAnterior)
+  };
+
+  return (
+    <Modal title="Auditoria de faturamento" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect label="Loja" error={errors.lojaId?.message} options={storeOptions} optionLabels={storeLabels} {...register("lojaId")} />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormInput label="Competencia" placeholder="2026-05" error={errors.competencia?.message} {...register("competencia")} />
+          <FormInput label="Relatorio ERP" type="number" error={errors.relatorioErp?.message} {...register("relatorioErp")} />
+          <FormInput label="Relatorio PDV" type="number" error={errors.relatorioPdv?.message} {...register("relatorioPdv")} />
+          <FormInput label="Stone" type="number" error={errors.stone?.message} {...register("stone")} />
+          <FormInput label="Rede" type="number" error={errors.rede?.message} {...register("rede")} />
+          <FormInput label="Cielo" type="number" error={errors.cielo?.message} {...register("cielo")} />
+          <FormInput label="PIX" type="number" error={errors.pix?.message} {...register("pix")} />
+          <FormInput label="iFood" type="number" error={errors.ifood?.message} {...register("ifood")} />
+          <FormInput label="Delivery" type="number" error={errors.delivery?.message} {...register("delivery")} />
+          <FormInput label="Faturamento anterior" type="number" error={errors.faturamentoAnterior?.message} {...register("faturamentoAnterior")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["pendente", "conciliado", "divergente", "critico"]}
+            optionLabels={revenueAuditStatusLabel}
+            {...register("status")}
+          />
+          <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+            <p className="metric-label">Previa da auditoria</p>
+            <p className="mt-1 font-bold text-primary">{brl(auditPaymentTotal(previewRecord))}</p>
+            <p className="text-muted-foreground">Divergencia: {percent(auditDivergence(previewRecord))}</p>
+            <p className="text-muted-foreground">Queda: {percent(auditDrop(previewRecord))}</p>
+          </div>
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -2179,6 +2439,81 @@ function fppBilling(record: FppRecord) {
   };
 }
 
+function auditCardPixTotal(record: RevenueAuditRecord) {
+  return record.stone + record.rede + record.cielo + record.pix;
+}
+
+function auditPaymentTotal(record: RevenueAuditRecord) {
+  return auditCardPixTotal(record) + record.ifood + record.delivery;
+}
+
+function auditDivergence(record: RevenueAuditRecord) {
+  return record.relatorioErp > 0 ? Math.abs(record.relatorioErp - auditPaymentTotal(record)) / record.relatorioErp : 0;
+}
+
+function auditDrop(record: RevenueAuditRecord) {
+  const current = auditPaymentTotal(record);
+  return record.faturamentoAnterior > 0 ? Math.max((record.faturamentoAnterior - current) / record.faturamentoAnterior, 0) : 0;
+}
+
+function auditAlertLevel(record: RevenueAuditRecord) {
+  const divergence = auditDivergence(record);
+  const drop = auditDrop(record);
+
+  if (divergence > 0.1 || drop > 0.2) return "critico";
+  if (divergence > 0.05) return "atencao";
+  return "ok";
+}
+
+function auditAlerts(record: RevenueAuditRecord, stores: StoreType[]) {
+  const label = storeLabel(stores, record.lojaId);
+  const divergence = auditDivergence(record);
+  const drop = auditDrop(record);
+  const alerts: { recordId: string; label: string; detail: string }[] = [];
+
+  if (divergence > 0.1) {
+    alerts.push({
+      recordId: record.id,
+      label: `${label} - divergencia acima de 10%`,
+      detail: `Divergencia de ${percent(divergence)} entre ERP e meios de pagamento.`
+    });
+  } else if (divergence > 0.05) {
+    alerts.push({
+      recordId: record.id,
+      label: `${label} - divergencia acima de 5%`,
+      detail: `Divergencia de ${percent(divergence)} exige conferencia operacional.`
+    });
+  }
+
+  if (drop > 0.2) {
+    alerts.push({
+      recordId: record.id,
+      label: `${label} - queda acima de 20%`,
+      detail: `Queda de ${percent(drop)} contra a competencia anterior.`
+    });
+  }
+
+  return alerts;
+}
+
+function auditRevenueBySegment(records: RevenueAuditRecord[], stores: StoreType[]) {
+  const rows = new Map<string, { segmento: string; lojas: number; faturamento: number; area: number }>();
+
+  records.forEach((record) => {
+    const store = stores.find((item) => item.id === record.lojaId);
+    const segmento = store?.segmento ?? "Nao informado";
+    const current = rows.get(segmento) ?? { segmento, lojas: 0, faturamento: 0, area: 0 };
+    rows.set(segmento, {
+      segmento,
+      lojas: current.lojas + 1,
+      faturamento: current.faturamento + auditPaymentTotal(record),
+      area: current.area + (store?.areaTotal ?? 0)
+    });
+  });
+
+  return [...rows.values()].sort((a, b) => b.faturamento - a.faturamento);
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -2310,6 +2645,25 @@ function emptyFppRecord(store: StoreType | undefined, contracts: Contract[]): Fp
     faturamentoInformado: 0,
     faturamentoAuditado: 0,
     status: "aberto"
+  };
+}
+
+function emptyRevenueAuditRecord(store?: StoreType): RevenueAuditRecord {
+  return {
+    id: crypto.randomUUID(),
+    lojaId: store?.id ?? "",
+    empreendimentoId: store?.empreendimentoId ?? "",
+    competencia: new Date().toISOString().slice(0, 7),
+    relatorioErp: 0,
+    relatorioPdv: 0,
+    stone: 0,
+    rede: 0,
+    cielo: 0,
+    pix: 0,
+    ifood: 0,
+    delivery: 0,
+    faturamentoAnterior: 0,
+    status: "pendente"
   };
 }
 

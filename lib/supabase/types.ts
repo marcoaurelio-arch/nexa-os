@@ -249,6 +249,44 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["fpp"]["Insert"]>;
       };
+      auditoria_faturamento: {
+        Row: {
+          id: string;
+          loja_id: string;
+          empreendimento_id: string;
+          competencia: string;
+          relatorio_erp: number;
+          relatorio_pdv: number;
+          stone: number;
+          rede: number;
+          cielo: number;
+          pix: number;
+          ifood: number;
+          delivery: number;
+          faturamento_anterior: number;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loja_id: string;
+          empreendimento_id: string;
+          competencia: string;
+          relatorio_erp?: number;
+          relatorio_pdv?: number;
+          stone?: number;
+          rede?: number;
+          cielo?: number;
+          pix?: number;
+          ifood?: number;
+          delivery?: number;
+          faturamento_anterior?: number;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["auditoria_faturamento"]["Insert"]>;
+      };
     };
   };
 };

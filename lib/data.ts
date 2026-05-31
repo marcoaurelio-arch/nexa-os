@@ -1,4 +1,4 @@
-import type { Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, ServiceOrder, Store, Tenant } from "./types";
+import type { Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -288,6 +288,73 @@ export const fppRecords: FppRecord[] = [
     faturamentoInformado: 880000,
     faturamentoAuditado: 912000,
     status: "aberto"
+  }
+];
+
+export const revenueAuditRecords: RevenueAuditRecord[] = [
+  {
+    id: "audit-vv-01-2026-05",
+    lojaId: "vv-01",
+    empreendimentoId: "villa-viseu",
+    competencia: "2026-05",
+    relatorioErp: 548000,
+    relatorioPdv: 543500,
+    stone: 212000,
+    rede: 148500,
+    cielo: 96000,
+    pix: 64500,
+    ifood: 18500,
+    delivery: 7600,
+    faturamentoAnterior: 502000,
+    status: "divergente"
+  },
+  {
+    id: "audit-vv-02-2026-05",
+    lojaId: "vv-02",
+    empreendimentoId: "villa-viseu",
+    competencia: "2026-05",
+    relatorioErp: 604000,
+    relatorioPdv: 607800,
+    stone: 184000,
+    rede: 171000,
+    cielo: 140500,
+    pix: 112000,
+    ifood: 0,
+    delivery: 0,
+    faturamentoAnterior: 790000,
+    status: "critico"
+  },
+  {
+    id: "audit-br-01-2026-05",
+    lojaId: "br-01",
+    empreendimentoId: "bluemall-rondon",
+    competencia: "2026-05",
+    relatorioErp: 912000,
+    relatorioPdv: 908000,
+    stone: 315000,
+    rede: 246000,
+    cielo: 180000,
+    pix: 127500,
+    ifood: 0,
+    delivery: 39500,
+    faturamentoAnterior: 874000,
+    status: "conciliado"
+  },
+  {
+    id: "audit-pn-01-2026-05",
+    lojaId: "pn-01",
+    empreendimentoId: "piazza-nicomedes",
+    competencia: "2026-05",
+    relatorioErp: 98000,
+    relatorioPdv: 104000,
+    stone: 35500,
+    rede: 28100,
+    cielo: 18400,
+    pix: 14200,
+    ifood: 6800,
+    delivery: 5200,
+    faturamentoAnterior: 110000,
+    status: "divergente"
   }
 ];
 

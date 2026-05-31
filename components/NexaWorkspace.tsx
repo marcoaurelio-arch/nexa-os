@@ -11,6 +11,7 @@ import {
   fppRecords as seedFppRecords,
   payables as seedPayables,
   receivables as seedReceivables,
+  revenueAuditRecords as seedRevenueAuditRecords,
   stores as seedStores,
   tenants as seedTenants
 } from "@/lib/data";
@@ -25,10 +26,11 @@ import {
   saveLocalAssetData,
   savePayable,
   saveReceivable,
+  saveRevenueAuditRecord,
   saveStore,
   saveTenant
 } from "@/lib/assets-repository";
-import type { Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Store, Tenant } from "@/lib/types";
+import type { Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant } from "@/lib/types";
 
 export function NexaWorkspace() {
   const [activeModule, setActiveModule] = useState("Dashboard");
@@ -40,6 +42,7 @@ export function NexaWorkspace() {
   const [payableRows, setPayableRows] = useState<Payable[]>(seedPayables);
   const [delinquencyRows, setDelinquencyRows] = useState<DelinquencyRecord[]>(seedDelinquencyRecords);
   const [fppRows, setFppRows] = useState<FppRecord[]>(seedFppRecords);
+  const [revenueAuditRows, setRevenueAuditRows] = useState<RevenueAuditRecord[]>(seedRevenueAuditRecords);
   const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
   const [syncError, setSyncError] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
@@ -57,6 +60,7 @@ export function NexaWorkspace() {
       setPayableRows(mergeSeedRows(seedPayables, localData.payables));
       setDelinquencyRows(mergeSeedRows(seedDelinquencyRecords, localData.delinquencyRecords));
       setFppRows(mergeSeedRows(seedFppRecords, localData.fppRecords));
+      setRevenueAuditRows(mergeSeedRows(seedRevenueAuditRecords, localData.revenueAuditRecords));
     }
     setStorageReady(true);
 
@@ -71,6 +75,7 @@ export function NexaWorkspace() {
         setPayableRows(data.payables);
         setDelinquencyRows(data.delinquencyRecords);
         setFppRows(data.fppRecords);
+        setRevenueAuditRows(data.revenueAuditRecords);
         setDataSource("supabase");
       })
       .catch((error: unknown) => {
@@ -92,10 +97,11 @@ export function NexaWorkspace() {
         receivables: receivableRows,
         payables: payableRows,
         delinquencyRecords: delinquencyRows,
-        fppRecords: fppRows
+        fppRecords: fppRows,
+        revenueAuditRecords: revenueAuditRows
       });
     }
-  }, [contractRows, dataSource, delinquencyRows, enterpriseRows, fppRows, payableRows, receivableRows, storageReady, storeRows, tenantRows]);
+  }, [contractRows, dataSource, delinquencyRows, enterpriseRows, fppRows, payableRows, receivableRows, revenueAuditRows, storageReady, storeRows, tenantRows]);
 
   return (
     <AppShell activeModule={activeModule} onModuleChange={setActiveModule}>
@@ -112,6 +118,7 @@ export function NexaWorkspace() {
           payables={payableRows}
           delinquencyRecords={delinquencyRows}
           fppRecords={fppRows}
+          revenueAuditRecords={revenueAuditRows}
           dataSource={dataSource}
           syncError={syncError}
           onResetLocalData={() => {
@@ -124,6 +131,7 @@ export function NexaWorkspace() {
             setPayableRows(seedPayables);
             setDelinquencyRows(seedDelinquencyRecords);
             setFppRows(seedFppRecords);
+            setRevenueAuditRows(seedRevenueAuditRecords);
             setDataSource("mock");
             setSyncError(null);
           }}
@@ -211,6 +219,17 @@ export function NexaWorkspace() {
             });
 
             setFppRows((current) => {
+              const exists = current.some((item) => item.id === record.id);
+              return exists ? current.map((item) => item.id === record.id ? saved : item) : [saved, ...current];
+            });
+          }}
+          onSaveRevenueAuditRecord={async (record) => {
+            const saved = await saveRevenueAuditRecord(record).catch((error: unknown) => {
+              setSyncError(error instanceof Error ? error.message : "Falha ao salvar auditoria");
+              return record;
+            });
+
+            setRevenueAuditRows((current) => {
               const exists = current.some((item) => item.id === record.id);
               return exists ? current.map((item) => item.id === record.id ? saved : item) : [saved, ...current];
             });

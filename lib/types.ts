@@ -121,6 +121,25 @@ export type FppRecord = {
   status: FinancialStatus;
 };
 
+export type RevenueAuditStatus = "pendente" | "conciliado" | "divergente" | "critico";
+
+export type RevenueAuditRecord = {
+  id: string;
+  lojaId: string;
+  empreendimentoId: string;
+  competencia: string;
+  relatorioErp: number;
+  relatorioPdv: number;
+  stone: number;
+  rede: number;
+  cielo: number;
+  pix: number;
+  ifood: number;
+  delivery: number;
+  faturamentoAnterior: number;
+  status: RevenueAuditStatus;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;

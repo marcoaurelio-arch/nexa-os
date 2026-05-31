@@ -31,6 +31,7 @@ export const navItems = [
   { label: "Condominio", icon: Home },
   { label: "Fundo", icon: Megaphone },
   { label: "FPP", icon: AreaChart },
+  { label: "Auditoria", icon: Receipt },
   { label: "Comercial", icon: BarChart3 },
   { label: "Operacoes", icon: Wrench },
   { label: "Energia e Agua", icon: Zap },

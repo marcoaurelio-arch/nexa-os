@@ -152,6 +152,26 @@ create table if not exists fpp (
   deleted_at timestamptz
 );
 
+create table if not exists auditoria_faturamento (
+  id uuid primary key default gen_random_uuid(),
+  loja_id uuid not null references lojas(id),
+  empreendimento_id uuid not null references empreendimentos(id),
+  competencia text not null,
+  relatorio_erp numeric(14,2) not null default 0,
+  relatorio_pdv numeric(14,2) not null default 0,
+  stone numeric(14,2) not null default 0,
+  rede numeric(14,2) not null default 0,
+  cielo numeric(14,2) not null default 0,
+  pix numeric(14,2) not null default 0,
+  ifood numeric(14,2) not null default 0,
+  delivery numeric(14,2) not null default 0,
+  faturamento_anterior numeric(14,2) not null default 0,
+  status text not null default 'pendente',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 create index if not exists idx_empreendimentos_status on empreendimentos (status) where deleted_at is null;
 create index if not exists idx_lojas_empreendimento_status on lojas (empreendimento_id, status) where deleted_at is null;
 create index if not exists idx_lojistas_loja_status on lojistas (loja_id, status) where deleted_at is null;
@@ -164,6 +184,8 @@ create index if not exists idx_inadimplencias_loja_status on inadimplencias (loj
 create index if not exists idx_inadimplencias_dias_atraso on inadimplencias (dias_atraso desc) where deleted_at is null;
 create index if not exists idx_fpp_empreendimento_competencia on fpp (empreendimento_id, competencia) where deleted_at is null;
 create index if not exists idx_fpp_loja_status on fpp (loja_id, status) where deleted_at is null;
+create index if not exists idx_auditoria_empreendimento_competencia on auditoria_faturamento (empreendimento_id, competencia) where deleted_at is null;
+create index if not exists idx_auditoria_loja_status on auditoria_faturamento (loja_id, status) where deleted_at is null;
 
 drop trigger if exists trg_empreendimentos_updated_at on empreendimentos;
 create trigger trg_empreendimentos_updated_at
@@ -203,6 +225,11 @@ for each row execute function set_updated_at();
 drop trigger if exists trg_fpp_updated_at on fpp;
 create trigger trg_fpp_updated_at
 before update on fpp
+for each row execute function set_updated_at();
+
+drop trigger if exists trg_auditoria_faturamento_updated_at on auditoria_faturamento;
+create trigger trg_auditoria_faturamento_updated_at
+before update on auditoria_faturamento
 for each row execute function set_updated_at();
 
 insert into empreendimentos (id, nome, cidade, estado, status, abl_m2, numero_lojas, numero_vagas)
@@ -807,4 +834,100 @@ on conflict (id) do update set
   aluguel_minimo = excluded.aluguel_minimo,
   faturamento_informado = excluded.faturamento_informado,
   faturamento_auditado = excluded.faturamento_auditado,
+  status = excluded.status;
+
+insert into auditoria_faturamento (
+  id,
+  loja_id,
+  empreendimento_id,
+  competencia,
+  relatorio_erp,
+  relatorio_pdv,
+  stone,
+  rede,
+  cielo,
+  pix,
+  ifood,
+  delivery,
+  faturamento_anterior,
+  status
+)
+values
+  (
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+    (select id from lojas where codigo = 'VV-01' limit 1),
+    '11111111-1111-4111-8111-111111111111',
+    '2026-05',
+    548000,
+    543500,
+    212000,
+    148500,
+    96000,
+    64500,
+    18500,
+    7600,
+    502000,
+    'divergente'
+  ),
+  (
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
+    (select id from lojas where codigo = 'VV-02' limit 1),
+    '11111111-1111-4111-8111-111111111111',
+    '2026-05',
+    604000,
+    607800,
+    184000,
+    171000,
+    140500,
+    112000,
+    0,
+    0,
+    790000,
+    'critico'
+  ),
+  (
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3',
+    (select id from lojas where codigo = 'BR-01' limit 1),
+    '33333333-3333-4333-8333-333333333333',
+    '2026-05',
+    912000,
+    908000,
+    315000,
+    246000,
+    180000,
+    127500,
+    0,
+    39500,
+    874000,
+    'conciliado'
+  ),
+  (
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4',
+    (select id from lojas where codigo = 'PN-01' limit 1),
+    '22222222-2222-4222-8222-222222222222',
+    '2026-05',
+    98000,
+    104000,
+    35500,
+    28100,
+    18400,
+    14200,
+    6800,
+    5200,
+    110000,
+    'divergente'
+  )
+on conflict (id) do update set
+  loja_id = excluded.loja_id,
+  empreendimento_id = excluded.empreendimento_id,
+  competencia = excluded.competencia,
+  relatorio_erp = excluded.relatorio_erp,
+  relatorio_pdv = excluded.relatorio_pdv,
+  stone = excluded.stone,
+  rede = excluded.rede,
+  cielo = excluded.cielo,
+  pix = excluded.pix,
+  ifood = excluded.ifood,
+  delivery = excluded.delivery,
+  faturamento_anterior = excluded.faturamento_anterior,
   status = excluded.status;

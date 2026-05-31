@@ -1,4 +1,4 @@
-import type { Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Store, Tenant } from "@/lib/types";
+import type { Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
@@ -9,6 +9,7 @@ type ReceivableRow = Database["public"]["Tables"]["receitas"]["Row"];
 type PayableRow = Database["public"]["Tables"]["despesas"]["Row"];
 type DelinquencyRow = Database["public"]["Tables"]["inadimplencias"]["Row"];
 type FppRow = Database["public"]["Tables"]["fpp"]["Row"];
+type RevenueAuditRow = Database["public"]["Tables"]["auditoria_faturamento"]["Row"];
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -130,5 +131,24 @@ export function mapFppRow(row: FppRow): FppRecord {
     faturamentoInformado: row.faturamento_informado,
     faturamentoAuditado: row.faturamento_auditado,
     status: row.status as FppRecord["status"]
+  };
+}
+
+export function mapRevenueAuditRow(row: RevenueAuditRow): RevenueAuditRecord {
+  return {
+    id: row.id,
+    lojaId: row.loja_id,
+    empreendimentoId: row.empreendimento_id,
+    competencia: row.competencia,
+    relatorioErp: row.relatorio_erp,
+    relatorioPdv: row.relatorio_pdv,
+    stone: row.stone,
+    rede: row.rede,
+    cielo: row.cielo,
+    pix: row.pix,
+    ifood: row.ifood,
+    delivery: row.delivery,
+    faturamentoAnterior: row.faturamento_anterior,
+    status: row.status as RevenueAuditRecord["status"]
   };
 }
