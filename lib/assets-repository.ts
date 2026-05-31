@@ -9,9 +9,10 @@ import {
   mapReceivableRow,
   mapRevenueAuditRow,
   mapStoreRow,
-  mapTenantRow
+  mapTenantRow,
+  mapVacancyRow
 } from "@/lib/supabase/mappers";
-import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant, VacancyRecord } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
@@ -24,6 +25,7 @@ export type AssetData = {
   fppRecords: FppRecord[];
   revenueAuditRecords: RevenueAuditRecord[];
   commercialLeads: CommercialLead[];
+  vacancyRecords: VacancyRecord[];
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -54,7 +56,8 @@ export function loadLocalAssetData(): AssetData | null {
       delinquencyRecords: Array.isArray(parsed.delinquencyRecords) ? parsed.delinquencyRecords : [],
       fppRecords: Array.isArray(parsed.fppRecords) ? parsed.fppRecords : [],
       revenueAuditRecords: Array.isArray(parsed.revenueAuditRecords) ? parsed.revenueAuditRecords : [],
-      commercialLeads: Array.isArray(parsed.commercialLeads) ? parsed.commercialLeads : []
+      commercialLeads: Array.isArray(parsed.commercialLeads) ? parsed.commercialLeads : [],
+      vacancyRecords: Array.isArray(parsed.vacancyRecords) ? parsed.vacancyRecords : []
     };
   } catch {
     return null;
@@ -86,7 +89,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -136,7 +139,12 @@ export async function fetchAssetData(): Promise<AssetData | null> {
       .from("comercial_leads")
       .select("*")
       .is("deleted_at", null)
-      .order("data_proxima_acao", { ascending: true })
+      .order("data_proxima_acao", { ascending: true }),
+    client
+      .from("vacancia")
+      .select("*")
+      .is("deleted_at", null)
+      .order("inicio_vacancia", { ascending: true })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
@@ -149,6 +157,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
   if (fppResult.error) throw fppResult.error;
   if (auditResult.error) throw auditResult.error;
   if (commercialResult.error) throw commercialResult.error;
+  if (vacancyResult.error) throw vacancyResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
@@ -160,7 +169,8 @@ export async function fetchAssetData(): Promise<AssetData | null> {
     delinquencyRecords: delinquencyResult.data.map(mapDelinquencyRow),
     fppRecords: fppResult.data.map(mapFppRow),
     revenueAuditRecords: auditResult.data.map(mapRevenueAuditRow),
-    commercialLeads: commercialResult.data.map(mapCommercialLeadRow)
+    commercialLeads: commercialResult.data.map(mapCommercialLeadRow),
+    vacancyRecords: vacancyResult.data.map(mapVacancyRow)
   };
 }
 
@@ -459,6 +469,34 @@ export async function saveCommercialLead(lead: CommercialLead) {
 
   if (error) throw error;
   return mapCommercialLeadRow(data);
+}
+
+export async function saveVacancyRecord(record: VacancyRecord) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return record;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("vacancia")
+    .upsert({
+      ...(isUuid(record.id) ? { id: record.id } : {}),
+      loja_id: record.lojaId,
+      empreendimento_id: record.empreendimentoId,
+      inicio_vacancia: record.inicioVacancia,
+      motivo: record.motivo,
+      criticidade: record.criticidade,
+      estrategia: record.estrategia,
+      receita_potencial: record.receitaPotencial,
+      responsavel: record.responsavel
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapVacancyRow(data);
 }
 
 function isUuid(value: string) {

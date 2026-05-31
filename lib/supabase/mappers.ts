@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant, VacancyRecord } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
@@ -11,6 +11,7 @@ type DelinquencyRow = Database["public"]["Tables"]["inadimplencias"]["Row"];
 type FppRow = Database["public"]["Tables"]["fpp"]["Row"];
 type RevenueAuditRow = Database["public"]["Tables"]["auditoria_faturamento"]["Row"];
 type CommercialLeadRow = Database["public"]["Tables"]["comercial_leads"]["Row"];
+type VacancyRow = Database["public"]["Tables"]["vacancia"]["Row"];
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -167,5 +168,19 @@ export function mapCommercialLeadRow(row: CommercialLeadRow): CommercialLead {
     historico: row.historico ?? "",
     etapa: row.etapa as CommercialLead["etapa"],
     valorProposta: row.valor_proposta
+  };
+}
+
+export function mapVacancyRow(row: VacancyRow): VacancyRecord {
+  return {
+    id: row.id,
+    lojaId: row.loja_id,
+    empreendimentoId: row.empreendimento_id,
+    inicioVacancia: row.inicio_vacancia,
+    motivo: row.motivo ?? "",
+    criticidade: row.criticidade as VacancyRecord["criticidade"],
+    estrategia: row.estrategia ?? "",
+    receitaPotencial: row.receita_potencial,
+    responsavel: row.responsavel ?? ""
   };
 }

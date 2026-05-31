@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant } from "./types";
+import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant, VacancyRecord } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -436,6 +436,53 @@ export const commercialLeads: CommercialLead[] = [
     historico: "Aprovado comercialmente e em elaboracao contratual.",
     etapa: "contrato",
     valorProposta: 24000
+  }
+];
+
+export const vacancyRecords: VacancyRecord[] = [
+  {
+    id: "vac-vv-03",
+    lojaId: "vv-03",
+    empreendimentoId: "villa-viseu",
+    inicioVacancia: "2026-02-10",
+    motivo: "Loja em negociacao apos troca de mix.",
+    criticidade: "estrategica",
+    estrategia: "Priorizar operador de conveniencia para reforcar fluxo diario.",
+    receitaPotencial: 11800,
+    responsavel: "Comercial"
+  },
+  {
+    id: "vac-vv-04",
+    lojaId: "vv-04",
+    empreendimentoId: "villa-viseu",
+    inicioVacancia: "2026-03-18",
+    motivo: "Espaco disponivel para moda ou servicos leves.",
+    criticidade: "alta",
+    estrategia: "Ofertar pacote com carencia curta e contrato padrao.",
+    receitaPotencial: 16200,
+    responsavel: "Marina"
+  },
+  {
+    id: "vac-bn-01",
+    lojaId: "bn-01",
+    empreendimentoId: "boulevard-naves",
+    inicioVacancia: "2026-01-05",
+    motivo: "Ancora em negociacao com impacto financeiro relevante.",
+    criticidade: "estrategica",
+    estrategia: "Negociar operador ancora com prazo longo e ativacao de marketing.",
+    receitaPotencial: 73000,
+    responsavel: "Diretoria"
+  },
+  {
+    id: "vac-bc-02",
+    lojaId: "bc-01",
+    empreendimentoId: "bluemall-centro",
+    inicioVacancia: "2026-04-02",
+    motivo: "Risco de vacancia futura em renovacao.",
+    criticidade: "media",
+    estrategia: "Monitorar renovacao e preparar substitutos por segmento.",
+    receitaPotencial: 18400,
+    responsavel: "Comercial"
   }
 ];
 

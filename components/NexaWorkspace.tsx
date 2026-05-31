@@ -14,7 +14,8 @@ import {
   receivables as seedReceivables,
   revenueAuditRecords as seedRevenueAuditRecords,
   stores as seedStores,
-  tenants as seedTenants
+  tenants as seedTenants,
+  vacancyRecords as seedVacancyRecords
 } from "@/lib/data";
 import {
   fetchAssetData,
@@ -30,9 +31,10 @@ import {
   saveReceivable,
   saveRevenueAuditRecord,
   saveStore,
-  saveTenant
+  saveTenant,
+  saveVacancyRecord
 } from "@/lib/assets-repository";
-import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant, VacancyRecord } from "@/lib/types";
 
 export function NexaWorkspace() {
   const [activeModule, setActiveModule] = useState("Dashboard");
@@ -46,6 +48,7 @@ export function NexaWorkspace() {
   const [fppRows, setFppRows] = useState<FppRecord[]>(seedFppRecords);
   const [revenueAuditRows, setRevenueAuditRows] = useState<RevenueAuditRecord[]>(seedRevenueAuditRecords);
   const [commercialLeadRows, setCommercialLeadRows] = useState<CommercialLead[]>(seedCommercialLeads);
+  const [vacancyRows, setVacancyRows] = useState<VacancyRecord[]>(seedVacancyRecords);
   const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
   const [syncError, setSyncError] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
@@ -65,6 +68,7 @@ export function NexaWorkspace() {
       setFppRows(mergeSeedRows(seedFppRecords, localData.fppRecords));
       setRevenueAuditRows(mergeSeedRows(seedRevenueAuditRecords, localData.revenueAuditRecords));
       setCommercialLeadRows(mergeSeedRows(seedCommercialLeads, localData.commercialLeads));
+      setVacancyRows(mergeSeedRows(seedVacancyRecords, localData.vacancyRecords));
     }
     setStorageReady(true);
 
@@ -81,6 +85,7 @@ export function NexaWorkspace() {
         setFppRows(data.fppRecords);
         setRevenueAuditRows(data.revenueAuditRecords);
         setCommercialLeadRows(data.commercialLeads);
+        setVacancyRows(data.vacancyRecords);
         setDataSource("supabase");
       })
       .catch((error: unknown) => {
@@ -104,10 +109,11 @@ export function NexaWorkspace() {
         delinquencyRecords: delinquencyRows,
         fppRecords: fppRows,
         revenueAuditRecords: revenueAuditRows,
-        commercialLeads: commercialLeadRows
+        commercialLeads: commercialLeadRows,
+        vacancyRecords: vacancyRows
       });
     }
-  }, [commercialLeadRows, contractRows, dataSource, delinquencyRows, enterpriseRows, fppRows, payableRows, receivableRows, revenueAuditRows, storageReady, storeRows, tenantRows]);
+  }, [commercialLeadRows, contractRows, dataSource, delinquencyRows, enterpriseRows, fppRows, payableRows, receivableRows, revenueAuditRows, storageReady, storeRows, tenantRows, vacancyRows]);
 
   return (
     <AppShell activeModule={activeModule} onModuleChange={setActiveModule}>
@@ -126,6 +132,7 @@ export function NexaWorkspace() {
           fppRecords={fppRows}
           revenueAuditRecords={revenueAuditRows}
           commercialLeads={commercialLeadRows}
+          vacancyRecords={vacancyRows}
           dataSource={dataSource}
           syncError={syncError}
           onResetLocalData={() => {
@@ -140,6 +147,7 @@ export function NexaWorkspace() {
             setFppRows(seedFppRecords);
             setRevenueAuditRows(seedRevenueAuditRecords);
             setCommercialLeadRows(seedCommercialLeads);
+            setVacancyRows(seedVacancyRecords);
             setDataSource("mock");
             setSyncError(null);
           }}
@@ -251,6 +259,17 @@ export function NexaWorkspace() {
             setCommercialLeadRows((current) => {
               const exists = current.some((item) => item.id === lead.id);
               return exists ? current.map((item) => item.id === lead.id ? saved : item) : [saved, ...current];
+            });
+          }}
+          onSaveVacancyRecord={async (record) => {
+            const saved = await saveVacancyRecord(record).catch((error: unknown) => {
+              setSyncError(error instanceof Error ? error.message : "Falha ao salvar vacancia");
+              return record;
+            });
+
+            setVacancyRows((current) => {
+              const exists = current.some((item) => item.id === record.id);
+              return exists ? current.map((item) => item.id === record.id ? saved : item) : [saved, ...current];
             });
           }}
         />

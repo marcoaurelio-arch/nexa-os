@@ -33,6 +33,7 @@ export const navItems = [
   { label: "FPP", icon: AreaChart },
   { label: "Auditoria", icon: Receipt },
   { label: "Comercial", icon: BarChart3 },
+  { label: "Vacancia", icon: Store },
   { label: "Operacoes", icon: Wrench },
   { label: "Energia e Agua", icon: Zap },
   { label: "Documentos", icon: ClipboardList },

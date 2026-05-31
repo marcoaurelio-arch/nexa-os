@@ -24,7 +24,9 @@ import type {
   RevenueType,
   Store as StoreType,
   Tenant,
-  TenantStatus
+  TenantStatus,
+  VacancyCriticality,
+  VacancyRecord
 } from "@/lib/types";
 
 type ModulePageProps = {
@@ -39,6 +41,7 @@ type ModulePageProps = {
   fppRecords: FppRecord[];
   revenueAuditRecords: RevenueAuditRecord[];
   commercialLeads: CommercialLead[];
+  vacancyRecords: VacancyRecord[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -52,6 +55,7 @@ type ModulePageProps = {
   onSaveFppRecord: (record: FppRecord) => void | Promise<void>;
   onSaveRevenueAuditRecord: (record: RevenueAuditRecord) => void | Promise<void>;
   onSaveCommercialLead: (lead: CommercialLead) => void | Promise<void>;
+  onSaveVacancyRecord: (record: VacancyRecord) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -120,6 +124,13 @@ const commercialStageLabel: Record<CommercialStage, string> = {
 };
 
 const commercialStages: CommercialStage[] = ["prospeccao", "lead", "visita", "proposta", "negociacao", "contrato", "implantacao", "inauguracao"];
+
+const vacancyCriticalityLabel: Record<VacancyCriticality, string> = {
+  baixa: "Baixa",
+  media: "Media",
+  alta: "Alta",
+  estrategica: "Estrategica"
+};
 
 const enterpriseSchema = z.object({
   id: z.string().min(1),
@@ -259,6 +270,18 @@ const commercialLeadSchema = z.object({
   valorProposta: z.coerce.number().min(0, "Informe zero ou mais.")
 });
 
+const vacancySchema = z.object({
+  id: z.string().min(1),
+  lojaId: z.string().trim().min(1, "Selecione a loja."),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  inicioVacancia: z.string().trim().min(8, "Informe o inicio da vacancia."),
+  motivo: z.string().trim().min(2, "Informe o motivo."),
+  criticidade: z.enum(["baixa", "media", "alta", "estrategica"]),
+  estrategia: z.string().trim().min(2, "Informe a estrategia."),
+  receitaPotencial: z.coerce.number().min(0, "Informe zero ou mais."),
+  responsavel: z.string().trim().min(2, "Informe o responsavel.")
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
@@ -269,6 +292,7 @@ type DelinquencyFormValues = z.infer<typeof delinquencySchema>;
 type FppFormValues = z.infer<typeof fppSchema>;
 type RevenueAuditFormValues = z.infer<typeof revenueAuditSchema>;
 type CommercialLeadFormValues = z.infer<typeof commercialLeadSchema>;
+type VacancyFormValues = z.infer<typeof vacancySchema>;
 
 export function ModulePage({
   module,
@@ -282,6 +306,7 @@ export function ModulePage({
   fppRecords,
   revenueAuditRecords,
   commercialLeads,
+  vacancyRecords,
   dataSource,
   syncError,
   onResetLocalData,
@@ -294,7 +319,8 @@ export function ModulePage({
   onSaveDelinquencyRecord,
   onSaveFppRecord,
   onSaveRevenueAuditRecord,
-  onSaveCommercialLead
+  onSaveCommercialLead,
+  onSaveVacancyRecord
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -401,6 +427,16 @@ export function ModulePage({
         stores={stores}
         leads={commercialLeads}
         onSaveLead={onSaveCommercialLead}
+      />
+    );
+  }
+  if (module === "Vacancia") {
+    return (
+      <VacancyPage
+        enterprises={enterprises}
+        stores={stores}
+        records={vacancyRecords}
+        onSaveRecord={onSaveVacancyRecord}
       />
     );
   }
@@ -1630,6 +1666,145 @@ function CommercialPage({
   );
 }
 
+function VacancyPage({
+  enterprises,
+  stores,
+  records,
+  onSaveRecord
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  records: VacancyRecord[];
+  onSaveRecord: (record: VacancyRecord) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [editingRecord, setEditingRecord] = useState<VacancyRecord | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedRecords = records.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const occupiedStores = selectedStores.filter((store) => ["ocupada", "implantacao", "em_obra"].includes(store.status));
+  const vacantStores = selectedStores.filter((store) => ["disponivel", "negociacao", "inativa"].includes(store.status));
+  const totalArea = selectedStores.reduce((sum, store) => sum + store.areaTotal, 0);
+  const vacantArea = vacantStores.reduce((sum, store) => sum + store.areaTotal, 0);
+  const potentialRent = selectedStores.reduce((sum, store) => sum + store.aluguel, 0);
+  const lostRevenue = selectedRecords.length
+    ? selectedRecords.reduce((sum, record) => sum + record.receitaPotencial, 0)
+    : vacantStores.reduce((sum, store) => sum + store.aluguel, 0);
+  const averageVacancyDays = selectedRecords.length
+    ? Math.round(selectedRecords.reduce((sum, record) => sum + vacancyDays(record), 0) / selectedRecords.length)
+    : 0;
+  const strategicRecords = selectedRecords.filter((record) => record.criticidade === "estrategica");
+  const firstVacantStore = vacantStores[0] ?? selectedStores[0] ?? stores[0];
+
+  return (
+    <Shell
+      title="Ocupacao e Vacancia"
+      description="Indicadores de ocupacao, vacancia fisica e financeira, receita perdida e ranking de lojas criticas."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => setEditingRecord(emptyVacancyRecord(firstVacantStore))}>
+            <Plus className="h-4 w-4" />
+            Vacancia
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Total lojas" value={numberPt(selectedStores.length)} />
+        <Kpi label="Lojas ocupadas" value={numberPt(occupiedStores.length)} tone="success" />
+        <Kpi label="Lojas vagas" value={numberPt(vacantStores.length)} tone={vacantStores.length ? "danger" : "success"} />
+        <Kpi label="Taxa ocupacao" value={percent(selectedStores.length ? occupiedStores.length / selectedStores.length : 0)} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Vacancia fisica" value={percent(totalArea > 0 ? vacantArea / totalArea : 0)} />
+        <Kpi label="Vacancia financeira" value={percent(potentialRent > 0 ? lostRevenue / potentialRent : 0)} tone={lostRevenue > 0 ? "danger" : "success"} />
+        <Kpi label="Receita perdida" value={brl(lostRevenue)} tone={lostRevenue > 0 ? "danger" : "success"} />
+        <Kpi label="Tempo medio vacancia" value={`${numberPt(averageVacancyDays)} dias`} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div className="space-y-3">
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Maiores vacancias</h2>
+            <DataTable
+              columns={["Loja", "Empreendimento", "ABL", "Aluguel", "Status"]}
+              rows={vacantStores
+                .slice()
+                .sort((a, b) => b.areaTotal - a.areaTotal)
+                .map((store) => [
+                  `${store.codigo} - ${store.nome}`,
+                  enterpriseLabel(enterprises, store.empreendimentoId),
+                  `${numberPt(store.areaTotal)} m2`,
+                  brl(store.aluguel),
+                  statusLabel[store.status]
+                ])}
+            />
+          </div>
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Lojas criticas</h2>
+            <DataTable
+              columns={["Loja", "Dias", "Criticidade", "Receita perdida", "Responsavel", "Acoes"]}
+              rows={selectedRecords
+                .slice()
+                .sort((a, b) => criticalityWeight(b.criticidade) - criticalityWeight(a.criticidade) || b.receitaPotencial - a.receitaPotencial)
+                .map((record) => [
+                  storeLabel(stores, record.lojaId),
+                  numberPt(vacancyDays(record)),
+                  vacancyCriticalityLabel[record.criticidade],
+                  brl(record.receitaPotencial),
+                  record.responsavel,
+                  "Editar"
+                ])}
+              onAction={(rowIndex) => {
+                const ordered = selectedRecords
+                  .slice()
+                  .sort((a, b) => criticalityWeight(b.criticidade) - criticalityWeight(a.criticidade) || b.receitaPotencial - a.receitaPotencial);
+                setEditingRecord(ordered[rowIndex]);
+              }}
+            />
+          </div>
+        </div>
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Lojas estrategicas</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Ranking de espacos com maior impacto financeiro, ABL ou relevancia de mix.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Registros monitorados" value={numberPt(selectedRecords.length)} />
+            <Mini label="Estrategicas" value={numberPt(strategicRecords.length)} />
+            <Mini label="ABL vaga" value={`${numberPt(vacantArea)} m2`} />
+          </div>
+          <div className="mt-5 space-y-2">
+            {strategicRecords.map((record) => (
+              <button key={record.id} className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm" onClick={() => setEditingRecord(record)}>
+                <p className="font-bold text-primary">{storeLabel(stores, record.lojaId)}</p>
+                <p className="text-muted-foreground">{record.estrategia}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {editingRecord ? (
+        <VacancyForm
+          record={editingRecord}
+          stores={stores}
+          enterprises={enterprises}
+          onClose={() => setEditingRecord(null)}
+          onSave={async (record) => {
+            await onSaveRecord(record);
+            setEditingRecord(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
 function DataTable({
   columns,
   rows,
@@ -2437,6 +2612,70 @@ function CommercialLeadForm({
   );
 }
 
+function VacancyForm({
+  record,
+  stores,
+  enterprises,
+  onClose,
+  onSave
+}: {
+  record: VacancyRecord;
+  stores: StoreType[];
+  enterprises: Enterprise[];
+  onClose: () => void;
+  onSave: (record: VacancyRecord) => void;
+}) {
+  const storeOptions = useMemo(() => stores.map((store) => store.id), [stores]);
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<VacancyFormValues>({
+    resolver: zodResolver(vacancySchema),
+    defaultValues: record
+  });
+
+  return (
+    <Modal title="Registro de vacancia" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect label="Loja" error={errors.lojaId?.message} options={storeOptions} optionLabels={storeLabels} {...register("lojaId")} />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormInput label="Inicio vacancia" type="date" error={errors.inicioVacancia?.message} {...register("inicioVacancia")} />
+          <FormSelect
+            label="Criticidade"
+            error={errors.criticidade?.message}
+            options={["baixa", "media", "alta", "estrategica"]}
+            optionLabels={vacancyCriticalityLabel}
+            {...register("criticidade")}
+          />
+          <FormInput label="Receita potencial" type="number" error={errors.receitaPotencial?.message} {...register("receitaPotencial")} />
+          <FormInput label="Responsavel" error={errors.responsavel?.message} {...register("responsavel")} />
+          <FormInput label="Motivo" error={errors.motivo?.message} {...register("motivo")} />
+          <FormInput label="Estrategia" error={errors.estrategia?.message} {...register("estrategia")} />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -2688,6 +2927,21 @@ function auditRevenueBySegment(records: RevenueAuditRecord[], stores: StoreType[
   return [...rows.values()].sort((a, b) => b.faturamento - a.faturamento);
 }
 
+function vacancyDays(record: VacancyRecord) {
+  return daysBetween(new Date(`${record.inicioVacancia}T00:00:00`), new Date());
+}
+
+function criticalityWeight(criticality: VacancyCriticality) {
+  const weights: Record<VacancyCriticality, number> = {
+    baixa: 1,
+    media: 2,
+    alta: 3,
+    estrategica: 4
+  };
+
+  return weights[criticality];
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -2854,6 +3108,20 @@ function emptyCommercialLead(store?: StoreType): CommercialLead {
     historico: "",
     etapa: "lead",
     valorProposta: store?.aluguel ?? 0
+  };
+}
+
+function emptyVacancyRecord(store?: StoreType): VacancyRecord {
+  return {
+    id: crypto.randomUUID(),
+    lojaId: store?.id ?? "",
+    empreendimentoId: store?.empreendimentoId ?? "",
+    inicioVacancia: new Date().toISOString().slice(0, 10),
+    motivo: "Novo monitoramento de vacancia.",
+    criticidade: "media",
+    estrategia: "Definir operador alvo e politica comercial.",
+    receitaPotencial: store?.aluguel ?? 0,
+    responsavel: "Comercial"
   };
 }
 

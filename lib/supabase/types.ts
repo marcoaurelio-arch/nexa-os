@@ -319,6 +319,34 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["comercial_leads"]["Insert"]>;
       };
+      vacancia: {
+        Row: {
+          id: string;
+          loja_id: string;
+          empreendimento_id: string;
+          inicio_vacancia: string;
+          motivo: string | null;
+          criticidade: string;
+          estrategia: string | null;
+          receita_potencial: number;
+          responsavel: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loja_id: string;
+          empreendimento_id: string;
+          inicio_vacancia: string;
+          motivo?: string | null;
+          criticidade?: string;
+          estrategia?: string | null;
+          receita_potencial?: number;
+          responsavel?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["vacancia"]["Insert"]>;
+      };
     };
   };
 };

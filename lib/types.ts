@@ -164,6 +164,20 @@ export type CommercialLead = {
   valorProposta: number;
 };
 
+export type VacancyCriticality = "baixa" | "media" | "alta" | "estrategica";
+
+export type VacancyRecord = {
+  id: string;
+  lojaId: string;
+  empreendimentoId: string;
+  inicioVacancia: string;
+  motivo: string;
+  criticidade: VacancyCriticality;
+  estrategia: string;
+  receitaPotencial: number;
+  responsavel: string;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;
