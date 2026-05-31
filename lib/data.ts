@@ -1,4 +1,4 @@
-import type { Contract, ContractAlert, Enterprise, Payable, Receivable, Revenue, ServiceOrder, Store, Tenant } from "./types";
+import type { Contract, ContractAlert, DelinquencyRecord, Enterprise, Payable, Receivable, Revenue, ServiceOrder, Store, Tenant } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -201,6 +201,42 @@ export const payables: Payable[] = [
   { id: "pay-vv-seguranca", empreendimentoId: "villa-viseu", fornecedor: "Seguranca Prime", categoria: "Seguranca", competencia: "2026-05", valor: 42000, vencimento: "2026-05-25", pagamento: "", centroCusto: "Condominio", status: "aberto" },
   { id: "pay-vv-marketing", empreendimentoId: "villa-viseu", fornecedor: "Agencia Criar", categoria: "Marketing", competencia: "2026-05", valor: 18500, vencimento: "2026-05-20", pagamento: "", centroCusto: "Fundo promocao", status: "vencido" },
   { id: "pay-br-energia", empreendimentoId: "bluemall-rondon", fornecedor: "Concessionaria energia", categoria: "Energia", competencia: "2026-05", valor: 31500, vencimento: "2026-05-22", pagamento: "2026-05-22", centroCusto: "Operacoes", status: "pago" }
+];
+
+export const delinquencyRecords: DelinquencyRecord[] = [
+  {
+    id: "del-rec-vv-01-condominio",
+    receivableId: "rec-vv-01-condominio",
+    lojaId: "vv-01",
+    valor: 6800,
+    diasAtraso: 21,
+    historico: "Boleto reenviado e contato realizado por WhatsApp.",
+    negociacao: "Promessa de pagamento em 03/06/2026.",
+    responsavel: "Financeiro",
+    status: "negociacao"
+  },
+  {
+    id: "del-rec-vv-02-aluguel",
+    receivableId: "rec-vv-02-aluguel",
+    lojaId: "vv-02",
+    valor: 31000,
+    diasAtraso: 21,
+    historico: "Notificacao preventiva enviada.",
+    negociacao: "Aguardando retorno do responsavel legal.",
+    responsavel: "Administrativo",
+    status: "regua"
+  },
+  {
+    id: "del-rec-pn-01-fundo",
+    receivableId: "rec-pn-01-fundo",
+    lojaId: "pn-01",
+    valor: 1800,
+    diasAtraso: 16,
+    historico: "Primeiro lembrete enviado.",
+    negociacao: "A acompanhar na proxima semana.",
+    responsavel: "Financeiro",
+    status: "regua"
+  }
 ];
 
 export const serviceOrders: ServiceOrder[] = [

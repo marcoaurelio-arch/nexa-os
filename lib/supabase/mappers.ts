@@ -1,4 +1,4 @@
-import type { Contract, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
+import type { Contract, DelinquencyRecord, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
@@ -7,6 +7,7 @@ type TenantRow = Database["public"]["Tables"]["lojistas"]["Row"];
 type ContractRow = Database["public"]["Tables"]["contratos"]["Row"];
 type ReceivableRow = Database["public"]["Tables"]["receitas"]["Row"];
 type PayableRow = Database["public"]["Tables"]["despesas"]["Row"];
+type DelinquencyRow = Database["public"]["Tables"]["inadimplencias"]["Row"];
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -99,5 +100,19 @@ export function mapPayableRow(row: PayableRow): Payable {
     pagamento: row.pagamento ?? "",
     centroCusto: row.centro_custo,
     status: row.status as Payable["status"]
+  };
+}
+
+export function mapDelinquencyRow(row: DelinquencyRow): DelinquencyRecord {
+  return {
+    id: row.id,
+    receivableId: row.receita_id ?? "",
+    lojaId: row.loja_id,
+    valor: row.valor,
+    diasAtraso: row.dias_atraso,
+    historico: row.historico ?? "",
+    negociacao: row.negociacao ?? "",
+    responsavel: row.responsavel ?? "",
+    status: row.status as DelinquencyRecord["status"]
   };
 }

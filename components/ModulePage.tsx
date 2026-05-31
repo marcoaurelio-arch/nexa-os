@@ -11,6 +11,7 @@ import { brl, numberPt, percent } from "@/lib/metrics";
 import type {
   Contract,
   ContractStatus,
+  DelinquencyRecord,
   Enterprise,
   FinancialStatus,
   Payable,
@@ -29,6 +30,7 @@ type ModulePageProps = {
   contracts: Contract[];
   receivables: Receivable[];
   payables: Payable[];
+  delinquencyRecords: DelinquencyRecord[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -38,6 +40,7 @@ type ModulePageProps = {
   onSaveContract: (contract: Contract) => void | Promise<void>;
   onSaveReceivable: (receivable: Receivable) => void | Promise<void>;
   onSavePayable: (payable: Payable) => void | Promise<void>;
+  onSaveDelinquencyRecord: (record: DelinquencyRecord) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -78,6 +81,13 @@ const revenueTypeLabel: Record<RevenueType, string> = {
   fpp: "FPP",
   multa: "Multa",
   juros: "Juros"
+};
+
+const delinquencyStatusLabel: Record<DelinquencyRecord["status"], string> = {
+  regua: "Regua",
+  negociacao: "Negociacao",
+  juridico: "Juridico",
+  regularizado: "Regularizado"
 };
 
 const enterpriseSchema = z.object({
@@ -162,12 +172,25 @@ const payableSchema = z.object({
   status: z.enum(["aberto", "vencido", "pago", "cancelado"])
 });
 
+const delinquencySchema = z.object({
+  id: z.string().min(1),
+  receivableId: z.string().min(1),
+  lojaId: z.string().min(1),
+  valor: z.coerce.number().min(0),
+  diasAtraso: z.coerce.number().int().min(0),
+  historico: z.string().trim(),
+  negociacao: z.string().trim(),
+  responsavel: z.string().trim().min(2, "Informe o responsavel."),
+  status: z.enum(["regua", "negociacao", "juridico", "regularizado"])
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
 type ContractFormValues = z.infer<typeof contractSchema>;
 type ReceivableFormValues = z.infer<typeof receivableSchema>;
 type PayableFormValues = z.infer<typeof payableSchema>;
+type DelinquencyFormValues = z.infer<typeof delinquencySchema>;
 
 export function ModulePage({
   module,
@@ -177,6 +200,7 @@ export function ModulePage({
   contracts,
   receivables,
   payables,
+  delinquencyRecords,
   dataSource,
   syncError,
   onResetLocalData,
@@ -185,7 +209,8 @@ export function ModulePage({
   onSaveTenant,
   onSaveContract,
   onSaveReceivable,
-  onSavePayable
+  onSavePayable,
+  onSaveDelinquencyRecord
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -214,7 +239,17 @@ export function ModulePage({
 
   if (module === "Contratos") return <ContractsPage stores={stores} tenants={tenants} contracts={contracts} onSaveContract={onSaveContract} />;
   if (module === "Lojistas") return <TenantsPage stores={stores} tenants={tenants} onSaveTenant={onSaveTenant} />;
-  if (module === "Inadimplencia") return <DelinquencyPage stores={stores} />;
+  if (module === "Inadimplencia") {
+    return (
+      <DelinquencyPage
+        stores={stores}
+        tenants={tenants}
+        receivables={receivables}
+        records={delinquencyRecords}
+        onSaveDelinquencyRecord={onSaveDelinquencyRecord}
+      />
+    );
+  }
   if (module === "Operacoes") return <OperationsPage />;
   if (module === "Financeiro") {
     return (
@@ -686,24 +721,75 @@ function FinancePage({
   );
 }
 
-function DelinquencyPage({ stores }: { stores: StoreType[] }) {
-  const lanes = ["5 dias", "15 dias", "30 dias", "60 dias", "90 dias"];
+function DelinquencyPage({
+  stores,
+  tenants,
+  receivables,
+  records,
+  onSaveDelinquencyRecord
+}: {
+  stores: StoreType[];
+  tenants: Tenant[];
+  receivables: Receivable[];
+  records: DelinquencyRecord[];
+  onSaveDelinquencyRecord: (record: DelinquencyRecord) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState<DelinquencyRecord | null>(null);
+  const cases = buildDelinquencyCases(receivables, records);
+  const totalValue = cases.reduce((sum, item) => sum + item.record.valor, 0);
+  const inNegotiation = cases.filter((item) => item.record.status === "negociacao").length;
+  const lanes: Array<5 | 15 | 30 | 60 | 90> = [5, 15, 30, 60, 90];
 
   return (
     <Shell title="Inadimplencia" description="Regua automatica e kanban de cobranca.">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Valor inadimplente" value={brl(totalValue)} tone="danger" />
+        <Kpi label="Casos ativos" value={numberPt(cases.length)} />
+        <Kpi label="Em negociacao" value={numberPt(inNegotiation)} tone="success" />
+        <Kpi label="Maior atraso" value={`${numberPt(Math.max(0, ...cases.map((item) => item.record.diasAtraso)))} dias`} />
+      </div>
       <div className="grid gap-3 xl:grid-cols-5">
-        {lanes.map((lane, index) => (
+        {lanes.map((lane) => {
+          const laneCases = cases.filter((item) => item.lane === lane);
+
+          return (
           <div key={lane} className="panel min-h-[360px] p-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold uppercase">{lane}</h2>
-              <AlertTriangle className={index > 2 ? "h-4 w-4 text-danger" : "h-4 w-4 text-warning"} />
+              <h2 className="font-bold uppercase">{lane} dias</h2>
+              <AlertTriangle className={lane >= 60 ? "h-4 w-4 text-danger" : "h-4 w-4 text-warning"} />
             </div>
             <div className="mt-4 space-y-3">
-              <KanbanCard title={stores[index % stores.length].codigo} subtitle={stores[index % stores.length].nome} value={brl((index + 1) * 18500)} />
+              {laneCases.length ? (
+                laneCases.map((item) => (
+                  <button key={item.record.id} className="w-full text-left" onClick={() => setEditing(item.record)}>
+                    <KanbanCard
+                      title={`${storeLabel(stores, item.record.lojaId)} | ${numberPt(item.record.diasAtraso)} dias`}
+                      subtitle={`${tenantByStore(tenants, item.record.lojaId)} | ${item.record.responsavel || "Sem responsavel"}`}
+                      value={`${brl(item.record.valor)} | ${delinquencyStatusLabel[item.record.status]}`}
+                    />
+                  </button>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-border p-3 text-xs font-medium text-muted-foreground">
+                  Sem casos nesta etapa.
+                </div>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
+      {editing ? (
+        <DelinquencyForm
+          record={editing}
+          stores={stores}
+          onClose={() => setEditing(null)}
+          onSave={async (record) => {
+            await onSaveDelinquencyRecord(record);
+            setEditing(null);
+          }}
+        />
+      ) : null}
     </Shell>
   );
 }
@@ -1301,6 +1387,57 @@ function PayableForm({
   );
 }
 
+function DelinquencyForm({
+  record,
+  stores,
+  onClose,
+  onSave
+}: {
+  record: DelinquencyRecord;
+  stores: StoreType[];
+  onClose: () => void;
+  onSave: (record: DelinquencyRecord) => void;
+}) {
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<DelinquencyFormValues>({
+    resolver: zodResolver(delinquencySchema),
+    defaultValues: record
+  });
+
+  return (
+    <Modal title="Inadimplencia" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <input type="hidden" {...register("receivableId")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect label="Loja" error={errors.lojaId?.message} options={Object.keys(storeLabels)} optionLabels={storeLabels} {...register("lojaId")} />
+          <FormInput label="Valor" type="number" error={errors.valor?.message} {...register("valor")} />
+          <FormInput label="Dias atraso" type="number" error={errors.diasAtraso?.message} {...register("diasAtraso")} />
+          <FormInput label="Responsavel" error={errors.responsavel?.message} {...register("responsavel")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["regua", "negociacao", "juridico", "regularizado"]}
+            optionLabels={delinquencyStatusLabel}
+            {...register("status")}
+          />
+          <div className="hidden md:block" />
+          <FormInput label="Historico" error={errors.historico?.message} {...register("historico")} />
+          <FormInput label="Negociacao" error={errors.negociacao?.message} {...register("negociacao")} />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -1383,6 +1520,56 @@ function enterpriseLabel(enterprises: Enterprise[], empreendimentoId: string) {
 function tenantLabel(tenants: Tenant[], lojistaId: string) {
   const tenant = tenants.find((item) => item.id === lojistaId);
   return tenant?.nomeFantasia ?? "-";
+}
+
+function tenantByStore(tenants: Tenant[], lojaId: string) {
+  return tenants.find((tenant) => tenant.lojaId === lojaId)?.nomeFantasia ?? "Sem lojista";
+}
+
+function buildDelinquencyCases(receivables: Receivable[], records: DelinquencyRecord[]) {
+  const today = new Date();
+
+  return receivables
+    .filter((receivable) => receivable.status !== "pago" && receivable.status !== "cancelado" && !receivable.recebimento)
+    .map((receivable) => {
+      const diasAtraso = daysBetween(new Date(`${receivable.vencimento}T00:00:00`), today);
+
+      if (diasAtraso <= 0) return null;
+
+      const record = records.find((item) => item.receivableId === receivable.id);
+      const merged: DelinquencyRecord = {
+        id: record?.id ?? `del-${receivable.id}`,
+        receivableId: receivable.id,
+        lojaId: receivable.lojaId,
+        valor: receivable.valor,
+        diasAtraso,
+        historico: record?.historico ?? "Caso gerado automaticamente pela conta a receber vencida.",
+        negociacao: record?.negociacao ?? "",
+        responsavel: record?.responsavel ?? "Financeiro",
+        status: record?.status ?? "regua"
+      };
+
+      if (merged.status === "regularizado") return null;
+
+      return {
+        record: merged,
+        lane: delinquencyLane(diasAtraso)
+      };
+    })
+    .filter((item): item is { record: DelinquencyRecord; lane: 5 | 15 | 30 | 60 | 90 } => Boolean(item));
+}
+
+function daysBetween(start: Date, end: Date) {
+  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay));
+}
+
+function delinquencyLane(days: number): 5 | 15 | 30 | 60 | 90 {
+  if (days <= 5) return 5;
+  if (days <= 15) return 15;
+  if (days <= 30) return 30;
+  if (days <= 60) return 60;
+  return 90;
 }
 
 function emptyEnterprise(): Enterprise {

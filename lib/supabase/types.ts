@@ -191,6 +191,34 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["despesas"]["Insert"]>;
       };
+      inadimplencias: {
+        Row: {
+          id: string;
+          receita_id: string | null;
+          loja_id: string;
+          valor: number;
+          dias_atraso: number;
+          historico: string | null;
+          negociacao: string | null;
+          responsavel: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          receita_id?: string | null;
+          loja_id: string;
+          valor?: number;
+          dias_atraso?: number;
+          historico?: string | null;
+          negociacao?: string | null;
+          responsavel?: string | null;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["inadimplencias"]["Insert"]>;
+      };
     };
   };
 };

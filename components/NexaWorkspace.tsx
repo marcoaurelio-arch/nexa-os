@@ -6,6 +6,7 @@ import { Dashboard } from "@/components/Dashboard";
 import { ModulePage } from "@/components/ModulePage";
 import {
   contracts as seedContracts,
+  delinquencyRecords as seedDelinquencyRecords,
   enterprises as seedEnterprises,
   payables as seedPayables,
   receivables as seedReceivables,
@@ -17,6 +18,7 @@ import {
   loadLocalAssetData,
   resetLocalAssetData,
   saveContract,
+  saveDelinquencyRecord,
   saveEnterprise,
   saveLocalAssetData,
   savePayable,
@@ -24,7 +26,7 @@ import {
   saveStore,
   saveTenant
 } from "@/lib/assets-repository";
-import type { Contract, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
+import type { Contract, DelinquencyRecord, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
 
 export function NexaWorkspace() {
   const [activeModule, setActiveModule] = useState("Dashboard");
@@ -34,6 +36,7 @@ export function NexaWorkspace() {
   const [contractRows, setContractRows] = useState<Contract[]>(seedContracts);
   const [receivableRows, setReceivableRows] = useState<Receivable[]>(seedReceivables);
   const [payableRows, setPayableRows] = useState<Payable[]>(seedPayables);
+  const [delinquencyRows, setDelinquencyRows] = useState<DelinquencyRecord[]>(seedDelinquencyRecords);
   const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
   const [syncError, setSyncError] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
@@ -49,6 +52,7 @@ export function NexaWorkspace() {
       setContractRows(localData.contracts.length ? localData.contracts : seedContracts);
       setReceivableRows(localData.receivables.length ? localData.receivables : seedReceivables);
       setPayableRows(localData.payables.length ? localData.payables : seedPayables);
+      setDelinquencyRows(localData.delinquencyRecords.length ? localData.delinquencyRecords : seedDelinquencyRecords);
     }
     setStorageReady(true);
 
@@ -61,6 +65,7 @@ export function NexaWorkspace() {
         setContractRows(data.contracts);
         setReceivableRows(data.receivables);
         setPayableRows(data.payables);
+        setDelinquencyRows(data.delinquencyRecords);
         setDataSource("supabase");
       })
       .catch((error: unknown) => {
@@ -80,10 +85,11 @@ export function NexaWorkspace() {
         tenants: tenantRows,
         contracts: contractRows,
         receivables: receivableRows,
-        payables: payableRows
+        payables: payableRows,
+        delinquencyRecords: delinquencyRows
       });
     }
-  }, [contractRows, dataSource, enterpriseRows, payableRows, receivableRows, storageReady, storeRows, tenantRows]);
+  }, [contractRows, dataSource, delinquencyRows, enterpriseRows, payableRows, receivableRows, storageReady, storeRows, tenantRows]);
 
   return (
     <AppShell activeModule={activeModule} onModuleChange={setActiveModule}>
@@ -98,6 +104,7 @@ export function NexaWorkspace() {
           contracts={contractRows}
           receivables={receivableRows}
           payables={payableRows}
+          delinquencyRecords={delinquencyRows}
           dataSource={dataSource}
           syncError={syncError}
           onResetLocalData={() => {
@@ -108,6 +115,7 @@ export function NexaWorkspace() {
             setContractRows(seedContracts);
             setReceivableRows(seedReceivables);
             setPayableRows(seedPayables);
+            setDelinquencyRows(seedDelinquencyRecords);
             setDataSource("mock");
             setSyncError(null);
           }}
@@ -175,6 +183,17 @@ export function NexaWorkspace() {
             setPayableRows((current) => {
               const exists = current.some((item) => item.id === payable.id);
               return exists ? current.map((item) => item.id === payable.id ? saved : item) : [saved, ...current];
+            });
+          }}
+          onSaveDelinquencyRecord={async (record) => {
+            const saved = await saveDelinquencyRecord(record).catch((error: unknown) => {
+              setSyncError(error instanceof Error ? error.message : "Falha ao salvar inadimplencia");
+              return record;
+            });
+
+            setDelinquencyRows((current) => {
+              const exists = current.some((item) => item.id === record.id);
+              return exists ? current.map((item) => item.id === record.id ? saved : item) : [saved, ...current];
             });
           }}
         />

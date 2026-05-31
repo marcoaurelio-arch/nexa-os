@@ -121,6 +121,21 @@ create table if not exists despesas (
   deleted_at timestamptz
 );
 
+create table if not exists inadimplencias (
+  id uuid primary key default gen_random_uuid(),
+  receita_id uuid references receitas(id),
+  loja_id uuid not null references lojas(id),
+  valor numeric(14,2) not null default 0,
+  dias_atraso integer not null default 0,
+  historico text,
+  negociacao text,
+  responsavel text,
+  status text not null default 'regua',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 create index if not exists idx_empreendimentos_status on empreendimentos (status) where deleted_at is null;
 create index if not exists idx_lojas_empreendimento_status on lojas (empreendimento_id, status) where deleted_at is null;
 create index if not exists idx_lojistas_loja_status on lojistas (loja_id, status) where deleted_at is null;
@@ -129,6 +144,8 @@ create index if not exists idx_receitas_competencia_status on receitas (competen
 create index if not exists idx_receitas_loja_vencimento on receitas (loja_id, vencimento) where deleted_at is null;
 create index if not exists idx_despesas_competencia_status on despesas (competencia, status) where deleted_at is null;
 create index if not exists idx_despesas_empreendimento_vencimento on despesas (empreendimento_id, vencimento) where deleted_at is null;
+create index if not exists idx_inadimplencias_loja_status on inadimplencias (loja_id, status) where deleted_at is null;
+create index if not exists idx_inadimplencias_dias_atraso on inadimplencias (dias_atraso desc) where deleted_at is null;
 
 drop trigger if exists trg_empreendimentos_updated_at on empreendimentos;
 create trigger trg_empreendimentos_updated_at
@@ -158,6 +175,11 @@ for each row execute function set_updated_at();
 drop trigger if exists trg_despesas_updated_at on despesas;
 create trigger trg_despesas_updated_at
 before update on despesas
+for each row execute function set_updated_at();
+
+drop trigger if exists trg_inadimplencias_updated_at on inadimplencias;
+create trigger trg_inadimplencias_updated_at
+before update on inadimplencias
 for each row execute function set_updated_at();
 
 insert into empreendimentos (id, nome, cidade, estado, status, abl_m2, numero_lojas, numero_vagas)
@@ -497,4 +519,59 @@ on conflict (id) do update set
   vencimento = excluded.vencimento,
   pagamento = excluded.pagamento,
   centro_custo = excluded.centro_custo,
+  status = excluded.status;
+
+insert into inadimplencias (
+  id,
+  receita_id,
+  loja_id,
+  valor,
+  dias_atraso,
+  historico,
+  negociacao,
+  responsavel,
+  status
+)
+values
+  (
+    '99999999-9999-4999-8999-999999999991',
+    '77777777-7777-4777-8777-777777777772',
+    (select id from lojas where codigo = 'VV-01' limit 1),
+    6800,
+    21,
+    'Boleto reenviado e contato realizado por WhatsApp.',
+    'Promessa de pagamento em 03/06/2026.',
+    'Financeiro',
+    'negociacao'
+  ),
+  (
+    '99999999-9999-4999-8999-999999999992',
+    '77777777-7777-4777-8777-777777777773',
+    (select id from lojas where codigo = 'VV-02' limit 1),
+    31000,
+    21,
+    'Notificacao preventiva enviada.',
+    'Aguardando retorno do responsavel legal.',
+    'Administrativo',
+    'regua'
+  ),
+  (
+    '99999999-9999-4999-8999-999999999993',
+    '77777777-7777-4777-8777-777777777775',
+    (select id from lojas where codigo = 'PN-01' limit 1),
+    1800,
+    16,
+    'Primeiro lembrete enviado.',
+    'A acompanhar na proxima semana.',
+    'Financeiro',
+    'regua'
+  )
+on conflict (id) do update set
+  receita_id = excluded.receita_id,
+  loja_id = excluded.loja_id,
+  valor = excluded.valor,
+  dias_atraso = excluded.dias_atraso,
+  historico = excluded.historico,
+  negociacao = excluded.negociacao,
+  responsavel = excluded.responsavel,
   status = excluded.status;

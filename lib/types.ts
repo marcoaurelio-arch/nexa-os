@@ -96,6 +96,18 @@ export type Payable = {
   status: FinancialStatus;
 };
 
+export type DelinquencyRecord = {
+  id: string;
+  receivableId: string;
+  lojaId: string;
+  valor: number;
+  diasAtraso: number;
+  historico: string;
+  negociacao: string;
+  responsavel: string;
+  status: "regua" | "negociacao" | "juridico" | "regularizado";
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;

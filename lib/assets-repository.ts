@@ -1,6 +1,14 @@
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { mapContractRow, mapEnterpriseRow, mapPayableRow, mapReceivableRow, mapStoreRow, mapTenantRow } from "@/lib/supabase/mappers";
-import type { Contract, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
+import {
+  mapContractRow,
+  mapDelinquencyRow,
+  mapEnterpriseRow,
+  mapPayableRow,
+  mapReceivableRow,
+  mapStoreRow,
+  mapTenantRow
+} from "@/lib/supabase/mappers";
+import type { Contract, DelinquencyRecord, Enterprise, Payable, Receivable, Store, Tenant } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
@@ -9,6 +17,7 @@ export type AssetData = {
   contracts: Contract[];
   receivables: Receivable[];
   payables: Payable[];
+  delinquencyRecords: DelinquencyRecord[];
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -35,7 +44,8 @@ export function loadLocalAssetData(): AssetData | null {
       tenants: Array.isArray(parsed.tenants) ? parsed.tenants : [],
       contracts: Array.isArray(parsed.contracts) ? parsed.contracts : [],
       receivables: Array.isArray(parsed.receivables) ? parsed.receivables : [],
-      payables: Array.isArray(parsed.payables) ? parsed.payables : []
+      payables: Array.isArray(parsed.payables) ? parsed.payables : [],
+      delinquencyRecords: Array.isArray(parsed.delinquencyRecords) ? parsed.delinquencyRecords : []
     };
   } catch {
     return null;
@@ -67,7 +77,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -97,7 +107,12 @@ export async function fetchAssetData(): Promise<AssetData | null> {
       .from("despesas")
       .select("*")
       .is("deleted_at", null)
-      .order("vencimento", { ascending: true })
+      .order("vencimento", { ascending: true }),
+    client
+      .from("inadimplencias")
+      .select("*")
+      .is("deleted_at", null)
+      .order("dias_atraso", { ascending: false })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
@@ -106,6 +121,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
   if (contractResult.error) throw contractResult.error;
   if (receivableResult.error) throw receivableResult.error;
   if (payableResult.error) throw payableResult.error;
+  if (delinquencyResult.error) throw delinquencyResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
@@ -113,7 +129,8 @@ export async function fetchAssetData(): Promise<AssetData | null> {
     tenants: tenantResult.data.map(mapTenantRow),
     contracts: contractResult.data.map(mapContractRow),
     receivables: receivableResult.data.map(mapReceivableRow),
-    payables: payableResult.data.map(mapPayableRow)
+    payables: payableResult.data.map(mapPayableRow),
+    delinquencyRecords: delinquencyResult.data.map(mapDelinquencyRow)
   };
 }
 
@@ -292,6 +309,34 @@ export async function savePayable(payable: Payable) {
 
   if (error) throw error;
   return mapPayableRow(data);
+}
+
+export async function saveDelinquencyRecord(record: DelinquencyRecord) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return record;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("inadimplencias")
+    .upsert({
+      ...(isUuid(record.id) ? { id: record.id } : {}),
+      receita_id: isUuid(record.receivableId) ? record.receivableId : null,
+      loja_id: record.lojaId,
+      valor: record.valor,
+      dias_atraso: record.diasAtraso,
+      historico: record.historico,
+      negociacao: record.negociacao,
+      responsavel: record.responsavel,
+      status: record.status
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapDelinquencyRow(data);
 }
 
 function isUuid(value: string) {
