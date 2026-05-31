@@ -1,4 +1,4 @@
-import type { Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant } from "./types";
+import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -355,6 +355,87 @@ export const revenueAuditRecords: RevenueAuditRecord[] = [
     delivery: 5200,
     faturamentoAnterior: 110000,
     status: "divergente"
+  }
+];
+
+export const commercialLeads: CommercialLead[] = [
+  {
+    id: "lead-academia-boutique",
+    lojaId: "vv-03",
+    empreendimentoId: "villa-viseu",
+    empresa: "Academia Boutique",
+    segmento: "Fitness",
+    responsavel: "Comercial",
+    proximaAcao: "Enviar estudo de mix e fluxo",
+    dataProximaAcao: "2026-06-04",
+    historico: "Prospect mapeado para ocupar loja satelite proxima a servicos.",
+    etapa: "prospeccao",
+    valorProposta: 18500
+  },
+  {
+    id: "lead-pet-center",
+    lojaId: "pn-01",
+    empreendimentoId: "piazza-nicomedes",
+    empresa: "Pet Center Prime",
+    segmento: "Servicos",
+    responsavel: "Marina",
+    proximaAcao: "Validar restricoes tecnicas com operacoes",
+    dataProximaAcao: "2026-06-05",
+    historico: "Lead indicado pela diretoria para sinergia com conveniencia.",
+    etapa: "lead",
+    valorProposta: 14200
+  },
+  {
+    id: "lead-cafeteria-regional",
+    lojaId: "vv-04",
+    empreendimentoId: "villa-viseu",
+    empresa: "Cafeteria Regional",
+    segmento: "Alimentacao",
+    responsavel: "Comercial",
+    proximaAcao: "Visita tecnica agendada",
+    dataProximaAcao: "2026-06-03",
+    historico: "Operador quer vitrine para avenida e area externa.",
+    etapa: "visita",
+    valorProposta: 16800
+  },
+  {
+    id: "lead-clinica-estetica",
+    lojaId: "bn-01",
+    empreendimentoId: "boulevard-naves",
+    empresa: "Clinica de Estetica",
+    segmento: "Saude",
+    responsavel: "Renata",
+    proximaAcao: "Revisar proposta com carencia de implantacao",
+    dataProximaAcao: "2026-06-06",
+    historico: "Proposta enviada com aluguel minimo e fundo reduzido nos 90 dias iniciais.",
+    etapa: "proposta",
+    valorProposta: 18500
+  },
+  {
+    id: "lead-wine-bar",
+    lojaId: "bc-01",
+    empreendimentoId: "bluemall-centro",
+    empresa: "Wine Bar",
+    segmento: "Gastronomia",
+    responsavel: "Comercial",
+    proximaAcao: "Negociar luvas e prazo contratual",
+    dataProximaAcao: "2026-06-07",
+    historico: "Operador aceita condominio, negocia carencia de obra.",
+    etapa: "negociacao",
+    valorProposta: 22000
+  },
+  {
+    id: "lead-mini-mercado",
+    lojaId: "vv-03",
+    empreendimentoId: "villa-viseu",
+    empresa: "Mini Mercado",
+    segmento: "Conveniencia",
+    responsavel: "Juridico",
+    proximaAcao: "Enviar minuta para assinatura",
+    dataProximaAcao: "2026-06-02",
+    historico: "Aprovado comercialmente e em elaboracao contratual.",
+    etapa: "contrato",
+    valorProposta: 24000
   }
 ];
 

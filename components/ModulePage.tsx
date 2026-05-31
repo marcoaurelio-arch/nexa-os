@@ -9,6 +9,8 @@ import { buildContractAlerts } from "@/lib/contracts";
 import { serviceOrders } from "@/lib/data";
 import { brl, numberPt, percent } from "@/lib/metrics";
 import type {
+  CommercialLead,
+  CommercialStage,
   Contract,
   ContractStatus,
   DelinquencyRecord,
@@ -36,6 +38,7 @@ type ModulePageProps = {
   delinquencyRecords: DelinquencyRecord[];
   fppRecords: FppRecord[];
   revenueAuditRecords: RevenueAuditRecord[];
+  commercialLeads: CommercialLead[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -48,6 +51,7 @@ type ModulePageProps = {
   onSaveDelinquencyRecord: (record: DelinquencyRecord) => void | Promise<void>;
   onSaveFppRecord: (record: FppRecord) => void | Promise<void>;
   onSaveRevenueAuditRecord: (record: RevenueAuditRecord) => void | Promise<void>;
+  onSaveCommercialLead: (lead: CommercialLead) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -103,6 +107,19 @@ const revenueAuditStatusLabel: Record<RevenueAuditStatus, string> = {
   divergente: "Divergente",
   critico: "Critico"
 };
+
+const commercialStageLabel: Record<CommercialStage, string> = {
+  prospeccao: "Prospeccao",
+  lead: "Lead",
+  visita: "Visita",
+  proposta: "Proposta",
+  negociacao: "Negociacao",
+  contrato: "Contrato",
+  implantacao: "Implantacao",
+  inauguracao: "Inauguracao"
+};
+
+const commercialStages: CommercialStage[] = ["prospeccao", "lead", "visita", "proposta", "negociacao", "contrato", "implantacao", "inauguracao"];
 
 const enterpriseSchema = z.object({
   id: z.string().min(1),
@@ -228,6 +245,20 @@ const revenueAuditSchema = z.object({
   status: z.enum(["pendente", "conciliado", "divergente", "critico"])
 });
 
+const commercialLeadSchema = z.object({
+  id: z.string().min(1),
+  lojaId: z.string().trim(),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  empresa: z.string().trim().min(2, "Informe a empresa."),
+  segmento: z.string().trim().min(2, "Informe o segmento."),
+  responsavel: z.string().trim().min(2, "Informe o responsavel."),
+  proximaAcao: z.string().trim().min(2, "Informe a proxima acao."),
+  dataProximaAcao: z.string().trim().min(8, "Informe a data da proxima acao."),
+  historico: z.string().trim(),
+  etapa: z.enum(["prospeccao", "lead", "visita", "proposta", "negociacao", "contrato", "implantacao", "inauguracao"]),
+  valorProposta: z.coerce.number().min(0, "Informe zero ou mais.")
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
@@ -237,6 +268,7 @@ type PayableFormValues = z.infer<typeof payableSchema>;
 type DelinquencyFormValues = z.infer<typeof delinquencySchema>;
 type FppFormValues = z.infer<typeof fppSchema>;
 type RevenueAuditFormValues = z.infer<typeof revenueAuditSchema>;
+type CommercialLeadFormValues = z.infer<typeof commercialLeadSchema>;
 
 export function ModulePage({
   module,
@@ -249,6 +281,7 @@ export function ModulePage({
   delinquencyRecords,
   fppRecords,
   revenueAuditRecords,
+  commercialLeads,
   dataSource,
   syncError,
   onResetLocalData,
@@ -260,7 +293,8 @@ export function ModulePage({
   onSavePayable,
   onSaveDelinquencyRecord,
   onSaveFppRecord,
-  onSaveRevenueAuditRecord
+  onSaveRevenueAuditRecord,
+  onSaveCommercialLead
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -360,7 +394,16 @@ export function ModulePage({
       />
     );
   }
-  if (module === "Comercial") return <CommercialPage enterprises={enterprises} stores={stores} />;
+  if (module === "Comercial") {
+    return (
+      <CommercialPage
+        enterprises={enterprises}
+        stores={stores}
+        leads={commercialLeads}
+        onSaveLead={onSaveCommercialLead}
+      />
+    );
+  }
 
   return (
     <Shell title={module} description="Modulo em estruturacao para a proxima sprint do Nexa OS.">
@@ -1466,99 +1509,123 @@ function OperationsPage() {
   );
 }
 
-function CommercialPage({ enterprises, stores }: { enterprises: Enterprise[]; stores: StoreType[] }) {
-  const pipeline = [
-    {
-      lane: "Disponivel",
-      cards: stores
-        .filter((store) => store.status === "disponivel")
-        .map((store) => ({
-          title: store.codigo,
-          subtitle: `${store.nome} | ${store.segmento}`,
-          value: brl(store.aluguel)
-        }))
-    },
-    {
-      lane: "Prospeccao",
-      cards: [
-        { title: "Academia boutique", subtitle: "Villa Viseu | Saude", value: "Proxima acao: contato" },
-        { title: "Pet center", subtitle: "Piazza Nicomedes | Servicos", value: "Proxima acao: curadoria" }
-      ]
-    },
-    {
-      lane: "Visita",
-      cards: [
-        { title: "Cafeteria regional", subtitle: "Villa Viseu | Alimentacao", value: "Agendada" }
-      ]
-    },
-    {
-      lane: "Proposta",
-      cards: [
-        { title: "Clinica de estetica", subtitle: "Boulevard Naves | Saude", value: "R$ 18.500" },
-        { title: "Wine bar", subtitle: "Bluemall Centro | Gastronomia", value: "R$ 22.000" }
-      ]
-    },
-    {
-      lane: "Negociacao",
-      cards: stores
-        .filter((store) => store.status === "negociacao")
-        .map((store) => ({
-          title: store.codigo,
-          subtitle: `${store.nome} | ${store.segmento}`,
-          value: brl(store.aluguel)
-        }))
-    },
-    {
-      lane: "Contrato",
-      cards: [
-        { title: "Mini mercado", subtitle: "Villa Viseu | Conveniencia", value: "Juridico" }
-      ]
-    },
-    {
-      lane: "Implantacao",
-      cards: stores
-        .filter((store) => store.status === "implantacao")
-        .map((store) => ({
-          title: store.codigo,
-          subtitle: `${store.nome} | ${store.segmento}`,
-          value: "Obra/fit-out"
-        }))
-    }
-  ];
-
-  const availableStores = stores.filter((store) => store.status === "disponivel").length;
-  const negotiatingStores = stores.filter((store) => store.status === "negociacao").length;
-  const pipelineTotal = pipeline.reduce((sum, lane) => sum + lane.cards.length, 0);
+function CommercialPage({
+  enterprises,
+  stores,
+  leads,
+  onSaveLead
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  leads: CommercialLead[];
+  onSaveLead: (lead: CommercialLead) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [editingLead, setEditingLead] = useState<CommercialLead | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedEnterprises = enterprises.filter((enterprise) => selectedEnterpriseIds.has(enterprise.id));
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedLeads = leads.filter((lead) => selectedEnterpriseIds.has(lead.empreendimentoId));
+  const availableStores = selectedStores.filter((store) => store.status === "disponivel");
+  const proposalCount = selectedLeads.filter((lead) => lead.etapa === "proposta").length;
+  const contractCount = selectedLeads.filter((lead) => lead.etapa === "contrato").length;
+  const pipelineValue = selectedLeads.reduce((sum, lead) => sum + lead.valorProposta, 0);
+  const firstStore = selectedStores[0] ?? stores[0];
 
   return (
-    <Shell title="Comercial" description="Pipeline de comercializacao, leads, visitas, propostas e contratos.">
+    <Shell
+      title="Comercial"
+      description="Pipeline de comercializacao, leads, visitas, propostas, negociacao, contrato e implantacao."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => setEditingLead(emptyCommercialLead(firstStore))}>
+            <Plus className="h-4 w-4" />
+            Oportunidade
+          </button>
+        </div>
+      }
+    >
       <div className="grid gap-3 md:grid-cols-4">
-        <Kpi label="Ativos no filtro" value={numberPt(enterprises.length)} />
-        <Kpi label="Lojas disponiveis" value={numberPt(availableStores)} />
-        <Kpi label="Em negociacao" value={numberPt(negotiatingStores)} tone="success" />
-        <Kpi label="Pipeline total" value={numberPt(pipelineTotal)} />
+        <Kpi label="Ativos no filtro" value={numberPt(selectedEnterprises.length)} />
+        <Kpi label="Lojas disponiveis" value={numberPt(availableStores.length)} />
+        <Kpi label="Propostas enviadas" value={numberPt(proposalCount)} tone="success" />
+        <Kpi label="Valor pipeline" value={brl(pipelineValue)} />
       </div>
-      <div className="grid gap-3 xl:grid-cols-7">
-        {pipeline.map((lane) => (
-          <div key={lane.lane} className="panel min-h-[380px] p-4">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold uppercase">{lane.lane}</h2>
-              <Badge>{numberPt(lane.cards.length)}</Badge>
-            </div>
-            <div className="mt-4 space-y-3">
-              {lane.cards.length ? (
-                lane.cards.map((card) => (
-                  <KanbanCard key={`${lane.lane}-${card.title}`} title={card.title} subtitle={card.subtitle} value={card.value} />
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-border p-3 text-xs font-medium text-muted-foreground">
-                  Sem oportunidades nesta etapa.
-                </div>
-              )}
-            </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div className="overflow-x-auto pb-2">
+          <div className="grid min-w-[1300px] gap-3 xl:grid-cols-9">
+            <CommercialLane title="Disponivel" count={availableStores.length}>
+              {availableStores.map((store) => (
+                <KanbanCard
+                  key={store.id}
+                  title={`${store.codigo} - ${store.nome}`}
+                  subtitle={`${enterpriseLabel(enterprises, store.empreendimentoId)} | ${store.segmento}`}
+                  value={brl(store.aluguel)}
+                />
+              ))}
+            </CommercialLane>
+            {commercialStages.map((stage) => {
+              const stageLeads = selectedLeads.filter((lead) => lead.etapa === stage);
+              return (
+                <CommercialLane key={stage} title={commercialStageLabel[stage]} count={stageLeads.length}>
+                  {stageLeads.map((lead) => (
+                    <KanbanCard
+                      key={lead.id}
+                      title={lead.empresa}
+                      subtitle={`${storeLabel(stores, lead.lojaId)} | ${lead.segmento}`}
+                      value={lead.proximaAcao}
+                      onClick={() => setEditingLead(lead)}
+                    />
+                  ))}
+                </CommercialLane>
+              );
+            })}
           </div>
-        ))}
+        </div>
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Resumo comercial</h2>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Oportunidades" value={numberPt(selectedLeads.length)} />
+            <Mini label="Contratos em elaboracao" value={numberPt(contractCount)} />
+            <Mini label="Ticket medio" value={brl(selectedLeads.length ? pipelineValue / selectedLeads.length : 0)} />
+          </div>
+          <h3 className="mt-6 text-sm font-bold uppercase">Proximas acoes</h3>
+          <div className="mt-3 space-y-2">
+            {selectedLeads
+              .slice()
+              .sort((a, b) => a.dataProximaAcao.localeCompare(b.dataProximaAcao))
+              .slice(0, 5)
+              .map((lead) => (
+                <button
+                  key={lead.id}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm"
+                  onClick={() => setEditingLead(lead)}
+                >
+                  <p className="font-bold text-primary">{lead.empresa}</p>
+                  <p className="text-muted-foreground">{lead.dataProximaAcao} | {lead.proximaAcao}</p>
+                </button>
+              ))}
+          </div>
+        </div>
       </div>
+      {editingLead ? (
+        <CommercialLeadForm
+          lead={editingLead}
+          stores={stores}
+          enterprises={enterprises}
+          onClose={() => setEditingLead(null)}
+          onSave={async (lead) => {
+            await onSaveLead(lead);
+            setEditingLead(null);
+          }}
+        />
+      ) : null}
     </Shell>
   );
 }
@@ -1630,12 +1697,44 @@ function Badge({ children }: { children: React.ReactNode }) {
   return <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold uppercase text-primary">{children}</span>;
 }
 
-function KanbanCard({ title, subtitle, value }: { title: string; subtitle: string; value: string }) {
+function CommercialLane({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-white p-3 shadow-sm">
+    <div className="panel min-h-[420px] p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-bold uppercase">{title}</h2>
+        <Badge>{numberPt(count)}</Badge>
+      </div>
+      <div className="mt-4 space-y-3">
+        {count ? children : (
+          <div className="rounded-lg border border-dashed border-border p-3 text-xs font-medium text-muted-foreground">
+            Sem oportunidades nesta etapa.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KanbanCard({ title, subtitle, value, onClick }: { title: string; subtitle: string; value: string; onClick?: () => void }) {
+  const content = (
+    <>
       <div className="font-bold">{title}</div>
       <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div>
       <div className="mt-3 text-sm font-bold text-primary">{value}</div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button className="w-full rounded-lg border border-border bg-white p-3 text-left shadow-sm transition hover:border-primary/40" onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-white p-3 shadow-sm">
+      {content}
     </div>
   );
 }
@@ -2263,6 +2362,81 @@ function RevenueAuditForm({
   );
 }
 
+function CommercialLeadForm({
+  lead,
+  stores,
+  enterprises,
+  onClose,
+  onSave
+}: {
+  lead: CommercialLead;
+  stores: StoreType[];
+  enterprises: Enterprise[];
+  onClose: () => void;
+  onSave: (lead: CommercialLead) => void;
+}) {
+  const storeOptions = useMemo(() => ["", ...stores.map((store) => store.id)], [stores]);
+  const storeLabels = useMemo(
+    () => ({
+      "": "Sem loja definida",
+      ...Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`]))
+    }),
+    [stores]
+  );
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<CommercialLeadFormValues>({
+    resolver: zodResolver(commercialLeadSchema),
+    defaultValues: lead
+  });
+
+  return (
+    <Modal title="Oportunidade comercial" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormInput label="Empresa" error={errors.empresa?.message} {...register("empresa")} />
+          <FormInput label="Segmento" error={errors.segmento?.message} {...register("segmento")} />
+          <FormSelect
+            label="Etapa"
+            error={errors.etapa?.message}
+            options={commercialStages}
+            optionLabels={commercialStageLabel}
+            {...register("etapa")}
+          />
+          <FormSelect
+            label="Loja"
+            error={errors.lojaId?.message}
+            options={storeOptions}
+            optionLabels={storeLabels}
+            {...register("lojaId")}
+          />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormInput label="Responsavel" error={errors.responsavel?.message} {...register("responsavel")} />
+          <FormInput label="Proxima acao" error={errors.proximaAcao?.message} {...register("proximaAcao")} />
+          <FormInput label="Data proxima acao" type="date" error={errors.dataProximaAcao?.message} {...register("dataProximaAcao")} />
+          <FormInput label="Valor proposta" type="number" error={errors.valorProposta?.message} {...register("valorProposta")} />
+          <FormInput label="Historico" error={errors.historico?.message} {...register("historico")} />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -2664,6 +2838,22 @@ function emptyRevenueAuditRecord(store?: StoreType): RevenueAuditRecord {
     delivery: 0,
     faturamentoAnterior: 0,
     status: "pendente"
+  };
+}
+
+function emptyCommercialLead(store?: StoreType): CommercialLead {
+  return {
+    id: crypto.randomUUID(),
+    lojaId: store?.id ?? "",
+    empreendimentoId: store?.empreendimentoId ?? "",
+    empresa: "Nova oportunidade",
+    segmento: store?.segmento ?? "Servicos",
+    responsavel: "Comercial",
+    proximaAcao: "Realizar primeiro contato",
+    dataProximaAcao: new Date().toISOString().slice(0, 10),
+    historico: "",
+    etapa: "lead",
+    valorProposta: store?.aluguel ?? 0
   };
 }
 

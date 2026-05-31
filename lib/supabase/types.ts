@@ -287,6 +287,38 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["auditoria_faturamento"]["Insert"]>;
       };
+      comercial_leads: {
+        Row: {
+          id: string;
+          loja_id: string | null;
+          empreendimento_id: string;
+          empresa: string;
+          segmento: string | null;
+          responsavel: string | null;
+          proxima_acao: string | null;
+          data_proxima_acao: string | null;
+          historico: string | null;
+          etapa: string;
+          valor_proposta: number;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loja_id?: string | null;
+          empreendimento_id: string;
+          empresa: string;
+          segmento?: string | null;
+          responsavel?: string | null;
+          proxima_acao?: string | null;
+          data_proxima_acao?: string | null;
+          historico?: string | null;
+          etapa?: string;
+          valor_proposta?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["comercial_leads"]["Insert"]>;
+      };
     };
   };
 };

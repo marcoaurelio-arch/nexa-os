@@ -140,6 +140,30 @@ export type RevenueAuditRecord = {
   status: RevenueAuditStatus;
 };
 
+export type CommercialStage =
+  | "prospeccao"
+  | "lead"
+  | "visita"
+  | "proposta"
+  | "negociacao"
+  | "contrato"
+  | "implantacao"
+  | "inauguracao";
+
+export type CommercialLead = {
+  id: string;
+  lojaId: string;
+  empreendimentoId: string;
+  empresa: string;
+  segmento: string;
+  responsavel: string;
+  proximaAcao: string;
+  dataProximaAcao: string;
+  historico: string;
+  etapa: CommercialStage;
+  valorProposta: number;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;

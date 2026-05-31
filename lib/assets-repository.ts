@@ -1,5 +1,6 @@
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
+  mapCommercialLeadRow,
   mapContractRow,
   mapDelinquencyRow,
   mapEnterpriseRow,
@@ -10,7 +11,7 @@ import {
   mapStoreRow,
   mapTenantRow
 } from "@/lib/supabase/mappers";
-import type { Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
@@ -22,6 +23,7 @@ export type AssetData = {
   delinquencyRecords: DelinquencyRecord[];
   fppRecords: FppRecord[];
   revenueAuditRecords: RevenueAuditRecord[];
+  commercialLeads: CommercialLead[];
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -51,7 +53,8 @@ export function loadLocalAssetData(): AssetData | null {
       payables: Array.isArray(parsed.payables) ? parsed.payables : [],
       delinquencyRecords: Array.isArray(parsed.delinquencyRecords) ? parsed.delinquencyRecords : [],
       fppRecords: Array.isArray(parsed.fppRecords) ? parsed.fppRecords : [],
-      revenueAuditRecords: Array.isArray(parsed.revenueAuditRecords) ? parsed.revenueAuditRecords : []
+      revenueAuditRecords: Array.isArray(parsed.revenueAuditRecords) ? parsed.revenueAuditRecords : [],
+      commercialLeads: Array.isArray(parsed.commercialLeads) ? parsed.commercialLeads : []
     };
   } catch {
     return null;
@@ -83,7 +86,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -128,7 +131,12 @@ export async function fetchAssetData(): Promise<AssetData | null> {
       .from("auditoria_faturamento")
       .select("*")
       .is("deleted_at", null)
-      .order("competencia", { ascending: false })
+      .order("competencia", { ascending: false }),
+    client
+      .from("comercial_leads")
+      .select("*")
+      .is("deleted_at", null)
+      .order("data_proxima_acao", { ascending: true })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
@@ -140,6 +148,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
   if (delinquencyResult.error) throw delinquencyResult.error;
   if (fppResult.error) throw fppResult.error;
   if (auditResult.error) throw auditResult.error;
+  if (commercialResult.error) throw commercialResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
@@ -150,7 +159,8 @@ export async function fetchAssetData(): Promise<AssetData | null> {
     payables: payableResult.data.map(mapPayableRow),
     delinquencyRecords: delinquencyResult.data.map(mapDelinquencyRow),
     fppRecords: fppResult.data.map(mapFppRow),
-    revenueAuditRecords: auditResult.data.map(mapRevenueAuditRow)
+    revenueAuditRecords: auditResult.data.map(mapRevenueAuditRow),
+    commercialLeads: commercialResult.data.map(mapCommercialLeadRow)
   };
 }
 
@@ -419,6 +429,36 @@ export async function saveRevenueAuditRecord(record: RevenueAuditRecord) {
 
   if (error) throw error;
   return mapRevenueAuditRow(data);
+}
+
+export async function saveCommercialLead(lead: CommercialLead) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return lead;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("comercial_leads")
+    .upsert({
+      ...(isUuid(lead.id) ? { id: lead.id } : {}),
+      loja_id: isUuid(lead.lojaId) ? lead.lojaId : null,
+      empreendimento_id: lead.empreendimentoId,
+      empresa: lead.empresa,
+      segmento: lead.segmento,
+      responsavel: lead.responsavel,
+      proxima_acao: lead.proximaAcao,
+      data_proxima_acao: lead.dataProximaAcao || null,
+      historico: lead.historico,
+      etapa: lead.etapa,
+      valor_proposta: lead.valorProposta
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapCommercialLeadRow(data);
 }
 
 function isUuid(value: string) {

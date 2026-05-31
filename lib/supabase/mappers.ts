@@ -1,4 +1,4 @@
-import type { Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
@@ -10,6 +10,7 @@ type PayableRow = Database["public"]["Tables"]["despesas"]["Row"];
 type DelinquencyRow = Database["public"]["Tables"]["inadimplencias"]["Row"];
 type FppRow = Database["public"]["Tables"]["fpp"]["Row"];
 type RevenueAuditRow = Database["public"]["Tables"]["auditoria_faturamento"]["Row"];
+type CommercialLeadRow = Database["public"]["Tables"]["comercial_leads"]["Row"];
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -150,5 +151,21 @@ export function mapRevenueAuditRow(row: RevenueAuditRow): RevenueAuditRecord {
     delivery: row.delivery,
     faturamentoAnterior: row.faturamento_anterior,
     status: row.status as RevenueAuditRecord["status"]
+  };
+}
+
+export function mapCommercialLeadRow(row: CommercialLeadRow): CommercialLead {
+  return {
+    id: row.id,
+    lojaId: row.loja_id ?? "",
+    empreendimentoId: row.empreendimento_id,
+    empresa: row.empresa,
+    segmento: row.segmento ?? "",
+    responsavel: row.responsavel ?? "",
+    proximaAcao: row.proxima_acao ?? "",
+    dataProximaAcao: row.data_proxima_acao ?? "",
+    historico: row.historico ?? "",
+    etapa: row.etapa as CommercialLead["etapa"],
+    valorProposta: row.valor_proposta
   };
 }
