@@ -46,13 +46,13 @@ export function NexaWorkspace() {
     const localData = loadLocalAssetData();
 
     if (localData) {
-      setEnterpriseRows(localData.enterprises);
-      setStoreRows(localData.stores);
-      setTenantRows(localData.tenants.length ? localData.tenants : seedTenants);
-      setContractRows(localData.contracts.length ? localData.contracts : seedContracts);
-      setReceivableRows(localData.receivables.length ? localData.receivables : seedReceivables);
-      setPayableRows(localData.payables.length ? localData.payables : seedPayables);
-      setDelinquencyRows(localData.delinquencyRecords.length ? localData.delinquencyRecords : seedDelinquencyRecords);
+      setEnterpriseRows(mergeSeedRows(seedEnterprises, localData.enterprises));
+      setStoreRows(mergeSeedRows(seedStores, localData.stores));
+      setTenantRows(mergeSeedRows(seedTenants, localData.tenants));
+      setContractRows(mergeSeedRows(seedContracts, localData.contracts));
+      setReceivableRows(mergeSeedRows(seedReceivables, localData.receivables));
+      setPayableRows(mergeSeedRows(seedPayables, localData.payables));
+      setDelinquencyRows(mergeSeedRows(seedDelinquencyRecords, localData.delinquencyRecords));
     }
     setStorageReady(true);
 
@@ -200,4 +200,11 @@ export function NexaWorkspace() {
       )}
     </AppShell>
   );
+}
+
+function mergeSeedRows<T extends { id: string }>(seedRows: T[], storedRows: T[]) {
+  const storedById = new Map(storedRows.map((row) => [row.id, row]));
+  const merged = seedRows.map((row) => storedById.get(row.id) ?? row);
+  const seedIds = new Set(seedRows.map((row) => row.id));
+  return [...merged, ...storedRows.filter((row) => !seedIds.has(row.id))];
 }

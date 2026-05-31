@@ -192,13 +192,19 @@ export const receivables: Receivable[] = [
   { id: "rec-vv-01-aluguel", lojaId: "vv-01", empreendimentoId: "villa-viseu", competencia: "2026-05", receita: "aluguel", valor: 25000, vencimento: "2026-05-10", recebimento: "2026-05-09", status: "pago" },
   { id: "rec-vv-01-condominio", lojaId: "vv-01", empreendimentoId: "villa-viseu", competencia: "2026-05", receita: "condominio", valor: 6800, vencimento: "2026-05-10", recebimento: "", status: "aberto" },
   { id: "rec-vv-02-aluguel", lojaId: "vv-02", empreendimentoId: "villa-viseu", competencia: "2026-05", receita: "aluguel", valor: 31000, vencimento: "2026-05-10", recebimento: "", status: "vencido" },
+  { id: "rec-vv-02-condominio", lojaId: "vv-02", empreendimentoId: "villa-viseu", competencia: "2026-05", receita: "condominio", valor: 7600, vencimento: "2026-05-10", recebimento: "2026-05-10", status: "pago" },
+  { id: "rec-vv-02-juros", lojaId: "vv-02", empreendimentoId: "villa-viseu", competencia: "2026-05", receita: "juros", valor: 620, vencimento: "2026-05-24", recebimento: "", status: "aberto" },
   { id: "rec-br-01-aluguel", lojaId: "br-01", empreendimentoId: "bluemall-rondon", competencia: "2026-05", receita: "aluguel", valor: 52000, vencimento: "2026-05-12", recebimento: "2026-05-12", status: "pago" },
+  { id: "rec-br-01-condominio", lojaId: "br-01", empreendimentoId: "bluemall-rondon", competencia: "2026-05", receita: "condominio", valor: 12800, vencimento: "2026-05-12", recebimento: "2026-05-12", status: "pago" },
   { id: "rec-pn-01-fundo", lojaId: "pn-01", empreendimentoId: "piazza-nicomedes", competencia: "2026-05", receita: "fundo_promocao", valor: 1800, vencimento: "2026-05-15", recebimento: "", status: "aberto" }
 ];
 
 export const payables: Payable[] = [
   { id: "pay-vv-limpeza", empreendimentoId: "villa-viseu", fornecedor: "Limpeza Triangulo", categoria: "Limpeza", competencia: "2026-05", valor: 28400, vencimento: "2026-05-18", pagamento: "2026-05-18", centroCusto: "Condominio", status: "pago" },
   { id: "pay-vv-seguranca", empreendimentoId: "villa-viseu", fornecedor: "Seguranca Prime", categoria: "Seguranca", competencia: "2026-05", valor: 42000, vencimento: "2026-05-25", pagamento: "", centroCusto: "Condominio", status: "aberto" },
+  { id: "pay-vv-agua", empreendimentoId: "villa-viseu", fornecedor: "DMAE", categoria: "Agua", competencia: "2026-05", valor: 9600, vencimento: "2026-05-23", pagamento: "", centroCusto: "Condominio", status: "aberto" },
+  { id: "pay-vv-jardinagem", empreendimentoId: "villa-viseu", fornecedor: "Verde Jardins", categoria: "Jardinagem", competencia: "2026-05", valor: 7400, vencimento: "2026-05-17", pagamento: "2026-05-17", centroCusto: "Condominio", status: "pago" },
+  { id: "pay-vv-manutencao", empreendimentoId: "villa-viseu", fornecedor: "Manutencao Master", categoria: "Manutencao", competencia: "2026-05", valor: 13800, vencimento: "2026-05-27", pagamento: "", centroCusto: "Condominio", status: "aberto" },
   { id: "pay-vv-marketing", empreendimentoId: "villa-viseu", fornecedor: "Agencia Criar", categoria: "Marketing", competencia: "2026-05", valor: 18500, vencimento: "2026-05-20", pagamento: "", centroCusto: "Fundo promocao", status: "vencido" },
   { id: "pay-br-energia", empreendimentoId: "bluemall-rondon", fornecedor: "Concessionaria energia", categoria: "Energia", competencia: "2026-05", valor: 31500, vencimento: "2026-05-22", pagamento: "2026-05-22", centroCusto: "Operacoes", status: "pago" }
 ];
