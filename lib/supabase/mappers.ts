@@ -1,8 +1,9 @@
-import type { Enterprise, Store } from "@/lib/types";
+import type { Enterprise, Store, Tenant } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
 type StoreRow = Database["public"]["Tables"]["lojas"]["Row"];
+type TenantRow = Database["public"]["Tables"]["lojistas"]["Row"];
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -30,5 +31,23 @@ export function mapStoreRow(row: StoreRow): Store {
     aluguel: row.valor_aluguel,
     condominio: row.valor_condominio,
     fundo: row.valor_fundo_promocao
+  };
+}
+
+export function mapTenantRow(row: TenantRow): Tenant {
+  return {
+    id: row.id,
+    nomeFantasia: row.nome_fantasia,
+    razaoSocial: row.razao_social,
+    cnpj: row.cnpj,
+    responsavelLegal: row.responsavel_legal ?? "",
+    telefone: row.telefone ?? "",
+    whatsapp: row.whatsapp ?? "",
+    email: row.email ?? "",
+    endereco: row.endereco ?? "",
+    segmento: row.segmento ?? "Nao informado",
+    lojaId: row.loja_id ?? "",
+    dataEntrada: row.data_entrada ?? "",
+    status: row.status as Tenant["status"]
   };
 }
