@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Building2, FileText, Mail, Phone, Plus, Search, Users, Wrench } from "lucide-react";
+import { AlertTriangle, Building2, Droplets, FileText, Mail, Phone, Plus, Search, Users, Wrench, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -25,6 +25,9 @@ import type {
   Store as StoreType,
   Tenant,
   TenantStatus,
+  UtilityKind,
+  UtilityReading,
+  UtilityStatus,
   VacancyCriticality,
   VacancyRecord
 } from "@/lib/types";
@@ -42,6 +45,7 @@ type ModulePageProps = {
   revenueAuditRecords: RevenueAuditRecord[];
   commercialLeads: CommercialLead[];
   vacancyRecords: VacancyRecord[];
+  utilityReadings: UtilityReading[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -56,6 +60,7 @@ type ModulePageProps = {
   onSaveRevenueAuditRecord: (record: RevenueAuditRecord) => void | Promise<void>;
   onSaveCommercialLead: (lead: CommercialLead) => void | Promise<void>;
   onSaveVacancyRecord: (record: VacancyRecord) => void | Promise<void>;
+  onSaveUtilityReading: (reading: UtilityReading) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -130,6 +135,17 @@ const vacancyCriticalityLabel: Record<VacancyCriticality, string> = {
   media: "Media",
   alta: "Alta",
   estrategica: "Estrategica"
+};
+
+const utilityKindLabel: Record<UtilityKind, string> = {
+  energia: "Energia",
+  agua: "Agua"
+};
+
+const utilityStatusLabel: Record<UtilityStatus, string> = {
+  normal: "Normal",
+  atencao: "Atencao",
+  critico: "Critico"
 };
 
 const enterpriseSchema = z.object({
@@ -282,6 +298,19 @@ const vacancySchema = z.object({
   responsavel: z.string().trim().min(2, "Informe o responsavel.")
 });
 
+const utilityReadingSchema = z.object({
+  id: z.string().min(1),
+  lojaId: z.string().trim().min(1, "Selecione a loja."),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  tipo: z.enum(["energia", "agua"]),
+  competencia: z.string().trim().min(7, "Informe a competencia."),
+  consumo: z.coerce.number().min(0, "Informe zero ou mais."),
+  consumoAnterior: z.coerce.number().min(0, "Informe zero ou mais."),
+  valor: z.coerce.number().min(0, "Informe zero ou mais."),
+  medidor: z.string().trim().min(2, "Informe o medidor."),
+  status: z.enum(["normal", "atencao", "critico"])
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
@@ -293,6 +322,7 @@ type FppFormValues = z.infer<typeof fppSchema>;
 type RevenueAuditFormValues = z.infer<typeof revenueAuditSchema>;
 type CommercialLeadFormValues = z.infer<typeof commercialLeadSchema>;
 type VacancyFormValues = z.infer<typeof vacancySchema>;
+type UtilityReadingFormValues = z.infer<typeof utilityReadingSchema>;
 
 export function ModulePage({
   module,
@@ -307,6 +337,7 @@ export function ModulePage({
   revenueAuditRecords,
   commercialLeads,
   vacancyRecords,
+  utilityReadings,
   dataSource,
   syncError,
   onResetLocalData,
@@ -320,7 +351,8 @@ export function ModulePage({
   onSaveFppRecord,
   onSaveRevenueAuditRecord,
   onSaveCommercialLead,
-  onSaveVacancyRecord
+  onSaveVacancyRecord,
+  onSaveUtilityReading
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -437,6 +469,16 @@ export function ModulePage({
         stores={stores}
         records={vacancyRecords}
         onSaveRecord={onSaveVacancyRecord}
+      />
+    );
+  }
+  if (module === "Energia e Agua") {
+    return (
+      <UtilitiesPage
+        enterprises={enterprises}
+        stores={stores}
+        readings={utilityReadings}
+        onSaveReading={onSaveUtilityReading}
       />
     );
   }
@@ -1805,6 +1847,139 @@ function VacancyPage({
   );
 }
 
+function UtilitiesPage({
+  enterprises,
+  stores,
+  readings,
+  onSaveReading
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  readings: UtilityReading[];
+  onSaveReading: (reading: UtilityReading) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [editingReading, setEditingReading] = useState<UtilityReading | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedReadings = readings.filter((reading) => selectedEnterpriseIds.has(reading.empreendimentoId));
+  const energyReadings = selectedReadings.filter((reading) => reading.tipo === "energia");
+  const waterReadings = selectedReadings.filter((reading) => reading.tipo === "agua");
+  const energyConsumption = energyReadings.reduce((sum, reading) => sum + reading.consumo, 0);
+  const waterConsumption = waterReadings.reduce((sum, reading) => sum + reading.consumo, 0);
+  const energyValue = energyReadings.reduce((sum, reading) => sum + reading.valor, 0);
+  const waterValue = waterReadings.reduce((sum, reading) => sum + reading.valor, 0);
+  const alerts = utilityAlerts(selectedReadings, stores);
+  const firstStore = selectedStores[0] ?? stores[0];
+
+  return (
+    <Shell
+      title="Energia e Agua"
+      description="Controle de consumo CEMIG e DMAE por loja, competencia, medidor, variacao e alertas operacionais."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => setEditingReading(emptyUtilityReading(firstStore, "energia"))}>
+            <Zap className="h-4 w-4" />
+            Energia
+          </button>
+          <button className="control inline-flex items-center gap-2" onClick={() => setEditingReading(emptyUtilityReading(firstStore, "agua"))}>
+            <Droplets className="h-4 w-4" />
+            Agua
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Consumo energia" value={`${numberPt(energyConsumption)} kWh`} />
+        <Kpi label="Valor energia" value={brl(energyValue)} />
+        <Kpi label="Consumo agua" value={`${numberPt(waterConsumption)} m3`} />
+        <Kpi label="Alertas" value={numberPt(alerts.length)} tone={alerts.length ? "danger" : "success"} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div className="space-y-3">
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Energia (CEMIG)</h2>
+            <DataTable
+              columns={["Loja", "Competencia", "Medidor", "Consumo", "Valor", "Variacao", "Status", "Acoes"]}
+              rows={energyReadings.map((reading) => [
+                storeLabel(stores, reading.lojaId),
+                reading.competencia,
+                reading.medidor,
+                `${numberPt(reading.consumo)} kWh`,
+                brl(reading.valor),
+                percent(utilityVariation(reading)),
+                utilityStatusLabel[reading.status],
+                "Editar"
+              ])}
+              onAction={(rowIndex) => setEditingReading(energyReadings[rowIndex])}
+            />
+          </div>
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Agua (DMAE)</h2>
+            <DataTable
+              columns={["Loja", "Competencia", "Medidor", "Consumo", "Valor", "Variacao", "Status", "Acoes"]}
+              rows={waterReadings.map((reading) => [
+                storeLabel(stores, reading.lojaId),
+                reading.competencia,
+                reading.medidor,
+                `${numberPt(reading.consumo)} m3`,
+                brl(reading.valor),
+                percent(utilityVariation(reading)),
+                utilityStatusLabel[reading.status],
+                "Editar"
+              ])}
+              onAction={(rowIndex) => setEditingReading(waterReadings[rowIndex])}
+            />
+          </div>
+        </div>
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Alertas de consumo</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Monitoramento automatico de consumo acima da media, consumo anormal e possiveis vazamentos.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Leituras energia" value={numberPt(energyReadings.length)} />
+            <Mini label="Leituras agua" value={numberPt(waterReadings.length)} />
+            <Mini label="Custo total" value={brl(energyValue + waterValue)} />
+          </div>
+          <div className="mt-5 space-y-2">
+            {alerts.length ? (
+              alerts.map((alert) => (
+                <button key={alert.reading.id} className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm" onClick={() => setEditingReading(alert.reading)}>
+                  <p className="font-bold text-primary">{alert.title}</p>
+                  <p className="text-muted-foreground">{alert.detail}</p>
+                </button>
+              ))
+            ) : (
+              <div className="rounded-lg border border-dashed border-border p-3 text-xs font-medium text-muted-foreground">
+                Nenhum alerta ativo para o filtro selecionado.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      {editingReading ? (
+        <UtilityReadingForm
+          reading={editingReading}
+          stores={stores}
+          enterprises={enterprises}
+          onClose={() => setEditingReading(null)}
+          onSave={async (reading) => {
+            await onSaveReading(reading);
+            setEditingReading(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
 function DataTable({
   columns,
   rows,
@@ -2676,6 +2851,88 @@ function VacancyForm({
   );
 }
 
+function UtilityReadingForm({
+  reading,
+  stores,
+  enterprises,
+  onClose,
+  onSave
+}: {
+  reading: UtilityReading;
+  stores: StoreType[];
+  enterprises: Enterprise[];
+  onClose: () => void;
+  onSave: (reading: UtilityReading) => void;
+}) {
+  const storeOptions = useMemo(() => stores.map((store) => store.id), [stores]);
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting }
+  } = useForm<UtilityReadingFormValues>({
+    resolver: zodResolver(utilityReadingSchema),
+    defaultValues: reading
+  });
+  const watchedReading = watch();
+  const previewVariation = utilityVariation({
+    ...reading,
+    consumo: Number(watchedReading.consumo) || 0,
+    consumoAnterior: Number(watchedReading.consumoAnterior) || 0
+  });
+
+  return (
+    <Modal title="Leitura de consumo" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect label="Loja" error={errors.lojaId?.message} options={storeOptions} optionLabels={storeLabels} {...register("lojaId")} />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormSelect
+            label="Tipo"
+            error={errors.tipo?.message}
+            options={["energia", "agua"]}
+            optionLabels={utilityKindLabel}
+            {...register("tipo")}
+          />
+          <FormInput label="Competencia" type="month" error={errors.competencia?.message} {...register("competencia")} />
+          <FormInput label="Medidor" error={errors.medidor?.message} {...register("medidor")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["normal", "atencao", "critico"]}
+            optionLabels={utilityStatusLabel}
+            {...register("status")}
+          />
+          <FormInput label="Consumo" type="number" error={errors.consumo?.message} {...register("consumo")} />
+          <FormInput label="Consumo anterior" type="number" error={errors.consumoAnterior?.message} {...register("consumoAnterior")} />
+          <FormInput label="Valor" type="number" error={errors.valor?.message} {...register("valor")} />
+          <div className="rounded-lg border border-border bg-muted/35 px-3 py-2">
+            <span className="metric-label">Variacao</span>
+            <p className="mt-1 text-lg font-bold text-primary">{percent(previewVariation)}</p>
+          </div>
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -2942,6 +3199,33 @@ function criticalityWeight(criticality: VacancyCriticality) {
   return weights[criticality];
 }
 
+function utilityVariation(reading: Pick<UtilityReading, "consumo" | "consumoAnterior">) {
+  return reading.consumoAnterior > 0 ? (reading.consumo - reading.consumoAnterior) / reading.consumoAnterior : 0;
+}
+
+function utilityAlerts(readings: UtilityReading[], stores: StoreType[]) {
+  return readings
+    .map((reading) => {
+      const variation = utilityVariation(reading);
+      const highVariation = reading.tipo === "agua" ? variation > 0.25 : variation > 0.2;
+      const activeStatus = reading.status !== "normal";
+
+      if (!highVariation && !activeStatus) return null;
+
+      const label = storeLabel(stores, reading.lojaId);
+      const title = reading.tipo === "agua" && (reading.status === "critico" || variation > 0.25)
+        ? `${label} - possivel vazamento`
+        : `${label} - consumo acima da media`;
+
+      return {
+        reading,
+        title,
+        detail: `${utilityKindLabel[reading.tipo]} ${reading.competencia}: variacao de ${percent(variation)} e status ${utilityStatusLabel[reading.status]}.`
+      };
+    })
+    .filter((alert): alert is { reading: UtilityReading; title: string; detail: string } => Boolean(alert));
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -3122,6 +3406,21 @@ function emptyVacancyRecord(store?: StoreType): VacancyRecord {
     estrategia: "Definir operador alvo e politica comercial.",
     receitaPotencial: store?.aluguel ?? 0,
     responsavel: "Comercial"
+  };
+}
+
+function emptyUtilityReading(store: StoreType | undefined, tipo: UtilityKind): UtilityReading {
+  return {
+    id: crypto.randomUUID(),
+    lojaId: store?.id ?? "",
+    empreendimentoId: store?.empreendimentoId ?? "",
+    tipo,
+    competencia: new Date().toISOString().slice(0, 7),
+    consumo: 0,
+    consumoAnterior: 0,
+    valor: 0,
+    medidor: tipo === "energia" ? "CEMIG-" : "DMAE-",
+    status: "normal"
   };
 }
 

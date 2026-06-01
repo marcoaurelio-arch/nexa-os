@@ -178,6 +178,22 @@ export type VacancyRecord = {
   responsavel: string;
 };
 
+export type UtilityKind = "energia" | "agua";
+export type UtilityStatus = "normal" | "atencao" | "critico";
+
+export type UtilityReading = {
+  id: string;
+  lojaId: string;
+  empreendimentoId: string;
+  tipo: UtilityKind;
+  competencia: string;
+  consumo: number;
+  consumoAnterior: number;
+  valor: number;
+  medidor: string;
+  status: UtilityStatus;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;

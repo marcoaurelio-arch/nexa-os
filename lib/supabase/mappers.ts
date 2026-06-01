@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant, VacancyRecord } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
@@ -12,6 +12,7 @@ type FppRow = Database["public"]["Tables"]["fpp"]["Row"];
 type RevenueAuditRow = Database["public"]["Tables"]["auditoria_faturamento"]["Row"];
 type CommercialLeadRow = Database["public"]["Tables"]["comercial_leads"]["Row"];
 type VacancyRow = Database["public"]["Tables"]["vacancia"]["Row"];
+type UtilityReadingRow = Database["public"]["Tables"]["consumos"]["Row"];
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -182,5 +183,20 @@ export function mapVacancyRow(row: VacancyRow): VacancyRecord {
     estrategia: row.estrategia ?? "",
     receitaPotencial: row.receita_potencial,
     responsavel: row.responsavel ?? ""
+  };
+}
+
+export function mapUtilityReadingRow(row: UtilityReadingRow): UtilityReading {
+  return {
+    id: row.id,
+    lojaId: row.loja_id,
+    empreendimentoId: row.empreendimento_id,
+    tipo: row.tipo as UtilityReading["tipo"],
+    competencia: row.competencia,
+    consumo: row.consumo,
+    consumoAnterior: row.consumo_anterior,
+    valor: row.valor,
+    medidor: row.medidor ?? "",
+    status: row.status as UtilityReading["status"]
   };
 }

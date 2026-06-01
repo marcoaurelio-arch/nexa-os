@@ -347,6 +347,36 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["vacancia"]["Insert"]>;
       };
+      consumos: {
+        Row: {
+          id: string;
+          loja_id: string;
+          empreendimento_id: string;
+          tipo: string;
+          competencia: string;
+          consumo: number;
+          consumo_anterior: number;
+          valor: number;
+          medidor: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loja_id: string;
+          empreendimento_id: string;
+          tipo: string;
+          competencia: string;
+          consumo?: number;
+          consumo_anterior?: number;
+          valor?: number;
+          medidor?: string | null;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["consumos"]["Insert"]>;
+      };
     };
   };
 };

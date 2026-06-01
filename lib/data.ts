@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant, VacancyRecord } from "./types";
+import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -483,6 +483,105 @@ export const vacancyRecords: VacancyRecord[] = [
     estrategia: "Monitorar renovacao e preparar substitutos por segmento.",
     receitaPotencial: 18400,
     responsavel: "Comercial"
+  }
+];
+
+export const utilityReadings: UtilityReading[] = [
+  {
+    id: "ene-vv-01-2026-05",
+    lojaId: "vv-01",
+    empreendimentoId: "villa-viseu",
+    tipo: "energia",
+    competencia: "2026-05",
+    consumo: 12800,
+    consumoAnterior: 11800,
+    valor: 14200,
+    medidor: "CEMIG-VV-001",
+    status: "normal"
+  },
+  {
+    id: "ene-vv-02-2026-05",
+    lojaId: "vv-02",
+    empreendimentoId: "villa-viseu",
+    tipo: "energia",
+    competencia: "2026-05",
+    consumo: 9200,
+    consumoAnterior: 7100,
+    valor: 10120,
+    medidor: "CEMIG-VV-002",
+    status: "atencao"
+  },
+  {
+    id: "ene-br-01-2026-05",
+    lojaId: "br-01",
+    empreendimentoId: "bluemall-rondon",
+    tipo: "energia",
+    competencia: "2026-05",
+    consumo: 44000,
+    consumoAnterior: 40200,
+    valor: 48900,
+    medidor: "CEMIG-BR-001",
+    status: "normal"
+  },
+  {
+    id: "ene-pn-01-2026-05",
+    lojaId: "pn-01",
+    empreendimentoId: "piazza-nicomedes",
+    tipo: "energia",
+    competencia: "2026-05",
+    consumo: 6400,
+    consumoAnterior: 5400,
+    valor: 7040,
+    medidor: "CEMIG-PN-001",
+    status: "normal"
+  },
+  {
+    id: "agua-vv-01-2026-05",
+    lojaId: "vv-01",
+    empreendimentoId: "villa-viseu",
+    tipo: "agua",
+    competencia: "2026-05",
+    consumo: 420,
+    consumoAnterior: 390,
+    valor: 3600,
+    medidor: "DMAE-VV-001",
+    status: "normal"
+  },
+  {
+    id: "agua-vv-02-2026-05",
+    lojaId: "vv-02",
+    empreendimentoId: "villa-viseu",
+    tipo: "agua",
+    competencia: "2026-05",
+    consumo: 610,
+    consumoAnterior: 340,
+    valor: 5200,
+    medidor: "DMAE-VV-002",
+    status: "critico"
+  },
+  {
+    id: "agua-pn-01-2026-05",
+    lojaId: "pn-01",
+    empreendimentoId: "piazza-nicomedes",
+    tipo: "agua",
+    competencia: "2026-05",
+    consumo: 220,
+    consumoAnterior: 210,
+    valor: 1850,
+    medidor: "DMAE-PN-001",
+    status: "normal"
+  },
+  {
+    id: "agua-bc-01-2026-05",
+    lojaId: "bc-01",
+    empreendimentoId: "bluemall-centro",
+    tipo: "agua",
+    competencia: "2026-05",
+    consumo: 280,
+    consumoAnterior: 230,
+    valor: 2420,
+    medidor: "DMAE-BC-001",
+    status: "atencao"
   }
 ];
 
