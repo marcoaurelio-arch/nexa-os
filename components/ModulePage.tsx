@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Building2, Copy, Droplets, FileText, Gavel, Mail, Phone, Plus, Printer, Search, Users, Wrench, Zap } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -470,6 +470,14 @@ type UtilityReadingFormValues = z.infer<typeof utilityReadingSchema>;
 type ServiceOrderFormValues = z.infer<typeof serviceOrderSchema>;
 type DocumentFormValues = z.infer<typeof documentSchema>;
 type LegalCaseFormValues = z.infer<typeof legalCaseSchema>;
+
+type SupabaseHealth = {
+  status: "ok" | "not_configured" | "error";
+  configured: boolean;
+  checkedAt: string;
+  enterpriseCount?: number;
+  message?: string;
+};
 
 export function ModulePage({
   module,
@@ -1195,6 +1203,8 @@ function SettingsPage({
   const moduleLabels = navItems.map((item) => item.label);
   const totalGrants = accessProfiles.reduce((sum, profile) => sum + profile.modules.length, 0);
   const supabaseEnvReady = hasSupabaseEnv();
+  const [health, setHealth] = useState<SupabaseHealth | null>(null);
+  const [checkingHealth, setCheckingHealth] = useState(false);
   const setupSteps = [
     { label: "Projeto Supabase criado", status: "manual" },
     { label: "Migrations 001 a 009 aplicadas", status: "manual" },
@@ -1203,6 +1213,30 @@ function SettingsPage({
     { label: "CRUD conectado ao banco real", status: dataSource === "supabase" ? "ok" : "pendente" },
     { label: "Notion preparado para sync", status: "manual" }
   ];
+  const healthStatus = health?.status ?? "nao verificado";
+
+  async function checkSupabaseHealth() {
+    setCheckingHealth(true);
+
+    try {
+      const response = await fetch("/api/health/supabase", { cache: "no-store" });
+      const payload = await response.json() as SupabaseHealth;
+      setHealth(payload);
+    } catch (error) {
+      setHealth({
+        status: "error",
+        configured: false,
+        checkedAt: new Date().toISOString(),
+        message: error instanceof Error ? error.message : "Falha ao verificar Supabase"
+      });
+    } finally {
+      setCheckingHealth(false);
+    }
+  }
+
+  useEffect(() => {
+    void checkSupabaseHealth();
+  }, []);
 
   return (
     <Shell
@@ -1215,6 +1249,24 @@ function SettingsPage({
         <Kpi label="Modulos governados" value={numberPt(moduleLabels.length)} />
         <Kpi label="Permissoes ativas" value={numberPt(totalGrants)} tone="success" />
         <Kpi label="Supabase" value={dataSource === "supabase" ? "Conectado" : "Pendente"} tone={dataSource === "supabase" ? "success" : "danger"} />
+      </div>
+      <div className="panel p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="font-bold uppercase">Saude do banco</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Verificacao server-side das variaveis e da tabela `empreendimentos`.</p>
+          </div>
+          <button className="control inline-flex items-center justify-center" onClick={() => void checkSupabaseHealth()} disabled={checkingHealth}>
+            {checkingHealth ? "Verificando" : "Verificar agora"}
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <Mini label="Status" value={healthStatus} />
+          <Mini label="Variaveis" value={health?.configured ? "Configuradas" : "Pendentes"} />
+          <Mini label="Empreendimentos" value={health?.enterpriseCount === undefined ? "-" : numberPt(health.enterpriseCount)} />
+          <Mini label="Ultima checagem" value={health?.checkedAt ? new Date(health.checkedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "-"} />
+        </div>
+        {health?.message ? <p className="mt-3 text-sm text-muted-foreground">{health.message}</p> : null}
       </div>
       <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
         <div className="panel p-5">

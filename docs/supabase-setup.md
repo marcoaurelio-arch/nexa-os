@@ -21,6 +21,16 @@ npm run supabase:check
 
 Esse comando confere migrations, `.env.example`, `.env.local`, manifesto Notion e rota de criacao das bases Notion.
 
+## Verificacao dentro do app
+
+A tela `Configuracoes` possui o bloco `Saude do banco`, que chama:
+
+```txt
+GET /api/health/supabase
+```
+
+Esse endpoint verifica se as variaveis foram carregadas no servidor e consulta a tabela `empreendimentos`. Quando retornar `ok`, o app esta pronto para operar com dados reais.
+
 ## Ordem das migrations
 
 - `001_nexa_os_core.sql`
