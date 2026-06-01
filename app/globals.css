@@ -88,3 +88,24 @@ button {
     font-weight: 600;
   }
 }
+
+@media (max-width: 767px) {
+  main {
+    overflow-x: hidden;
+  }
+
+  table {
+    display: block;
+    min-width: 640px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .panel {
+    max-width: 100%;
+  }
+
+  .control {
+    min-width: 0;
+  }
+}
