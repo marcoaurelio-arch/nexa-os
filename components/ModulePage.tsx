@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Building2, Droplets, FileText, Mail, Phone, Plus, Search, Users, Wrench, Zap } from "lucide-react";
+import { AlertTriangle, Building2, Droplets, FileText, Gavel, Mail, Phone, Plus, Search, Users, Wrench, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -19,6 +19,10 @@ import type {
   Enterprise,
   FinancialStatus,
   FppRecord,
+  LegalCase,
+  LegalCaseStatus,
+  LegalCaseType,
+  LegalRisk,
   Payable,
   Receivable,
   RevenueAuditRecord,
@@ -54,6 +58,7 @@ type ModulePageProps = {
   utilityReadings: UtilityReading[];
   serviceOrders: ServiceOrder[];
   documentRecords: DocumentRecord[];
+  legalCases: LegalCase[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -71,6 +76,7 @@ type ModulePageProps = {
   onSaveUtilityReading: (reading: UtilityReading) => void | Promise<void>;
   onSaveServiceOrder: (order: ServiceOrder) => void | Promise<void>;
   onSaveDocumentRecord: (record: DocumentRecord) => void | Promise<void>;
+  onSaveLegalCase: (record: LegalCase) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -209,6 +215,31 @@ const documentStatusLabel: Record<DocumentStatus, string> = {
 };
 
 const documentCategories: DocumentCategory[] = ["contratos", "aditivos", "garantias", "seguros", "alvaras", "avcb", "vistorias", "licencas", "plantas", "projetos", "fotos"];
+
+const legalCaseTypeLabel: Record<LegalCaseType, string> = {
+  notificacao: "Notificacao",
+  acao_judicial: "Acao judicial",
+  garantia: "Garantia",
+  contrato: "Contrato",
+  renovacao: "Renovacao",
+  pendencia: "Pendencia"
+};
+
+const legalCaseStatusLabel: Record<LegalCaseStatus, string> = {
+  aberto: "Aberto",
+  em_andamento: "Em andamento",
+  aguardando: "Aguardando",
+  concluido: "Concluido",
+  critico: "Critico"
+};
+
+const legalRiskLabel: Record<LegalRisk, string> = {
+  baixo: "Baixo",
+  medio: "Medio",
+  alto: "Alto"
+};
+
+const legalCaseTypes: LegalCaseType[] = ["notificacao", "acao_judicial", "garantia", "contrato", "renovacao", "pendencia"];
 
 const enterpriseSchema = z.object({
   id: z.string().min(1),
@@ -404,6 +435,23 @@ const documentSchema = z.object({
   observacoes: z.string().trim()
 });
 
+const legalCaseSchema = z.object({
+  id: z.string().min(1),
+  lojaId: z.string().trim().min(1, "Selecione a loja."),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  contratoId: z.string().trim(),
+  tipo: z.enum(["notificacao", "acao_judicial", "garantia", "contrato", "renovacao", "pendencia"]),
+  titulo: z.string().trim().min(2, "Informe o titulo."),
+  parteContraria: z.string().trim(),
+  valorCausa: z.coerce.number().min(0, "Informe zero ou mais."),
+  prazo: z.string().trim().min(8, "Informe o prazo."),
+  status: z.enum(["aberto", "em_andamento", "aguardando", "concluido", "critico"]),
+  risco: z.enum(["baixo", "medio", "alto"]),
+  responsavel: z.string().trim().min(2, "Informe o responsavel."),
+  historico: z.string().trim().min(2, "Informe o historico."),
+  proximaAcao: z.string().trim().min(2, "Informe a proxima acao.")
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
@@ -418,6 +466,7 @@ type VacancyFormValues = z.infer<typeof vacancySchema>;
 type UtilityReadingFormValues = z.infer<typeof utilityReadingSchema>;
 type ServiceOrderFormValues = z.infer<typeof serviceOrderSchema>;
 type DocumentFormValues = z.infer<typeof documentSchema>;
+type LegalCaseFormValues = z.infer<typeof legalCaseSchema>;
 
 export function ModulePage({
   module,
@@ -435,6 +484,7 @@ export function ModulePage({
   utilityReadings,
   serviceOrders,
   documentRecords,
+  legalCases,
   dataSource,
   syncError,
   onResetLocalData,
@@ -451,7 +501,8 @@ export function ModulePage({
   onSaveVacancyRecord,
   onSaveUtilityReading,
   onSaveServiceOrder,
-  onSaveDocumentRecord
+  onSaveDocumentRecord,
+  onSaveLegalCase
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -597,6 +648,18 @@ export function ModulePage({
         stores={stores}
         records={documentRecords}
         onSaveRecord={onSaveDocumentRecord}
+      />
+    );
+  }
+  if (module === "Juridico") {
+    return (
+      <LegalPage
+        enterprises={enterprises}
+        stores={stores}
+        tenants={tenants}
+        contracts={contracts}
+        records={legalCases}
+        onSaveRecord={onSaveLegalCase}
       />
     );
   }
@@ -2332,6 +2395,148 @@ function DocumentsPage({
   );
 }
 
+function LegalPage({
+  enterprises,
+  stores,
+  tenants,
+  contracts,
+  records,
+  onSaveRecord
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  tenants: Tenant[];
+  contracts: Contract[];
+  records: LegalCase[];
+  onSaveRecord: (record: LegalCase) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [editingRecord, setEditingRecord] = useState<LegalCase | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedRecords = records.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const activeRecords = selectedRecords.filter((record) => record.status !== "concluido");
+  const criticalRecords = selectedRecords.filter((record) => record.status === "critico" || record.risco === "alto");
+  const notificationCount = selectedRecords.filter((record) => record.tipo === "notificacao").length;
+  const lawsuitCount = selectedRecords.filter((record) => record.tipo === "acao_judicial").length;
+  const exposure = selectedRecords.reduce((sum, record) => sum + record.valorCausa, 0);
+  const firstStore = selectedStores[0] ?? stores[0];
+  const typeRows = legalCaseTypes.map((type) => ({
+    type,
+    total: selectedRecords.filter((record) => record.tipo === type).length,
+    critical: selectedRecords.filter((record) => record.tipo === type && (record.risco === "alto" || record.status === "critico")).length
+  }));
+
+  return (
+    <Shell
+      title="Juridico"
+      description="Notificacoes, acoes judiciais, garantias, contratos, renovacoes e pendencias juridicas."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => setEditingRecord(emptyLegalCase(firstStore, contracts))}>
+            <Plus className="h-4 w-4" />
+            Caso juridico
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Casos ativos" value={numberPt(activeRecords.length)} tone={activeRecords.length ? "danger" : "success"} />
+        <Kpi label="Risco alto" value={numberPt(criticalRecords.length)} tone={criticalRecords.length ? "danger" : "success"} />
+        <Kpi label="Notificacoes" value={numberPt(notificationCount)} />
+        <Kpi label="Acoes judiciais" value={numberPt(lawsuitCount)} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div className="space-y-3">
+          <DataTable
+            columns={["Loja", "Tipo", "Titulo", "Parte", "Prazo", "Risco", "Status", "Acoes"]}
+            rows={selectedRecords.map((record) => [
+              storeLabel(stores, record.lojaId),
+              legalCaseTypeLabel[record.tipo],
+              record.titulo,
+              record.parteContraria || tenantByStore(tenants, record.lojaId),
+              record.prazo,
+              legalRiskLabel[record.risco],
+              legalCaseStatusLabel[record.status],
+              "Editar"
+            ])}
+            onAction={(rowIndex) => setEditingRecord(selectedRecords[rowIndex])}
+          />
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Prazos e pendencias</h2>
+            <DataTable
+              columns={["Prazo", "Loja", "Proxima acao", "Responsavel", "Risco"]}
+              rows={activeRecords
+                .slice()
+                .sort((a, b) => a.prazo.localeCompare(b.prazo))
+                .map((record) => [
+                  record.prazo,
+                  storeLabel(stores, record.lojaId),
+                  record.proximaAcao,
+                  record.responsavel,
+                  legalRiskLabel[record.risco]
+                ])}
+            />
+          </div>
+        </div>
+        <div className="panel p-5">
+          <div className="flex items-center gap-2">
+            <Gavel className="h-4 w-4 text-primary" />
+            <h2 className="font-bold uppercase">Painel juridico</h2>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Controle executivo de exposicao, prazos, responsaveis e proximas acoes por ativo e loja.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Exposicao mapeada" value={brl(exposure)} />
+            <Mini label="Contratos vinculados" value={numberPt(selectedRecords.filter((record) => record.contratoId).length)} />
+            <Mini label="Pendencias abertas" value={numberPt(selectedRecords.filter((record) => record.tipo === "pendencia" && record.status !== "concluido").length)} />
+          </div>
+          <h3 className="mt-6 text-sm font-bold uppercase">Frentes juridicas</h3>
+          <div className="mt-3 space-y-2">
+            {typeRows.map((row) => (
+              <div key={row.type} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span className="font-medium">{legalCaseTypeLabel[row.type]}</span>
+                <span className={row.critical ? "font-bold text-danger" : "font-bold text-primary"}>
+                  {row.total} casos{row.critical ? ` | ${row.critical} risco` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+          <h3 className="mt-6 text-sm font-bold uppercase">Alertas</h3>
+          <div className="mt-3 space-y-2">
+            {criticalRecords.slice(0, 4).map((record) => (
+              <button key={record.id} className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm" onClick={() => setEditingRecord(record)}>
+                <p className="font-bold text-primary">{record.titulo}</p>
+                <p className="text-muted-foreground">{record.prazo} | {legalRiskLabel[record.risco]} | {record.responsavel}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {editingRecord ? (
+        <LegalCaseForm
+          record={editingRecord}
+          stores={stores}
+          enterprises={enterprises}
+          contracts={contracts}
+          onClose={() => setEditingRecord(null)}
+          onSave={async (record) => {
+            await onSaveRecord(record);
+            setEditingRecord(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
 function DataTable({
   columns,
   rows,
@@ -3443,6 +3648,105 @@ function DocumentForm({
   );
 }
 
+function LegalCaseForm({
+  record,
+  stores,
+  enterprises,
+  contracts,
+  onClose,
+  onSave
+}: {
+  record: LegalCase;
+  stores: StoreType[];
+  enterprises: Enterprise[];
+  contracts: Contract[];
+  onClose: () => void;
+  onSave: (record: LegalCase) => void;
+}) {
+  const storeOptions = useMemo(() => stores.map((store) => store.id), [stores]);
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const contractOptions = useMemo(() => ["", ...contracts.map((contract) => contract.id)], [contracts]);
+  const contractLabels = useMemo(
+    () => ({
+      "": "Sem contrato vinculado",
+      ...Object.fromEntries(contracts.map((contract) => [contract.id, `${storeLabel(stores, contract.lojaId)} - ${contract.dataTermino}`]))
+    }),
+    [contracts, stores]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<LegalCaseFormValues>({
+    resolver: zodResolver(legalCaseSchema),
+    defaultValues: record
+  });
+
+  return (
+    <Modal title="Caso juridico" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect label="Loja" error={errors.lojaId?.message} options={storeOptions} optionLabels={storeLabels} {...register("lojaId")} />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormSelect
+            label="Contrato"
+            error={errors.contratoId?.message}
+            options={contractOptions}
+            optionLabels={contractLabels}
+            {...register("contratoId")}
+          />
+          <FormSelect
+            label="Tipo"
+            error={errors.tipo?.message}
+            options={legalCaseTypes}
+            optionLabels={legalCaseTypeLabel}
+            {...register("tipo")}
+          />
+          <FormInput label="Titulo" error={errors.titulo?.message} {...register("titulo")} />
+          <FormInput label="Parte contraria" error={errors.parteContraria?.message} {...register("parteContraria")} />
+          <FormInput label="Valor causa" type="number" error={errors.valorCausa?.message} {...register("valorCausa")} />
+          <FormInput label="Prazo" type="date" error={errors.prazo?.message} {...register("prazo")} />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["aberto", "em_andamento", "aguardando", "concluido", "critico"]}
+            optionLabels={legalCaseStatusLabel}
+            {...register("status")}
+          />
+          <FormSelect
+            label="Risco"
+            error={errors.risco?.message}
+            options={["baixo", "medio", "alto"]}
+            optionLabels={legalRiskLabel}
+            {...register("risco")}
+          />
+          <FormInput label="Responsavel" error={errors.responsavel?.message} {...register("responsavel")} />
+          <FormInput label="Proxima acao" error={errors.proximaAcao?.message} {...register("proximaAcao")} />
+          <div className="md:col-span-2">
+            <FormInput label="Historico" error={errors.historico?.message} {...register("historico")} />
+          </div>
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -3994,6 +4298,27 @@ function emptyDocumentRecord(store?: StoreType): DocumentRecord {
     arquivoUrl: "",
     responsavel: "Administrativo",
     observacoes: ""
+  };
+}
+
+function emptyLegalCase(store: StoreType | undefined, contracts: Contract[]): LegalCase {
+  const contract = contracts.find((item) => item.lojaId === store?.id);
+
+  return {
+    id: crypto.randomUUID(),
+    lojaId: store?.id ?? "",
+    empreendimentoId: store?.empreendimentoId ?? "",
+    contratoId: contract?.id ?? "",
+    tipo: "pendencia",
+    titulo: "Novo caso juridico",
+    parteContraria: "",
+    valorCausa: 0,
+    prazo: new Date().toISOString().slice(0, 10),
+    status: "aberto",
+    risco: "medio",
+    responsavel: "Juridico",
+    historico: "Novo acompanhamento juridico.",
+    proximaAcao: "Definir proxima providencia."
   };
 }
 

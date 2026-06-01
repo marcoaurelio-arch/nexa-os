@@ -447,6 +447,44 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["documentos"]["Insert"]>;
       };
+      juridico: {
+        Row: {
+          id: string;
+          loja_id: string;
+          empreendimento_id: string;
+          contrato_id: string | null;
+          tipo: string;
+          titulo: string;
+          parte_contraria: string | null;
+          valor_causa: number;
+          prazo: string;
+          status: string;
+          risco: string;
+          responsavel: string | null;
+          historico: string | null;
+          proxima_acao: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loja_id: string;
+          empreendimento_id: string;
+          contrato_id?: string | null;
+          tipo: string;
+          titulo: string;
+          parte_contraria?: string | null;
+          valor_causa?: number;
+          prazo: string;
+          status?: string;
+          risco?: string;
+          responsavel?: string | null;
+          historico?: string | null;
+          proxima_acao?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["juridico"]["Insert"]>;
+      };
     };
   };
 };

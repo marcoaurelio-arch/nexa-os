@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "./types";
+import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -759,6 +759,105 @@ export const documentRecords: DocumentRecord[] = [
     arquivoUrl: "drive://nexa/documentos/bluemall-centro/bc-01/fotos/fachada",
     responsavel: "Marketing",
     observacoes: "Acervo atualizado apos troca de comunicacao visual."
+  }
+];
+
+export const legalCases: LegalCase[] = [
+  {
+    id: "legal-vv-01-renovacao",
+    lojaId: "vv-01",
+    empreendimentoId: "villa-viseu",
+    contratoId: "contract-gastro-prime",
+    tipo: "renovacao",
+    titulo: "Renovacao contratual Gastro Prime",
+    parteContraria: "Gastro Prime Alimentacao Ltda",
+    valorCausa: 0,
+    prazo: "2026-08-30",
+    status: "em_andamento",
+    risco: "medio",
+    responsavel: "Juridico",
+    historico: "Contrato vence em 2026-11-30 e requer alinhamento de garantia e novo indice.",
+    proximaAcao: "Preparar minuta de renovacao com Comercial."
+  },
+  {
+    id: "legal-vv-02-notificacao",
+    lojaId: "vv-02",
+    empreendimentoId: "villa-viseu",
+    contratoId: "contract-clinica-vida",
+    tipo: "notificacao",
+    titulo: "Notificacao por atraso de aluguel",
+    parteContraria: "Clinica Vida Integrada Ltda",
+    valorCausa: 31000,
+    prazo: "2026-06-07",
+    status: "critico",
+    risco: "alto",
+    responsavel: "Financeiro/Juridico",
+    historico: "Receita de aluguel vencida, contato administrativo sem retorno conclusivo.",
+    proximaAcao: "Enviar notificacao extrajudicial e registrar comprovante."
+  },
+  {
+    id: "legal-br-01-acao",
+    lojaId: "br-01",
+    empreendimentoId: "bluemall-rondon",
+    contratoId: "contract-smart-fit-hub",
+    tipo: "acao_judicial",
+    titulo: "Acao revisional em acompanhamento",
+    parteContraria: "Hub Fitness Rondonopolis Ltda",
+    valorCausa: 125000,
+    prazo: "2026-06-20",
+    status: "aguardando",
+    risco: "alto",
+    responsavel: "Escritorio parceiro",
+    historico: "Processo em fase de manifestacao sobre documentos apresentados.",
+    proximaAcao: "Revisar manifestacao e atualizar diretoria."
+  },
+  {
+    id: "legal-pn-01-garantia",
+    lojaId: "pn-01",
+    empreendimentoId: "piazza-nicomedes",
+    contratoId: "",
+    tipo: "garantia",
+    titulo: "Garantia pendente para implantacao",
+    parteContraria: "Cafe Jardim Nicomedes Ltda",
+    valorCausa: 19000,
+    prazo: "2026-06-12",
+    status: "aberto",
+    risco: "medio",
+    responsavel: "Administrativo",
+    historico: "Operador em implantacao ainda nao apresentou garantia final.",
+    proximaAcao: "Cobrar comprovante de caucao antes da liberacao final."
+  },
+  {
+    id: "legal-vv-03-minuta",
+    lojaId: "vv-03",
+    empreendimentoId: "villa-viseu",
+    contratoId: "",
+    tipo: "contrato",
+    titulo: "Minuta para nova operacao",
+    parteContraria: "Mini Mercado",
+    valorCausa: 24000,
+    prazo: "2026-06-05",
+    status: "em_andamento",
+    risco: "baixo",
+    responsavel: "Juridico",
+    historico: "Oportunidade aprovada comercialmente e enviada para minuta.",
+    proximaAcao: "Concluir minuta e enviar para assinatura."
+  },
+  {
+    id: "legal-bc-01-pendencia",
+    lojaId: "bc-01",
+    empreendimentoId: "bluemall-centro",
+    contratoId: "",
+    tipo: "pendencia",
+    titulo: "Regularizacao de seguro complementar",
+    parteContraria: "Odonto Mais",
+    valorCausa: 0,
+    prazo: "2026-07-01",
+    status: "aberto",
+    risco: "baixo",
+    responsavel: "Administrativo",
+    historico: "Pendencia documental identificada no checklist mensal.",
+    proximaAcao: "Solicitar apolice complementar atualizada."
   }
 ];
 

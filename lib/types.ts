@@ -222,6 +222,27 @@ export type DocumentRecord = {
   observacoes: string;
 };
 
+export type LegalCaseType = "notificacao" | "acao_judicial" | "garantia" | "contrato" | "renovacao" | "pendencia";
+export type LegalCaseStatus = "aberto" | "em_andamento" | "aguardando" | "concluido" | "critico";
+export type LegalRisk = "baixo" | "medio" | "alto";
+
+export type LegalCase = {
+  id: string;
+  lojaId: string;
+  empreendimentoId: string;
+  contratoId: string;
+  tipo: LegalCaseType;
+  titulo: string;
+  parteContraria: string;
+  valorCausa: number;
+  prazo: string;
+  status: LegalCaseStatus;
+  risco: LegalRisk;
+  responsavel: string;
+  historico: string;
+  proximaAcao: string;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;

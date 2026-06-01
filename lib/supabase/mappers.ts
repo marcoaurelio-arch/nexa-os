@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
@@ -15,6 +15,7 @@ type VacancyRow = Database["public"]["Tables"]["vacancia"]["Row"];
 type UtilityReadingRow = Database["public"]["Tables"]["consumos"]["Row"];
 type ServiceOrderRow = Database["public"]["Tables"]["ordens_servico"]["Row"];
 type DocumentRow = Database["public"]["Tables"]["documentos"]["Row"];
+type LegalCaseRow = Database["public"]["Tables"]["juridico"]["Row"];
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -235,5 +236,24 @@ export function mapDocumentRow(row: DocumentRow): DocumentRecord {
     arquivoUrl: row.arquivo_url ?? "",
     responsavel: row.responsavel ?? "",
     observacoes: row.observacoes ?? ""
+  };
+}
+
+export function mapLegalCaseRow(row: LegalCaseRow): LegalCase {
+  return {
+    id: row.id,
+    lojaId: row.loja_id,
+    empreendimentoId: row.empreendimento_id,
+    contratoId: row.contrato_id ?? "",
+    tipo: row.tipo as LegalCase["tipo"],
+    titulo: row.titulo,
+    parteContraria: row.parte_contraria ?? "",
+    valorCausa: row.valor_causa,
+    prazo: row.prazo,
+    status: row.status as LegalCase["status"],
+    risco: row.risco as LegalCase["risco"],
+    responsavel: row.responsavel ?? "",
+    historico: row.historico ?? "",
+    proximaAcao: row.proxima_acao ?? ""
   };
 }
