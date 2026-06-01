@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Building2, Droplets, FileText, Gavel, Mail, Phone, Plus, Search, Users, Wrench, Zap } from "lucide-react";
+import { AlertTriangle, Building2, Copy, Droplets, FileText, Gavel, Mail, Phone, Plus, Printer, Search, Users, Wrench, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -680,6 +680,26 @@ export function ModulePage({
       />
     );
   }
+  if (module === "Relatorios") {
+    return (
+      <MonthlyReportPage
+        enterprises={enterprises}
+        stores={stores}
+        contracts={contracts}
+        receivables={receivables}
+        payables={payables}
+        delinquencyRecords={delinquencyRecords}
+        fppRecords={fppRecords}
+        revenueAuditRecords={revenueAuditRecords}
+        commercialLeads={commercialLeads}
+        vacancyRecords={vacancyRecords}
+        utilityReadings={utilityReadings}
+        serviceOrders={serviceOrders}
+        documentRecords={documentRecords}
+        legalCases={legalCases}
+      />
+    );
+  }
 
   return (
     <Shell title={module} description="Modulo em estruturacao para a proxima sprint do Nexa OS.">
@@ -877,6 +897,278 @@ function BusinessIntelligencePage({
               <Mini label="OS criticas" value={numberPt(criticalOrders.length)} />
               <Mini label="Juridico alto risco" value={numberPt(highRiskLegal.length)} />
               <Mini label="Vacancia financeira" value={brl(lostRevenue)} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </Shell>
+  );
+}
+
+function MonthlyReportPage({
+  enterprises,
+  stores,
+  contracts,
+  receivables,
+  payables,
+  delinquencyRecords,
+  fppRecords,
+  revenueAuditRecords,
+  commercialLeads,
+  vacancyRecords,
+  utilityReadings,
+  serviceOrders,
+  documentRecords,
+  legalCases
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  contracts: Contract[];
+  receivables: Receivable[];
+  payables: Payable[];
+  delinquencyRecords: DelinquencyRecord[];
+  fppRecords: FppRecord[];
+  revenueAuditRecords: RevenueAuditRecord[];
+  commercialLeads: CommercialLead[];
+  vacancyRecords: VacancyRecord[];
+  utilityReadings: UtilityReading[];
+  serviceOrders: ServiceOrder[];
+  documentRecords: DocumentRecord[];
+  legalCases: LegalCase[];
+}) {
+  const competenceOptions = useMemo(() => {
+    const values = new Set<string>();
+    receivables.forEach((item) => values.add(item.competencia));
+    payables.forEach((item) => values.add(item.competencia));
+    fppRecords.forEach((item) => values.add(item.competencia));
+    revenueAuditRecords.forEach((item) => values.add(item.competencia));
+    utilityReadings.forEach((item) => values.add(item.competencia));
+    return [...values].sort((a, b) => b.localeCompare(a));
+  }, [fppRecords, payables, receivables, revenueAuditRecords, utilityReadings]);
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [competencia, setCompetencia] = useState(() => competenceOptions[0] ?? new Date().toISOString().slice(0, 7));
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedEnterpriseNames = enterprises
+    .filter((enterprise) => selectedEnterpriseIds.has(enterprise.id))
+    .map((enterprise) => enterprise.nome);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedStoreIds = new Set(selectedStores.map((store) => store.id));
+  const selectedContracts = contracts.filter((contract) => selectedStoreIds.has(contract.lojaId));
+  const selectedReceivables = receivables.filter((item) => selectedEnterpriseIds.has(item.empreendimentoId) && item.competencia === competencia && item.status !== "cancelado");
+  const selectedPayables = payables.filter((item) => selectedEnterpriseIds.has(item.empreendimentoId) && item.competencia === competencia && item.status !== "cancelado");
+  const selectedFpp = fppRecords.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId) && record.competencia === competencia);
+  const selectedAudits = revenueAuditRecords.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId) && record.competencia === competencia);
+  const selectedUtilities = utilityReadings.filter((reading) => selectedEnterpriseIds.has(reading.empreendimentoId) && reading.competencia === competencia);
+  const selectedVacancies = vacancyRecords.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const selectedOrders = serviceOrders.filter((order) => selectedEnterpriseIds.has(order.empreendimentoId) && order.prazo.startsWith(competencia));
+  const selectedDocuments = documentRecords.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const selectedLegal = legalCases.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const selectedLeads = commercialLeads.filter((lead) => selectedEnterpriseIds.has(lead.empreendimentoId));
+
+  const occupiedStores = selectedStores.filter((store) => ["ocupada", "implantacao", "em_obra"].includes(store.status));
+  const vacantStores = selectedStores.filter((store) => ["disponivel", "negociacao", "inativa"].includes(store.status));
+  const totalArea = selectedStores.reduce((sum, store) => sum + store.areaTotal, 0);
+  const occupiedArea = occupiedStores.reduce((sum, store) => sum + store.areaTotal, 0);
+  const vacantArea = Math.max(totalArea - occupiedArea, 0);
+  const potentialRent = selectedStores.reduce((sum, store) => sum + store.aluguel, 0);
+  const lostRevenue = selectedVacancies.length
+    ? selectedVacancies.reduce((sum, record) => sum + record.receitaPotencial, 0)
+    : vacantStores.reduce((sum, store) => sum + store.aluguel, 0);
+  const revenueByType = {
+    aluguel: selectedReceivables.filter((item) => item.receita === "aluguel").reduce((sum, item) => sum + item.valor, 0),
+    condominio: selectedReceivables.filter((item) => item.receita === "condominio").reduce((sum, item) => sum + item.valor, 0),
+    fundo: selectedReceivables.filter((item) => item.receita === "fundo_promocao").reduce((sum, item) => sum + item.valor, 0),
+    fpp: selectedReceivables.filter((item) => item.receita === "fpp").reduce((sum, item) => sum + item.valor, 0)
+  };
+  const realEstateRevenue = revenueByType.aluguel + revenueByType.condominio + revenueByType.fundo + revenueByType.fpp;
+  const receivedRevenue = selectedReceivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const overdueReceivables = selectedReceivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const paidPayables = selectedPayables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const openPayables = selectedPayables.filter((item) => item.status === "aberto" || item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const condominiumExpenses = selectedPayables.filter((item) => item.centroCusto.toLowerCase().includes("condominio")).reduce((sum, item) => sum + item.valor, 0);
+  const fundExpenses = selectedPayables.filter((item) => item.centroCusto.toLowerCase().includes("fundo")).reduce((sum, item) => sum + item.valor, 0);
+  const marketingExpenses = selectedPayables
+    .filter((item) => ["marketing", "eventos", "trafego pago", "redes sociais", "producao audiovisual", "decoracao", "material grafico"].includes(item.categoria.toLowerCase()))
+    .reduce((sum, item) => sum + item.valor, 0);
+  const fppComplement = selectedFpp.reduce((sum, record) => sum + fppBilling(record).valorComplementar, 0);
+  const fppBillingTotal = selectedFpp.reduce((sum, record) => sum + fppBilling(record).valorCobrado, 0);
+  const averageAuditDivergence = selectedAudits.length ? selectedAudits.reduce((sum, record) => sum + auditDivergence(record), 0) / selectedAudits.length : 0;
+  const delinquencyRows = delinquencyRecords.filter((record) => {
+    if (!selectedStoreIds.has(record.lojaId)) return false;
+    const linkedReceivable = receivables.find((item) => item.id === record.receivableId);
+    return !linkedReceivable || linkedReceivable.competencia === competencia;
+  });
+  const contractAlerts = buildContractAlerts(selectedContracts, selectedStores, []);
+  const openOrders = selectedOrders.filter((order) => order.status !== "concluida");
+  const criticalOrders = selectedOrders.filter((order) => order.prioridade === "critica" && order.status !== "concluida");
+  const activeLegal = selectedLegal.filter((record) => record.status !== "concluido");
+  const highRiskLegal = selectedLegal.filter((record) => record.risco === "alto" || record.status === "critico");
+  const pendingDocuments = selectedDocuments.filter((record) => ["pendente", "vencido", "vencendo"].includes(documentEffectiveStatus(record))).length;
+  const pipelineValue = selectedLeads.reduce((sum, lead) => sum + lead.valorProposta, 0);
+  const energyValue = selectedUtilities.filter((reading) => reading.tipo === "energia").reduce((sum, reading) => sum + reading.valor, 0);
+  const waterValue = selectedUtilities.filter((reading) => reading.tipo === "agua").reduce((sum, reading) => sum + reading.valor, 0);
+  const utilityCriticalAlerts = selectedUtilities.filter((reading) => reading.status !== "normal").length;
+
+  const recommendations = [
+    overdueReceivables > 0 ? `Acionar regua de inadimplencia para ${brl(overdueReceivables)} vencidos na competencia.` : "",
+    lostRevenue > 0 ? `Priorizar lojas vagas com potencial mensal de ${brl(lostRevenue)}.` : "",
+    averageAuditDivergence > 0.05 ? `Conferir auditoria de faturamento, divergencia media de ${percent(averageAuditDivergence)}.` : "",
+    criticalOrders.length > 0 ? `Tratar ${numberPt(criticalOrders.length)} OS criticas antes do fechamento.` : "",
+    utilityCriticalAlerts > 0 ? `Revisar consumo de energia e agua em ${numberPt(utilityCriticalAlerts)} leituras fora do normal.` : "",
+    highRiskLegal.length > 0 ? `Levar ${numberPt(highRiskLegal.length)} pendencias juridicas de alto risco para comite.` : ""
+  ].filter(Boolean);
+
+  const reportSections = [
+    {
+      title: "Ocupacao",
+      summary: `${numberPt(occupiedStores.length)} lojas ocupadas de ${numberPt(selectedStores.length)} cadastradas.`,
+      items: [`Taxa de ocupacao: ${percent(selectedStores.length ? occupiedStores.length / selectedStores.length : 0)}`, `ABL ocupada: ${numberPt(occupiedArea)} m2`, `ABL disponivel: ${numberPt(vacantArea)} m2`]
+    },
+    {
+      title: "Vacancia",
+      summary: `${numberPt(vacantStores.length)} lojas vagas ou em negociacao.`,
+      items: [`Vacancia fisica: ${percent(totalArea > 0 ? vacantArea / totalArea : 0)}`, `Vacancia financeira: ${percent(potentialRent > 0 ? lostRevenue / potentialRent : 0)}`, `Receita perdida estimada: ${brl(lostRevenue)}`]
+    },
+    {
+      title: "Receita",
+      summary: `Receita imobiliaria lancada de ${brl(realEstateRevenue)}.`,
+      items: [`Aluguel: ${brl(revenueByType.aluguel)}`, `Condominio: ${brl(revenueByType.condominio)}`, `Fundo de promocao: ${brl(revenueByType.fundo)}`, `FPP: ${brl(revenueByType.fpp)}`]
+    },
+    {
+      title: "Inadimplencia",
+      summary: `${brl(overdueReceivables)} em contas vencidas.`,
+      items: [`Casos na regua: ${numberPt(delinquencyRows.length)}`, `Negociacoes ativas: ${numberPt(delinquencyRows.filter((record) => record.status === "negociacao").length)}`, `Maior atraso: ${numberPt(Math.max(0, ...delinquencyRows.map((record) => record.diasAtraso)))} dias`]
+    },
+    {
+      title: "FPP",
+      summary: `${numberPt(selectedFpp.length)} contratos percentuais monitorados.`,
+      items: [`Complementar apurado: ${brl(fppComplement)}`, `Cobranca total pela regra: ${brl(fppBillingTotal)}`, `Divergencia media auditoria: ${percent(averageAuditDivergence)}`]
+    },
+    {
+      title: "Condominio",
+      summary: `Saldo condominial da competencia: ${brl(revenueByType.condominio - condominiumExpenses)}.`,
+      items: [`Receitas: ${brl(revenueByType.condominio)}`, `Despesas: ${brl(condominiumExpenses)}`, `Custo por m2: ${brl(totalArea > 0 ? condominiumExpenses / totalArea : 0)}`]
+    },
+    {
+      title: "Fundo de Promocao",
+      summary: `Saldo do fundo na competencia: ${brl(revenueByType.fundo - fundExpenses)}.`,
+      items: [`Arrecadacao: ${brl(revenueByType.fundo)}`, `Utilizacao: ${brl(fundExpenses)}`, `Marketing lancado: ${brl(marketingExpenses)}`]
+    },
+    {
+      title: "Contratos",
+      summary: `${numberPt(contractAlerts.length)} alertas de vencimento ativos.`,
+      items: [`Contratos monitorados: ${numberPt(selectedContracts.length)}`, `Alertas 3 meses: ${numberPt(contractAlerts.filter((alert) => alert.meses === 3).length)}`, `Minutas/renovacoes: ${numberPt(selectedContracts.filter((contract) => contract.status === "minuta" || contract.status === "renovacao").length)}`]
+    },
+    {
+      title: "OS",
+      summary: `${numberPt(openOrders.length)} ordens de servico abertas no periodo.`,
+      items: [`Criticas: ${numberPt(criticalOrders.length)}`, `Custo previsto: ${brl(selectedOrders.reduce((sum, order) => sum + order.custoPrevisto, 0))}`, `Custo realizado: ${brl(selectedOrders.reduce((sum, order) => sum + order.custoRealizado, 0))}`]
+    },
+    {
+      title: "Marketing",
+      summary: `${brl(marketingExpenses)} aplicados em marketing e promocao.`,
+      items: [`Pipeline comercial influenciado: ${brl(pipelineValue)}`, `Leads ativos: ${numberPt(selectedLeads.length)}`, `Energia e agua do periodo: ${brl(energyValue + waterValue)}`]
+    },
+    {
+      title: "Juridico",
+      summary: `${numberPt(activeLegal.length)} controles juridicos ativos.`,
+      items: [`Alto risco: ${numberPt(highRiskLegal.length)}`, `Exposicao mapeada: ${brl(selectedLegal.reduce((sum, record) => sum + record.valorCausa, 0))}`, `Documentos pendentes/vencendo: ${numberPt(pendingDocuments)}`]
+    },
+    {
+      title: "Recomendacoes",
+      summary: recommendations.length ? `${numberPt(recommendations.length)} recomendacoes geradas.` : "Sem alertas criticos para a competencia.",
+      items: recommendations.length ? recommendations : ["Manter acompanhamento semanal de indicadores, contratos e inadimplencia."]
+    }
+  ];
+
+  const reportTitle = `Relatorio mensal ${competenceLabel(competencia)} - ${enterpriseId === "all" ? "Nexa Malls" : selectedEnterpriseNames[0] ?? "Nexa Malls"}`;
+  const reportText = [
+    reportTitle,
+    `Empreendimentos: ${selectedEnterpriseNames.join(", ") || "Todos"}`,
+    ...reportSections.flatMap((section) => [section.title, section.summary, ...section.items])
+  ].join("\n");
+
+  return (
+    <Shell
+      title="Relatorio Mensal Automatico"
+      description="Previa executiva pronta para impressao em PDF com ocupacao, vacancia, receitas, inadimplencia, FPP, operacoes, marketing e juridico."
+      action={
+        <>
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <select className="control min-w-[120px]" value={competencia} onChange={(event) => setCompetencia(event.target.value)}>
+            {competenceOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2" onClick={() => void navigator.clipboard?.writeText(reportText)}>
+            <Copy className="h-4 w-4" />
+            Copiar resumo
+          </button>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => window.print()}>
+            <Printer className="h-4 w-4" />
+            Gerar PDF
+          </button>
+        </>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Receita imobiliaria" value={brl(realEstateRevenue)} tone="success" />
+        <Kpi label="Inadimplencia" value={brl(overdueReceivables)} tone={overdueReceivables ? "danger" : "success"} />
+        <Kpi label="Ocupacao" value={percent(selectedStores.length ? occupiedStores.length / selectedStores.length : 0)} />
+        <Kpi label="Saldo operacional" value={brl(receivedRevenue - paidPayables)} tone={receivedRevenue >= paidPayables ? "success" : "danger"} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+        <div className="panel overflow-hidden">
+          <div className="brand-angle bg-brand-dark p-6 text-white">
+            <img src="/nexa-malls-logo.png" alt="Nexa Malls" className="h-8 w-[150px] bg-white object-contain object-left p-1" />
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase text-white/65">Fechamento mensal</p>
+                <h2 className="mt-1 text-2xl font-bold uppercase">{reportTitle}</h2>
+              </div>
+              <Badge>{competencia}</Badge>
+            </div>
+          </div>
+          <div className="grid gap-3 p-5 lg:grid-cols-2">
+            {reportSections.map((section) => (
+              <section key={section.title} className="rounded-lg border border-border p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold uppercase text-primary">{section.title}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{section.summary}</p>
+                  </div>
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <ul className="mt-3 space-y-2 text-sm">
+                  {section.items.map((item) => (
+                    <li key={item} className="rounded-md bg-muted px-3 py-2">{item}</li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Checklist de emissao</h2>
+            <div className="mt-4 grid gap-3">
+              <Mini label="Dados financeiros" value={`${numberPt(selectedReceivables.length + selectedPayables.length)} lancamentos`} />
+              <Mini label="FPP e auditoria" value={`${numberPt(selectedFpp.length + selectedAudits.length)} registros`} />
+              <Mini label="OS e juridico" value={`${numberPt(openOrders.length + activeLegal.length)} pendencias`} />
+              <Mini label="Documentos" value={`${numberPt(pendingDocuments)} alertas`} />
+            </div>
+          </div>
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Recomendacoes</h2>
+            <div className="mt-4 space-y-2">
+              {(recommendations.length ? recommendations : ["Operacao dentro da normalidade para a competencia selecionada."]).map((item) => (
+                <div key={item} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">{item}</div>
+              ))}
             </div>
           </div>
         </div>
@@ -4046,6 +4338,14 @@ function buildDelinquencyCases(receivables: Receivable[], records: DelinquencyRe
 function daysBetween(start: Date, end: Date) {
   const millisecondsPerDay = 1000 * 60 * 60 * 24;
   return Math.max(0, Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay));
+}
+
+function competenceLabel(competencia: string) {
+  const [year, month] = competencia.split("-");
+  if (!year || !month) return competencia;
+
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
 }
 
 function delinquencyLane(days: number): 5 | 15 | 30 | 60 | 90 {

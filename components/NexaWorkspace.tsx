@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppShell } from "@/components/AppShell";
+import { AppShell, navItems } from "@/components/AppShell";
 import { Dashboard } from "@/components/Dashboard";
 import { ModulePage } from "@/components/ModulePage";
 import {
@@ -64,6 +64,15 @@ export function NexaWorkspace() {
   const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
   const [syncError, setSyncError] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
+
+  useEffect(() => {
+    const requestedModule = new URLSearchParams(window.location.search).get("module");
+    const moduleExists = navItems.some((item) => item.label === requestedModule);
+
+    if (requestedModule && moduleExists) {
+      setActiveModule(requestedModule);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;

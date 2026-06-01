@@ -6,6 +6,7 @@ import {
   BarChart3,
   Building2,
   ClipboardList,
+  FileBarChart,
   FileText,
   Gavel,
   Home,
@@ -39,6 +40,7 @@ export const navItems = [
   { label: "Energia e Agua", icon: Zap },
   { label: "Documentos", icon: ClipboardList },
   { label: "Juridico", icon: Gavel },
+  { label: "Relatorios", icon: FileBarChart },
   { label: "Configuracoes", icon: Settings }
 ];
 
