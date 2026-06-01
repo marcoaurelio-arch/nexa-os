@@ -4,6 +4,10 @@
 
 O Notion sera usado como camada de acompanhamento, reuniao, cobranca de responsaveis e leitura executiva. O PostgreSQL/Supabase continua sendo a fonte oficial dos dados.
 
+Em 01/06/2026 foi identificada a pagina-mae `NEXA OS` no workspace Notion, com as 23 bases operacionais vinculadas. Tambem foi criada uma pagina filha `Integracao API - Nexa OS` para acompanhar a configuracao do token oficial, o compartilhamento da pagina-mae e a sincronizacao inicial.
+
+Como a API atual do Notion separa `database` de `data source`, o Nexa OS deve registrar em `notion_databases` tanto o `notion_database_id` quanto o `notion_data_source_id`. O `data_source_id` sera usado nas consultas e sincronizacoes por modulo.
+
 Padrao de propriedades em todas as bases:
 
 - `ID Nexa`: texto, UUID da entidade no PostgreSQL.
@@ -394,6 +398,12 @@ A especificacao das 23 bases tambem existe em codigo em `lib/notion/schema.ts`. 
 
 A migration `009_reporting_access_notion.sql` cria as tabelas de apoio para esse fluxo.
 
+A migration `010_notion_workspace_binding.sql` adiciona:
+
+- `notion_data_source_id`: identificador do data source operacional.
+- `notion_url`: URL da base no workspace.
+- indices para consulta por data source e URL.
+
 ## 5. Verificacao de conexao
 
 A tela `Configuracoes` chama:
@@ -410,3 +420,5 @@ O plano de criacao continua disponivel em:
 GET /api/notion/databases
 POST /api/notion/databases
 ```
+
+Ao criar bases pela API, o `POST /api/notion/databases` registra automaticamente no Supabase os campos `notion_database_id`, `notion_data_source_id`, `notion_url`, `status` e `ultima_sincronizacao`.

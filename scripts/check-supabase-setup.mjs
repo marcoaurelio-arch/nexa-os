@@ -28,13 +28,13 @@ if (!existsSync(migrationsDir)) {
   fail("Diretorio supabase/migrations nao encontrado.");
 } else {
   const migrations = readdirSync(migrationsDir).filter((file) => file.endsWith(".sql")).sort();
-  const missing = Array.from({ length: 9 }, (_, index) => String(index + 1).padStart(3, "0"))
+  const missing = Array.from({ length: 10 }, (_, index) => String(index + 1).padStart(3, "0"))
     .filter((prefix) => !migrations.some((file) => file.startsWith(prefix)));
 
   if (missing.length) {
     fail(`Migrations ausentes: ${missing.join(", ")}`);
   } else {
-    ok(`Migrations 001 a 009 encontradas (${migrations.length} arquivos SQL).`);
+    ok(`Migrations 001 a 010 encontradas (${migrations.length} arquivos SQL).`);
   }
 }
 

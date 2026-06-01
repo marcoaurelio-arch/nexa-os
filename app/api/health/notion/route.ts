@@ -14,7 +14,9 @@ export async function GET() {
       checkedAt,
       databaseCount: notionDatabases.length,
       parentPageConfigured: Boolean(parentPageId),
-      message: "Notion ainda nao configurado. Preencha NOTION_API_KEY e NOTION_PARENT_PAGE_ID."
+      message: parentPageId
+        ? "Pagina mae configurada. Preencha NOTION_API_KEY para validar a API oficial do Notion."
+        : "Notion ainda nao configurado. Preencha NOTION_API_KEY e NOTION_PARENT_PAGE_ID."
     });
   }
 

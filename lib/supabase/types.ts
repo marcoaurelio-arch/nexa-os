@@ -594,6 +594,8 @@ export type Database = {
           nome: string;
           slug: string;
           notion_database_id: string | null;
+          notion_data_source_id: string | null;
+          notion_url: string | null;
           status: string;
           schema: Json;
           relacoes: Json;
@@ -607,6 +609,8 @@ export type Database = {
           nome: string;
           slug: string;
           notion_database_id?: string | null;
+          notion_data_source_id?: string | null;
+          notion_url?: string | null;
           status?: string;
           schema?: Json;
           relacoes?: Json;

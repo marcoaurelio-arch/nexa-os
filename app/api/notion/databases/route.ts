@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { buildNotionCreationPlan, NOTION_VERSION } from "@/lib/notion/payload";
 import { notionDatabases } from "@/lib/notion/schema";
+import type { Database } from "@/lib/supabase/types";
 
 const NOTION_API_URL = "https://api.notion.com/v1/databases";
 
@@ -37,6 +39,7 @@ export async function POST(request: Request) {
   }
 
   const results = [];
+  const upserts = [];
 
   for (const item of plan) {
     const response = await fetch(NOTION_API_URL, {
@@ -56,11 +59,66 @@ export async function POST(request: Request) {
       ok: response.ok,
       status: response.status,
       notionDatabaseId: data?.id ?? null,
+      notionDataSourceId: data?.data_sources?.[0]?.id ?? null,
+      notionUrl: data?.url ?? null,
       response: data
     });
+
+    if (response.ok && data?.id) {
+      upserts.push({
+        slug: item.slug,
+        nome: item.name,
+        notion_database_id: data.id,
+        notion_data_source_id: data?.data_sources?.[0]?.id ?? null,
+        notion_url: data?.url ?? null,
+        status: "criado",
+        ultima_sincronizacao: new Date().toISOString(),
+        erro: null
+      });
+    }
 
     if (!response.ok) break;
   }
 
-  return NextResponse.json({ dryRun: false, version: NOTION_VERSION, results }, { status: results.every((item) => item.ok) ? 200 : 207 });
+  const registry = await registerCreatedDatabases(upserts);
+
+  return NextResponse.json(
+    { dryRun: false, version: NOTION_VERSION, results, registry },
+    { status: results.every((item) => item.ok) && registry.ok ? 200 : 207 }
+  );
+}
+
+async function registerCreatedDatabases(rows: Array<{
+  slug: string;
+  nome: string;
+  notion_database_id: string;
+  notion_data_source_id: string | null;
+  notion_url: string | null;
+  status: string;
+  ultima_sincronizacao: string;
+  erro: null;
+}>) {
+  if (!rows.length) return { ok: true, count: 0 };
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceKey) {
+    return { ok: false, count: 0, error: "Supabase server env not configured." };
+  }
+
+  const client = createClient<Database>(url, serviceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }) as any;
+
+  const { error } = await client
+    .from("notion_databases")
+    .upsert(rows, { onConflict: "slug" });
+
+  if (error) return { ok: false, count: 0, error: error.message };
+
+  return { ok: true, count: rows.length };
 }
