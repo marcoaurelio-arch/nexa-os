@@ -19,7 +19,10 @@ import {
   Wrench,
   Zap
 } from "lucide-react";
+import { useState } from "react";
 import type { ReactNode } from "react";
+import { accessProfiles, modulesForProfile } from "@/lib/access-control";
+import type { AccessProfileId } from "@/lib/access-control";
 
 export const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, active: true },
@@ -53,6 +56,19 @@ export function AppShell({
   activeModule: string;
   onModuleChange: (module: string) => void;
 }) {
+  const [profileId, setProfileId] = useState<AccessProfileId>("diretoria");
+  const allowedModules = modulesForProfile(profileId);
+  const visibleNavItems = navItems.filter((item) => allowedModules.includes(item.label));
+
+  function handleProfileChange(nextProfileId: AccessProfileId) {
+    const nextAllowedModules = modulesForProfile(nextProfileId);
+    setProfileId(nextProfileId);
+
+    if (!nextAllowedModules.includes(activeModule)) {
+      onModuleChange("Dashboard");
+    }
+  }
+
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[252px_1fr]">
       <aside className="hidden border-r border-border bg-surface lg:block">
@@ -64,8 +80,20 @@ export function AppShell({
           />
           <div className="text-[11px] font-semibold uppercase leading-4 text-muted-foreground">OS</div>
         </div>
+        <div className="border-b border-border p-3">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground">Perfil de acesso</label>
+          <select
+            className="control mt-2 w-full text-xs"
+            value={profileId}
+            onChange={(event) => handleProfileChange(event.target.value as AccessProfileId)}
+          >
+            {accessProfiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>{profile.label}</option>
+            ))}
+          </select>
+        </div>
         <nav className="space-y-1 p-3">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.label === activeModule;
             return (
@@ -96,8 +124,19 @@ export function AppShell({
             Nexa OS
           </div>
         </div>
+        <div className="mt-3">
+          <select
+            className="control w-full text-xs"
+            value={profileId}
+            onChange={(event) => handleProfileChange(event.target.value as AccessProfileId)}
+          >
+            {accessProfiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>{profile.label}</option>
+            ))}
+          </select>
+        </div>
         <nav className="mt-3 flex gap-2 overflow-x-auto pb-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.label === activeModule;
             return (

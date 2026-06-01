@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { navItems } from "@/components/AppShell";
+import { accessProfiles } from "@/lib/access-control";
 import { buildContractAlerts } from "@/lib/contracts";
 import { brl, numberPt, percent } from "@/lib/metrics";
 import type {
@@ -700,6 +702,7 @@ export function ModulePage({
       />
     );
   }
+  if (module === "Configuracoes") return <SettingsPage />;
 
   return (
     <Shell title={module} description="Modulo em estruturacao para a proxima sprint do Nexa OS.">
@@ -1171,6 +1174,83 @@ function MonthlyReportPage({
               ))}
             </div>
           </div>
+        </div>
+      </div>
+    </Shell>
+  );
+}
+
+function SettingsPage() {
+  const moduleLabels = navItems.map((item) => item.label);
+  const totalGrants = accessProfiles.reduce((sum, profile) => sum + profile.modules.length, 0);
+
+  return (
+    <Shell
+      title="Configuracoes"
+      description="Governanca do Nexa OS com perfis, matriz de acesso e visibilidade de modulos por area."
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Perfis" value={numberPt(accessProfiles.length)} />
+        <Kpi label="Modulos governados" value={numberPt(moduleLabels.length)} />
+        <Kpi label="Permissoes ativas" value={numberPt(totalGrants)} tone="success" />
+        <Kpi label="Perfil master" value="Diretoria" />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
+        <div className="space-y-3">
+          {accessProfiles.map((profile) => (
+            <div key={profile.id} className="panel p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-bold uppercase text-primary">{profile.label}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{profile.description}</p>
+                </div>
+                <Badge>{numberPt(profile.modules.length)}</Badge>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {profile.modules.slice(0, 8).map((moduleName) => (
+                  <span key={moduleName} className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+                    {moduleName}
+                  </span>
+                ))}
+                {profile.modules.length > 8 ? (
+                  <span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
+                    +{profile.modules.length - 8}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="panel overflow-x-auto p-5">
+          <h2 className="font-bold uppercase">Matriz de acesso</h2>
+          <p className="mt-1 text-sm text-muted-foreground">A navegação lateral respeita o perfil selecionado e exibe apenas os modulos autorizados.</p>
+          <table className="mt-4 w-full min-w-[860px] text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase text-muted-foreground">
+                <th className="border-b border-border py-3 pr-3">Modulo</th>
+                {accessProfiles.map((profile) => (
+                  <th key={profile.id} className="border-b border-border px-2 py-3 text-center">{profile.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {moduleLabels.map((moduleName) => (
+                <tr key={moduleName}>
+                  <td className="border-b border-border py-3 pr-3 font-semibold text-primary">{moduleName}</td>
+                  {accessProfiles.map((profile) => {
+                    const isAllowed = profile.modules.includes(moduleName);
+                    return (
+                      <td key={`${profile.id}-${moduleName}`} className="border-b border-border px-2 py-3 text-center">
+                        <span className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-[11px] font-bold ${isAllowed ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
+                          {isAllowed ? "Sim" : "-"}
+                        </span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </Shell>
