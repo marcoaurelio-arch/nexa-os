@@ -393,3 +393,20 @@ A especificacao das 23 bases tambem existe em codigo em `lib/notion/schema.ts`. 
 - manter o PostgreSQL/Supabase como fonte oficial dos dados.
 
 A migration `009_reporting_access_notion.sql` cria as tabelas de apoio para esse fluxo.
+
+## 5. Verificacao de conexao
+
+A tela `Configuracoes` chama:
+
+```txt
+GET /api/health/notion
+```
+
+O endpoint valida `NOTION_API_KEY` ou `NOTION_TOKEN`, confirma `NOTION_PARENT_PAGE_ID` e consulta `GET /v1/users/me` da API oficial do Notion. Quando retornar `ok`, o ambiente esta pronto para testar o `dryRun` e depois criar as bases.
+
+O plano de criacao continua disponivel em:
+
+```txt
+GET /api/notion/databases
+POST /api/notion/databases
+```

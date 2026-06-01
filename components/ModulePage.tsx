@@ -479,6 +479,16 @@ type SupabaseHealth = {
   message?: string;
 };
 
+type NotionHealth = {
+  status: "ok" | "not_configured" | "error";
+  configured: boolean;
+  checkedAt: string;
+  databaseCount: number;
+  parentPageConfigured: boolean;
+  botName?: string;
+  message?: string;
+};
+
 export function ModulePage({
   module,
   enterprises,
@@ -1204,7 +1214,9 @@ function SettingsPage({
   const totalGrants = accessProfiles.reduce((sum, profile) => sum + profile.modules.length, 0);
   const supabaseEnvReady = hasSupabaseEnv();
   const [health, setHealth] = useState<SupabaseHealth | null>(null);
+  const [notionHealth, setNotionHealth] = useState<NotionHealth | null>(null);
   const [checkingHealth, setCheckingHealth] = useState(false);
+  const [checkingNotionHealth, setCheckingNotionHealth] = useState(false);
   const setupSteps = [
     { label: "Projeto Supabase criado", status: "manual" },
     { label: "Migrations 001 a 009 aplicadas", status: "manual" },
@@ -1214,6 +1226,7 @@ function SettingsPage({
     { label: "Notion preparado para sync", status: "manual" }
   ];
   const healthStatus = health?.status ?? "nao verificado";
+  const notionHealthStatus = notionHealth?.status ?? "nao verificado";
 
   async function checkSupabaseHealth() {
     setCheckingHealth(true);
@@ -1234,8 +1247,30 @@ function SettingsPage({
     }
   }
 
+  async function checkNotionHealth() {
+    setCheckingNotionHealth(true);
+
+    try {
+      const response = await fetch("/api/health/notion", { cache: "no-store" });
+      const payload = await response.json() as NotionHealth;
+      setNotionHealth(payload);
+    } catch (error) {
+      setNotionHealth({
+        status: "error",
+        configured: false,
+        checkedAt: new Date().toISOString(),
+        databaseCount: 23,
+        parentPageConfigured: false,
+        message: error instanceof Error ? error.message : "Falha ao verificar Notion"
+      });
+    } finally {
+      setCheckingNotionHealth(false);
+    }
+  }
+
   useEffect(() => {
     void checkSupabaseHealth();
+    void checkNotionHealth();
   }, []);
 
   return (
@@ -1267,6 +1302,25 @@ function SettingsPage({
           <Mini label="Ultima checagem" value={health?.checkedAt ? new Date(health.checkedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "-"} />
         </div>
         {health?.message ? <p className="mt-3 text-sm text-muted-foreground">{health.message}</p> : null}
+      </div>
+      <div className="panel p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="font-bold uppercase">Saude do Notion</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Verificacao da conexao Notion e do plano de criacao das 23 bases.</p>
+          </div>
+          <button className="control inline-flex items-center justify-center" onClick={() => void checkNotionHealth()} disabled={checkingNotionHealth}>
+            {checkingNotionHealth ? "Verificando" : "Verificar Notion"}
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <Mini label="Status" value={notionHealthStatus} />
+          <Mini label="Token" value={notionHealth?.configured ? "Configurado" : "Pendente"} />
+          <Mini label="Bases planejadas" value={notionHealth?.databaseCount === undefined ? "23" : numberPt(notionHealth.databaseCount)} />
+          <Mini label="Pagina mae" value={notionHealth?.parentPageConfigured ? "Configurada" : "Pendente"} />
+        </div>
+        {notionHealth?.botName ? <p className="mt-3 text-sm text-muted-foreground">Conexao: {notionHealth.botName}</p> : null}
+        {notionHealth?.message ? <p className="mt-1 text-sm text-muted-foreground">{notionHealth.message}</p> : null}
       </div>
       <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
         <div className="panel p-5">
