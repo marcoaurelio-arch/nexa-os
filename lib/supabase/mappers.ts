@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
@@ -14,6 +14,7 @@ type CommercialLeadRow = Database["public"]["Tables"]["comercial_leads"]["Row"];
 type VacancyRow = Database["public"]["Tables"]["vacancia"]["Row"];
 type UtilityReadingRow = Database["public"]["Tables"]["consumos"]["Row"];
 type ServiceOrderRow = Database["public"]["Tables"]["ordens_servico"]["Row"];
+type DocumentRow = Database["public"]["Tables"]["documentos"]["Row"];
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -218,5 +219,21 @@ export function mapServiceOrderRow(row: ServiceOrderRow): ServiceOrder {
     fotosAntes: row.fotos_antes ?? "",
     fotosDepois: row.fotos_depois ?? "",
     descricao: row.descricao ?? ""
+  };
+}
+
+export function mapDocumentRow(row: DocumentRow): DocumentRecord {
+  return {
+    id: row.id,
+    lojaId: row.loja_id,
+    empreendimentoId: row.empreendimento_id,
+    categoria: row.categoria as DocumentRecord["categoria"],
+    titulo: row.titulo,
+    status: row.status as DocumentRecord["status"],
+    vencimento: row.vencimento ?? "",
+    pastaDriveUrl: row.pasta_drive_url ?? "",
+    arquivoUrl: row.arquivo_url ?? "",
+    responsavel: row.responsavel ?? "",
+    observacoes: row.observacoes ?? ""
   };
 }

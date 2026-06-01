@@ -3,6 +3,7 @@ import {
   mapCommercialLeadRow,
   mapContractRow,
   mapDelinquencyRow,
+  mapDocumentRow,
   mapEnterpriseRow,
   mapFppRow,
   mapPayableRow,
@@ -14,7 +15,7 @@ import {
   mapUtilityReadingRow,
   mapVacancyRow
 } from "@/lib/supabase/mappers";
-import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
@@ -30,6 +31,7 @@ export type AssetData = {
   vacancyRecords: VacancyRecord[];
   utilityReadings: UtilityReading[];
   serviceOrders: ServiceOrder[];
+  documentRecords: DocumentRecord[];
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -63,7 +65,8 @@ export function loadLocalAssetData(): AssetData | null {
       commercialLeads: Array.isArray(parsed.commercialLeads) ? parsed.commercialLeads : [],
       vacancyRecords: Array.isArray(parsed.vacancyRecords) ? parsed.vacancyRecords : [],
       utilityReadings: Array.isArray(parsed.utilityReadings) ? parsed.utilityReadings : [],
-      serviceOrders: Array.isArray(parsed.serviceOrders) ? parsed.serviceOrders : []
+      serviceOrders: Array.isArray(parsed.serviceOrders) ? parsed.serviceOrders : [],
+      documentRecords: Array.isArray(parsed.documentRecords) ? parsed.documentRecords : []
     };
   } catch {
     return null;
@@ -95,7 +98,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -160,7 +163,12 @@ export async function fetchAssetData(): Promise<AssetData | null> {
       .from("ordens_servico")
       .select("*")
       .is("deleted_at", null)
-      .order("prazo", { ascending: true })
+      .order("prazo", { ascending: true }),
+    client
+      .from("documentos")
+      .select("*")
+      .is("deleted_at", null)
+      .order("vencimento", { ascending: true })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
@@ -176,6 +184,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
   if (vacancyResult.error) throw vacancyResult.error;
   if (utilityResult.error) throw utilityResult.error;
   if (serviceOrderResult.error) throw serviceOrderResult.error;
+  if (documentResult.error) throw documentResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
@@ -190,7 +199,8 @@ export async function fetchAssetData(): Promise<AssetData | null> {
     commercialLeads: commercialResult.data.map(mapCommercialLeadRow),
     vacancyRecords: vacancyResult.data.map(mapVacancyRow),
     utilityReadings: utilityResult.data.map(mapUtilityReadingRow),
-    serviceOrders: serviceOrderResult.data.map(mapServiceOrderRow)
+    serviceOrders: serviceOrderResult.data.map(mapServiceOrderRow),
+    documentRecords: documentResult.data.map(mapDocumentRow)
   };
 }
 
@@ -579,6 +589,36 @@ export async function saveServiceOrder(order: ServiceOrder) {
 
   if (error) throw error;
   return mapServiceOrderRow(data);
+}
+
+export async function saveDocumentRecord(record: DocumentRecord) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return record;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("documentos")
+    .upsert({
+      ...(isUuid(record.id) ? { id: record.id } : {}),
+      loja_id: record.lojaId,
+      empreendimento_id: record.empreendimentoId,
+      categoria: record.categoria,
+      titulo: record.titulo,
+      status: record.status,
+      vencimento: record.vencimento || null,
+      pasta_drive_url: record.pastaDriveUrl || null,
+      arquivo_url: record.arquivoUrl || null,
+      responsavel: record.responsavel || null,
+      observacoes: record.observacoes || null
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapDocumentRow(data);
 }
 
 function isUuid(value: string) {

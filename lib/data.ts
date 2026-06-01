@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "./types";
+import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -665,6 +665,100 @@ export const serviceOrders: ServiceOrder[] = [
     fotosAntes: "drive://nexa/os-1028/antes",
     fotosDepois: "drive://nexa/os-1028/depois",
     descricao: "Substituicao de adesivo de vitrine e padronizacao de fachada."
+  }
+];
+
+export const documentRecords: DocumentRecord[] = [
+  {
+    id: "doc-vv-01-contrato",
+    lojaId: "vv-01",
+    empreendimentoId: "villa-viseu",
+    categoria: "contratos",
+    titulo: "Contrato de locacao - Gastro Prime",
+    status: "vigente",
+    vencimento: "2026-11-30",
+    pastaDriveUrl: "drive://nexa/documentos/villa-viseu/vv-01/contratos",
+    arquivoUrl: "drive://nexa/documentos/villa-viseu/vv-01/contratos/contrato.pdf",
+    responsavel: "Juridico",
+    observacoes: "Contrato principal assinado e validado."
+  },
+  {
+    id: "doc-vv-01-seguro",
+    lojaId: "vv-01",
+    empreendimentoId: "villa-viseu",
+    categoria: "seguros",
+    titulo: "Seguro empresarial - Gastro Prime",
+    status: "vencendo",
+    vencimento: "2026-07-15",
+    pastaDriveUrl: "drive://nexa/documentos/villa-viseu/vv-01/seguros",
+    arquivoUrl: "drive://nexa/documentos/villa-viseu/vv-01/seguros/apolice.pdf",
+    responsavel: "Administrativo",
+    observacoes: "Solicitar renovacao com 30 dias de antecedencia."
+  },
+  {
+    id: "doc-vv-02-avcb",
+    lojaId: "vv-02",
+    empreendimentoId: "villa-viseu",
+    categoria: "avcb",
+    titulo: "AVCB loja Clinica Vida",
+    status: "vigente",
+    vencimento: "2027-03-20",
+    pastaDriveUrl: "drive://nexa/documentos/villa-viseu/vv-02/avcb",
+    arquivoUrl: "drive://nexa/documentos/villa-viseu/vv-02/avcb/avcb.pdf",
+    responsavel: "Operacoes",
+    observacoes: "Documento conferido na ultima vistoria."
+  },
+  {
+    id: "doc-vv-03-projeto",
+    lojaId: "vv-03",
+    empreendimentoId: "villa-viseu",
+    categoria: "projetos",
+    titulo: "Projeto preliminar de implantacao",
+    status: "pendente",
+    vencimento: "",
+    pastaDriveUrl: "drive://nexa/documentos/villa-viseu/vv-03/projetos",
+    arquivoUrl: "",
+    responsavel: "Comercial",
+    observacoes: "Aguardando operador definir layout final."
+  },
+  {
+    id: "doc-pn-01-alvara",
+    lojaId: "pn-01",
+    empreendimentoId: "piazza-nicomedes",
+    categoria: "alvaras",
+    titulo: "Alvara de funcionamento - Cafe Jardim",
+    status: "vencendo",
+    vencimento: "2026-08-10",
+    pastaDriveUrl: "drive://nexa/documentos/piazza-nicomedes/pn-01/alvaras",
+    arquivoUrl: "drive://nexa/documentos/piazza-nicomedes/pn-01/alvaras/alvara.pdf",
+    responsavel: "Administrativo",
+    observacoes: "Renovacao prevista para o inicio da operacao."
+  },
+  {
+    id: "doc-br-01-vistoria",
+    lojaId: "br-01",
+    empreendimentoId: "bluemall-rondon",
+    categoria: "vistorias",
+    titulo: "Relatorio de vistoria anual",
+    status: "vigente",
+    vencimento: "2027-01-15",
+    pastaDriveUrl: "drive://nexa/documentos/bluemall-rondon/br-01/vistorias",
+    arquivoUrl: "drive://nexa/documentos/bluemall-rondon/br-01/vistorias/relatorio.pdf",
+    responsavel: "Operacoes",
+    observacoes: "Sem pendencias estruturais."
+  },
+  {
+    id: "doc-bc-01-fotos",
+    lojaId: "bc-01",
+    empreendimentoId: "bluemall-centro",
+    categoria: "fotos",
+    titulo: "Fotos de fachada e loja",
+    status: "vigente",
+    vencimento: "",
+    pastaDriveUrl: "drive://nexa/documentos/bluemall-centro/bc-01/fotos",
+    arquivoUrl: "drive://nexa/documentos/bluemall-centro/bc-01/fotos/fachada",
+    responsavel: "Marketing",
+    observacoes: "Acervo atualizado apos troca de comunicacao visual."
   }
 ];
 

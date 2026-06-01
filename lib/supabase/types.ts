@@ -415,6 +415,38 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["ordens_servico"]["Insert"]>;
       };
+      documentos: {
+        Row: {
+          id: string;
+          loja_id: string;
+          empreendimento_id: string;
+          categoria: string;
+          titulo: string;
+          status: string;
+          vencimento: string | null;
+          pasta_drive_url: string | null;
+          arquivo_url: string | null;
+          responsavel: string | null;
+          observacoes: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loja_id: string;
+          empreendimento_id: string;
+          categoria: string;
+          titulo: string;
+          status?: string;
+          vencimento?: string | null;
+          pasta_drive_url?: string | null;
+          arquivo_url?: string | null;
+          responsavel?: string | null;
+          observacoes?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["documentos"]["Insert"]>;
+      };
     };
   };
 };

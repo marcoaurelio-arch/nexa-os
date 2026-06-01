@@ -194,6 +194,34 @@ export type UtilityReading = {
   status: UtilityStatus;
 };
 
+export type DocumentCategory =
+  | "contratos"
+  | "aditivos"
+  | "garantias"
+  | "seguros"
+  | "alvaras"
+  | "avcb"
+  | "vistorias"
+  | "licencas"
+  | "plantas"
+  | "projetos"
+  | "fotos";
+export type DocumentStatus = "pendente" | "vigente" | "vencendo" | "vencido" | "dispensado";
+
+export type DocumentRecord = {
+  id: string;
+  lojaId: string;
+  empreendimentoId: string;
+  categoria: DocumentCategory;
+  titulo: string;
+  status: DocumentStatus;
+  vencimento: string;
+  pastaDriveUrl: string;
+  arquivoUrl: string;
+  responsavel: string;
+  observacoes: string;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;

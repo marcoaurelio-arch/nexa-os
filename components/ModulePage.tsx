@@ -13,6 +13,9 @@ import type {
   Contract,
   ContractStatus,
   DelinquencyRecord,
+  DocumentCategory,
+  DocumentRecord,
+  DocumentStatus,
   Enterprise,
   FinancialStatus,
   FppRecord,
@@ -50,6 +53,7 @@ type ModulePageProps = {
   vacancyRecords: VacancyRecord[];
   utilityReadings: UtilityReading[];
   serviceOrders: ServiceOrder[];
+  documentRecords: DocumentRecord[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -66,6 +70,7 @@ type ModulePageProps = {
   onSaveVacancyRecord: (record: VacancyRecord) => void | Promise<void>;
   onSaveUtilityReading: (reading: UtilityReading) => void | Promise<void>;
   onSaveServiceOrder: (order: ServiceOrder) => void | Promise<void>;
+  onSaveDocumentRecord: (record: DocumentRecord) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -180,6 +185,30 @@ const serviceOrderStatusLabel: Record<ServiceOrderStatus, string> = {
 
 const serviceOrderStatuses: ServiceOrderStatus[] = ["aberta", "em_execucao", "aguardando_terceiro", "concluida"];
 const serviceOrderCategories: ServiceOrderCategory[] = ["eletrica", "hidraulica", "civil", "limpeza", "seguranca", "jardinagem", "comunicacao_visual", "ar_condicionado"];
+
+const documentCategoryLabel: Record<DocumentCategory, string> = {
+  contratos: "Contratos",
+  aditivos: "Aditivos",
+  garantias: "Garantias",
+  seguros: "Seguros",
+  alvaras: "Alvaras",
+  avcb: "AVCB",
+  vistorias: "Vistorias",
+  licencas: "Licencas",
+  plantas: "Plantas",
+  projetos: "Projetos",
+  fotos: "Fotos"
+};
+
+const documentStatusLabel: Record<DocumentStatus, string> = {
+  pendente: "Pendente",
+  vigente: "Vigente",
+  vencendo: "Vencendo",
+  vencido: "Vencido",
+  dispensado: "Dispensado"
+};
+
+const documentCategories: DocumentCategory[] = ["contratos", "aditivos", "garantias", "seguros", "alvaras", "avcb", "vistorias", "licencas", "plantas", "projetos", "fotos"];
 
 const enterpriseSchema = z.object({
   id: z.string().min(1),
@@ -361,6 +390,20 @@ const serviceOrderSchema = z.object({
   descricao: z.string().trim().min(2, "Informe a descricao.")
 });
 
+const documentSchema = z.object({
+  id: z.string().min(1),
+  lojaId: z.string().trim().min(1, "Selecione a loja."),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  categoria: z.enum(["contratos", "aditivos", "garantias", "seguros", "alvaras", "avcb", "vistorias", "licencas", "plantas", "projetos", "fotos"]),
+  titulo: z.string().trim().min(2, "Informe o titulo."),
+  status: z.enum(["pendente", "vigente", "vencendo", "vencido", "dispensado"]),
+  vencimento: z.string().trim(),
+  pastaDriveUrl: z.string().trim().min(2, "Informe a pasta do Drive."),
+  arquivoUrl: z.string().trim(),
+  responsavel: z.string().trim().min(2, "Informe o responsavel."),
+  observacoes: z.string().trim()
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
@@ -374,6 +417,7 @@ type CommercialLeadFormValues = z.infer<typeof commercialLeadSchema>;
 type VacancyFormValues = z.infer<typeof vacancySchema>;
 type UtilityReadingFormValues = z.infer<typeof utilityReadingSchema>;
 type ServiceOrderFormValues = z.infer<typeof serviceOrderSchema>;
+type DocumentFormValues = z.infer<typeof documentSchema>;
 
 export function ModulePage({
   module,
@@ -390,6 +434,7 @@ export function ModulePage({
   vacancyRecords,
   utilityReadings,
   serviceOrders,
+  documentRecords,
   dataSource,
   syncError,
   onResetLocalData,
@@ -405,7 +450,8 @@ export function ModulePage({
   onSaveCommercialLead,
   onSaveVacancyRecord,
   onSaveUtilityReading,
-  onSaveServiceOrder
+  onSaveServiceOrder,
+  onSaveDocumentRecord
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -541,6 +587,16 @@ export function ModulePage({
         stores={stores}
         readings={utilityReadings}
         onSaveReading={onSaveUtilityReading}
+      />
+    );
+  }
+  if (module === "Documentos") {
+    return (
+      <DocumentsPage
+        enterprises={enterprises}
+        stores={stores}
+        records={documentRecords}
+        onSaveRecord={onSaveDocumentRecord}
       />
     );
   }
@@ -2154,6 +2210,128 @@ function UtilitiesPage({
   );
 }
 
+function DocumentsPage({
+  enterprises,
+  stores,
+  records,
+  onSaveRecord
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  records: DocumentRecord[];
+  onSaveRecord: (record: DocumentRecord) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [editingRecord, setEditingRecord] = useState<DocumentRecord | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedRecords = records.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const expiringRecords = selectedRecords.filter((record) => documentEffectiveStatus(record) === "vencendo");
+  const expiredRecords = selectedRecords.filter((record) => documentEffectiveStatus(record) === "vencido");
+  const driveFolders = new Set(selectedRecords.map((record) => record.pastaDriveUrl).filter(Boolean)).size;
+  const firstStore = selectedStores[0] ?? stores[0];
+  const categoryRows = documentCategories.map((category) => ({
+    category,
+    total: selectedRecords.filter((record) => record.categoria === category).length,
+    pending: selectedRecords.filter((record) => record.categoria === category && documentEffectiveStatus(record) === "pendente").length
+  }));
+
+  return (
+    <Shell
+      title="Gestao Documental"
+      description="Estrutura documental por loja com pastas Google Drive, vencimentos, status e responsaveis."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => setEditingRecord(emptyDocumentRecord(firstStore))}>
+            <Plus className="h-4 w-4" />
+            Documento
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Documentos" value={numberPt(selectedRecords.length)} />
+        <Kpi label="Pastas Drive" value={numberPt(driveFolders)} />
+        <Kpi label="Vencendo" value={numberPt(expiringRecords.length)} tone={expiringRecords.length ? "danger" : "success"} />
+        <Kpi label="Vencidos" value={numberPt(expiredRecords.length)} tone={expiredRecords.length ? "danger" : "success"} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div className="space-y-3">
+          <DataTable
+            columns={["Loja", "Categoria", "Titulo", "Status", "Vencimento", "Responsavel", "Drive", "Acoes"]}
+            rows={selectedRecords.map((record) => [
+              storeLabel(stores, record.lojaId),
+              documentCategoryLabel[record.categoria],
+              record.titulo,
+              documentStatusLabel[documentEffectiveStatus(record)],
+              record.vencimento || "-",
+              record.responsavel,
+              record.pastaDriveUrl ? "Pasta vinculada" : "Pendente",
+              "Editar"
+            ])}
+            onAction={(rowIndex) => setEditingRecord(selectedRecords[rowIndex])}
+          />
+          <div>
+            <h2 className="mb-3 font-bold uppercase">Vencimentos e pendencias</h2>
+            <DataTable
+              columns={["Loja", "Documento", "Status", "Prazo", "Responsavel"]}
+              rows={selectedRecords
+                .filter((record) => ["pendente", "vencendo", "vencido"].includes(documentEffectiveStatus(record)))
+                .map((record) => [
+                  storeLabel(stores, record.lojaId),
+                  record.titulo,
+                  documentStatusLabel[documentEffectiveStatus(record)],
+                  record.vencimento || "Sem prazo",
+                  record.responsavel
+                ])}
+            />
+          </div>
+        </div>
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Estrutura por loja</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Bases padronizadas para contratos, aditivos, garantias, seguros, alvaras, AVCB, vistorias, licencas, plantas, projetos e fotos.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Lojas com documentos" value={numberPt(new Set(selectedRecords.map((record) => record.lojaId)).size)} />
+            <Mini label="Arquivos vinculados" value={numberPt(selectedRecords.filter((record) => record.arquivoUrl).length)} />
+            <Mini label="Categorias ativas" value={numberPt(categoryRows.filter((row) => row.total > 0).length)} />
+          </div>
+          <h3 className="mt-6 text-sm font-bold uppercase">Categorias</h3>
+          <div className="mt-3 space-y-2">
+            {categoryRows.map((row) => (
+              <div key={row.category} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span className="font-medium">{documentCategoryLabel[row.category]}</span>
+                <span className={row.pending ? "font-bold text-danger" : "font-bold text-primary"}>
+                  {row.total} docs{row.pending ? ` | ${row.pending} pend.` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {editingRecord ? (
+        <DocumentForm
+          record={editingRecord}
+          stores={stores}
+          enterprises={enterprises}
+          onClose={() => setEditingRecord(null)}
+          onSave={async (record) => {
+            await onSaveRecord(record);
+            setEditingRecord(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
 function DataTable({
   columns,
   rows,
@@ -3193,6 +3371,78 @@ function ServiceOrderForm({
   );
 }
 
+function DocumentForm({
+  record,
+  stores,
+  enterprises,
+  onClose,
+  onSave
+}: {
+  record: DocumentRecord;
+  stores: StoreType[];
+  enterprises: Enterprise[];
+  onClose: () => void;
+  onSave: (record: DocumentRecord) => void;
+}) {
+  const storeOptions = useMemo(() => stores.map((store) => store.id), [stores]);
+  const storeLabels = useMemo(
+    () => Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`])),
+    [stores]
+  );
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<DocumentFormValues>({
+    resolver: zodResolver(documentSchema),
+    defaultValues: record
+  });
+
+  return (
+    <Modal title="Documento" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect label="Loja" error={errors.lojaId?.message} options={storeOptions} optionLabels={storeLabels} {...register("lojaId")} />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormSelect
+            label="Categoria"
+            error={errors.categoria?.message}
+            options={documentCategories}
+            optionLabels={documentCategoryLabel}
+            {...register("categoria")}
+          />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={["pendente", "vigente", "vencendo", "vencido", "dispensado"]}
+            optionLabels={documentStatusLabel}
+            {...register("status")}
+          />
+          <FormInput label="Titulo" error={errors.titulo?.message} {...register("titulo")} />
+          <FormInput label="Vencimento" type="date" error={errors.vencimento?.message} {...register("vencimento")} />
+          <FormInput label="Pasta Google Drive" error={errors.pastaDriveUrl?.message} {...register("pastaDriveUrl")} />
+          <FormInput label="Arquivo" error={errors.arquivoUrl?.message} {...register("arquivoUrl")} />
+          <FormInput label="Responsavel" error={errors.responsavel?.message} {...register("responsavel")} />
+          <FormInput label="Observacoes" error={errors.observacoes?.message} {...register("observacoes")} />
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -3498,6 +3748,20 @@ function serviceOrderEvidence(order: ServiceOrder) {
   return "Pendente";
 }
 
+function documentEffectiveStatus(record: DocumentRecord): DocumentStatus {
+  if (record.status === "dispensado" || record.status === "pendente" || !record.vencimento) {
+    return record.status;
+  }
+
+  const today = new Date();
+  const dueDate = new Date(`${record.vencimento}T00:00:00`);
+  const daysToDue = daysBetween(today, dueDate);
+
+  if (dueDate < today) return "vencido";
+  if (daysToDue <= 60) return "vencendo";
+  return record.status;
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -3714,6 +3978,22 @@ function emptyServiceOrder(store: StoreType | undefined, empreendimentoId: strin
     fotosAntes: "",
     fotosDepois: "",
     descricao: "Nova ordem de servico."
+  };
+}
+
+function emptyDocumentRecord(store?: StoreType): DocumentRecord {
+  return {
+    id: crypto.randomUUID(),
+    lojaId: store?.id ?? "",
+    empreendimentoId: store?.empreendimentoId ?? "",
+    categoria: "contratos",
+    titulo: "Novo documento",
+    status: "pendente",
+    vencimento: "",
+    pastaDriveUrl: store ? `drive://nexa/documentos/${store.empreendimentoId}/${store.codigo.toLowerCase()}` : "drive://nexa/documentos",
+    arquivoUrl: "",
+    responsavel: "Administrativo",
+    observacoes: ""
   };
 }
 
