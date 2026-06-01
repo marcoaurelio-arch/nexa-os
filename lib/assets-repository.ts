@@ -8,12 +8,13 @@ import {
   mapPayableRow,
   mapReceivableRow,
   mapRevenueAuditRow,
+  mapServiceOrderRow,
   mapStoreRow,
   mapTenantRow,
   mapUtilityReadingRow,
   mapVacancyRow
 } from "@/lib/supabase/mappers";
-import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
@@ -28,6 +29,7 @@ export type AssetData = {
   commercialLeads: CommercialLead[];
   vacancyRecords: VacancyRecord[];
   utilityReadings: UtilityReading[];
+  serviceOrders: ServiceOrder[];
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -60,7 +62,8 @@ export function loadLocalAssetData(): AssetData | null {
       revenueAuditRecords: Array.isArray(parsed.revenueAuditRecords) ? parsed.revenueAuditRecords : [],
       commercialLeads: Array.isArray(parsed.commercialLeads) ? parsed.commercialLeads : [],
       vacancyRecords: Array.isArray(parsed.vacancyRecords) ? parsed.vacancyRecords : [],
-      utilityReadings: Array.isArray(parsed.utilityReadings) ? parsed.utilityReadings : []
+      utilityReadings: Array.isArray(parsed.utilityReadings) ? parsed.utilityReadings : [],
+      serviceOrders: Array.isArray(parsed.serviceOrders) ? parsed.serviceOrders : []
     };
   } catch {
     return null;
@@ -92,7 +95,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -152,7 +155,12 @@ export async function fetchAssetData(): Promise<AssetData | null> {
       .from("consumos")
       .select("*")
       .is("deleted_at", null)
-      .order("competencia", { ascending: false })
+      .order("competencia", { ascending: false }),
+    client
+      .from("ordens_servico")
+      .select("*")
+      .is("deleted_at", null)
+      .order("prazo", { ascending: true })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
@@ -167,6 +175,7 @@ export async function fetchAssetData(): Promise<AssetData | null> {
   if (commercialResult.error) throw commercialResult.error;
   if (vacancyResult.error) throw vacancyResult.error;
   if (utilityResult.error) throw utilityResult.error;
+  if (serviceOrderResult.error) throw serviceOrderResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
@@ -180,7 +189,8 @@ export async function fetchAssetData(): Promise<AssetData | null> {
     revenueAuditRecords: auditResult.data.map(mapRevenueAuditRow),
     commercialLeads: commercialResult.data.map(mapCommercialLeadRow),
     vacancyRecords: vacancyResult.data.map(mapVacancyRow),
-    utilityReadings: utilityResult.data.map(mapUtilityReadingRow)
+    utilityReadings: utilityResult.data.map(mapUtilityReadingRow),
+    serviceOrders: serviceOrderResult.data.map(mapServiceOrderRow)
   };
 }
 
@@ -536,6 +546,39 @@ export async function saveUtilityReading(reading: UtilityReading) {
 
   if (error) throw error;
   return mapUtilityReadingRow(data);
+}
+
+export async function saveServiceOrder(order: ServiceOrder) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return order;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("ordens_servico")
+    .upsert({
+      ...(isUuid(order.id) ? { id: order.id } : {}),
+      empreendimento_id: order.empreendimentoId,
+      loja_id: isUuid(order.lojaId) ? order.lojaId : null,
+      local: order.local,
+      categoria: order.categoria,
+      prioridade: order.prioridade,
+      status: order.status,
+      responsavel: order.responsavel || null,
+      prazo: order.prazo,
+      custo_previsto: order.custoPrevisto,
+      custo_realizado: order.custoRealizado,
+      fotos_antes: order.fotosAntes || null,
+      fotos_depois: order.fotosDepois || null,
+      descricao: order.descricao || null
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapServiceOrderRow(data);
 }
 
 function isUuid(value: string) {

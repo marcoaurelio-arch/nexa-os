@@ -377,6 +377,44 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["consumos"]["Insert"]>;
       };
+      ordens_servico: {
+        Row: {
+          id: string;
+          empreendimento_id: string;
+          loja_id: string | null;
+          local: string;
+          categoria: string;
+          prioridade: string;
+          status: string;
+          responsavel: string | null;
+          prazo: string;
+          custo_previsto: number;
+          custo_realizado: number;
+          fotos_antes: string | null;
+          fotos_depois: string | null;
+          descricao: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          empreendimento_id: string;
+          loja_id?: string | null;
+          local: string;
+          categoria: string;
+          prioridade?: string;
+          status?: string;
+          responsavel?: string | null;
+          prazo: string;
+          custo_previsto?: number;
+          custo_realizado?: number;
+          fotos_antes?: string | null;
+          fotos_depois?: string | null;
+          descricao?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["ordens_servico"]["Insert"]>;
+      };
     };
   };
 };

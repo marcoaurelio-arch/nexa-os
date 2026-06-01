@@ -13,6 +13,7 @@ import {
   payables as seedPayables,
   receivables as seedReceivables,
   revenueAuditRecords as seedRevenueAuditRecords,
+  serviceOrders as seedServiceOrders,
   stores as seedStores,
   tenants as seedTenants,
   utilityReadings as seedUtilityReadings,
@@ -31,12 +32,13 @@ import {
   savePayable,
   saveReceivable,
   saveRevenueAuditRecord,
+  saveServiceOrder,
   saveStore,
   saveTenant,
   saveUtilityReading,
   saveVacancyRecord
 } from "@/lib/assets-repository";
-import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, Enterprise, FppRecord, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 
 export function NexaWorkspace() {
   const [activeModule, setActiveModule] = useState("Dashboard");
@@ -52,6 +54,7 @@ export function NexaWorkspace() {
   const [commercialLeadRows, setCommercialLeadRows] = useState<CommercialLead[]>(seedCommercialLeads);
   const [vacancyRows, setVacancyRows] = useState<VacancyRecord[]>(seedVacancyRecords);
   const [utilityRows, setUtilityRows] = useState<UtilityReading[]>(seedUtilityReadings);
+  const [serviceOrderRows, setServiceOrderRows] = useState<ServiceOrder[]>(seedServiceOrders);
   const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
   const [syncError, setSyncError] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
@@ -73,6 +76,7 @@ export function NexaWorkspace() {
       setCommercialLeadRows(mergeSeedRows(seedCommercialLeads, localData.commercialLeads));
       setVacancyRows(mergeSeedRows(seedVacancyRecords, localData.vacancyRecords));
       setUtilityRows(mergeSeedRows(seedUtilityReadings, localData.utilityReadings));
+      setServiceOrderRows(mergeSeedRows(seedServiceOrders, localData.serviceOrders));
     }
     setStorageReady(true);
 
@@ -91,6 +95,7 @@ export function NexaWorkspace() {
         setCommercialLeadRows(data.commercialLeads);
         setVacancyRows(data.vacancyRecords);
         setUtilityRows(data.utilityReadings);
+        setServiceOrderRows(data.serviceOrders);
         setDataSource("supabase");
       })
       .catch((error: unknown) => {
@@ -116,15 +121,16 @@ export function NexaWorkspace() {
         revenueAuditRecords: revenueAuditRows,
         commercialLeads: commercialLeadRows,
         vacancyRecords: vacancyRows,
-        utilityReadings: utilityRows
+        utilityReadings: utilityRows,
+        serviceOrders: serviceOrderRows
       });
     }
-  }, [commercialLeadRows, contractRows, dataSource, delinquencyRows, enterpriseRows, fppRows, payableRows, receivableRows, revenueAuditRows, storageReady, storeRows, tenantRows, utilityRows, vacancyRows]);
+  }, [commercialLeadRows, contractRows, dataSource, delinquencyRows, enterpriseRows, fppRows, payableRows, receivableRows, revenueAuditRows, serviceOrderRows, storageReady, storeRows, tenantRows, utilityRows, vacancyRows]);
 
   return (
     <AppShell activeModule={activeModule} onModuleChange={setActiveModule}>
       {activeModule === "Dashboard" ? (
-        <Dashboard enterpriseRows={enterpriseRows} storeRows={storeRows} tenantRows={tenantRows} contractRows={contractRows} />
+        <Dashboard enterpriseRows={enterpriseRows} storeRows={storeRows} tenantRows={tenantRows} contractRows={contractRows} serviceOrderRows={serviceOrderRows} />
       ) : (
         <ModulePage
           module={activeModule}
@@ -140,6 +146,7 @@ export function NexaWorkspace() {
           commercialLeads={commercialLeadRows}
           vacancyRecords={vacancyRows}
           utilityReadings={utilityRows}
+          serviceOrders={serviceOrderRows}
           dataSource={dataSource}
           syncError={syncError}
           onResetLocalData={() => {
@@ -156,6 +163,7 @@ export function NexaWorkspace() {
             setCommercialLeadRows(seedCommercialLeads);
             setVacancyRows(seedVacancyRecords);
             setUtilityRows(seedUtilityReadings);
+            setServiceOrderRows(seedServiceOrders);
             setDataSource("mock");
             setSyncError(null);
           }}
@@ -289,6 +297,17 @@ export function NexaWorkspace() {
             setUtilityRows((current) => {
               const exists = current.some((item) => item.id === reading.id);
               return exists ? current.map((item) => item.id === reading.id ? saved : item) : [saved, ...current];
+            });
+          }}
+          onSaveServiceOrder={async (order) => {
+            const saved = await saveServiceOrder(order).catch((error: unknown) => {
+              setSyncError(error instanceof Error ? error.message : "Falha ao salvar ordem de servico");
+              return order;
+            });
+
+            setServiceOrderRows((current) => {
+              const exists = current.some((item) => item.id === order.id);
+              return exists ? current.map((item) => item.id === order.id ? saved : item) : [saved, ...current];
             });
           }}
         />

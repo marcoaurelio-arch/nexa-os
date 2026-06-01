@@ -27,7 +27,7 @@ import {
 import { buildContractAlerts } from "@/lib/contracts";
 import { contracts, enterprises, serviceOrders, tenants } from "@/lib/data";
 import { brl, chartRows, filterByEnterprise, getDashboardMetrics, numberPt, percent } from "@/lib/metrics";
-import type { Contract, Enterprise, Store, Tenant } from "@/lib/types";
+import type { Contract, Enterprise, ServiceOrder, Store, Tenant } from "@/lib/types";
 
 type MetricCardProps = {
   label: string;
@@ -68,16 +68,18 @@ export function Dashboard({
   enterpriseRows = enterprises,
   storeRows,
   tenantRows = tenants,
-  contractRows = contracts
+  contractRows = contracts,
+  serviceOrderRows = serviceOrders
 }: {
   enterpriseRows?: Enterprise[];
   storeRows: Store[];
   tenantRows?: Tenant[];
   contractRows?: Contract[];
+  serviceOrderRows?: ServiceOrder[];
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
   const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows), [enterpriseId, enterpriseRows, storeRows]);
-  const filteredOrders = filterByEnterprise(serviceOrders, enterpriseId);
+  const filteredOrders = filterByEnterprise(serviceOrderRows, enterpriseId);
   const filteredAlerts = filterByEnterprise(buildContractAlerts(contractRows, storeRows, tenantRows), enterpriseId);
   const charts = chartRows(enterpriseRows, storeRows);
 
@@ -250,8 +252,8 @@ export function Dashboard({
                           OS
                         </span>
                       </td>
-                      <td className="px-4 py-3">{order.loja}</td>
-                      <td className="px-4 py-3">{order.categoria}</td>
+                      <td className="px-4 py-3">{serviceOrderLocation(order, storeRows)}</td>
+                      <td className="px-4 py-3">{serviceOrderCategoryLabel(order.categoria)}</td>
                       <td className="px-4 py-3">{order.prazo}</td>
                       <td className="px-4 py-3">
                         <PriorityBadge priority={order.prioridade} />
@@ -293,6 +295,26 @@ function PriorityBadge({ priority }: { priority: "baixa" | "media" | "alta" | "c
         : "bg-slate-100 text-slate-700";
 
   return <span className={`rounded-md px-2 py-1 text-xs font-semibold ${className}`}>{priority}</span>;
+}
+
+function serviceOrderLocation(order: ServiceOrder, stores: Store[]) {
+  const store = stores.find((item) => item.id === order.lojaId);
+  return store ? `${store.codigo} - ${store.nome}` : order.local;
+}
+
+function serviceOrderCategoryLabel(category: ServiceOrder["categoria"]) {
+  const labels: Record<ServiceOrder["categoria"], string> = {
+    eletrica: "Eletrica",
+    hidraulica: "Hidraulica",
+    civil: "Civil",
+    limpeza: "Limpeza",
+    seguranca: "Seguranca",
+    jardinagem: "Jardinagem",
+    comunicacao_visual: "Comunicacao visual",
+    ar_condicionado: "Ar condicionado"
+  };
+
+  return labels[category];
 }
 
 function AppViewport({ children }: { children: React.ReactNode }) {

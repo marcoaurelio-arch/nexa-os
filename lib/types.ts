@@ -206,14 +206,33 @@ export type Revenue = {
   pagar: number;
 };
 
+export type ServiceOrderCategory =
+  | "eletrica"
+  | "hidraulica"
+  | "civil"
+  | "limpeza"
+  | "seguranca"
+  | "jardinagem"
+  | "comunicacao_visual"
+  | "ar_condicionado";
+export type ServiceOrderPriority = "baixa" | "media" | "alta" | "critica";
+export type ServiceOrderStatus = "aberta" | "em_execucao" | "aguardando_terceiro" | "concluida";
+
 export type ServiceOrder = {
   id: string;
   empreendimentoId: string;
-  loja: string;
-  categoria: string;
-  prioridade: "baixa" | "media" | "alta" | "critica";
-  status: "aberta" | "em_execucao" | "aguardando_terceiro" | "concluida";
+  lojaId: string;
+  local: string;
+  categoria: ServiceOrderCategory;
+  prioridade: ServiceOrderPriority;
+  status: ServiceOrderStatus;
+  responsavel: string;
   prazo: string;
+  custoPrevisto: number;
+  custoRealizado: number;
+  fotosAntes: string;
+  fotosDepois: string;
+  descricao: string;
 };
 
 export type ContractAlert = {

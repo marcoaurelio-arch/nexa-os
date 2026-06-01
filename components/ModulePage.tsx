@@ -6,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { buildContractAlerts } from "@/lib/contracts";
-import { serviceOrders } from "@/lib/data";
 import { brl, numberPt, percent } from "@/lib/metrics";
 import type {
   CommercialLead,
@@ -22,6 +21,10 @@ import type {
   RevenueAuditRecord,
   RevenueAuditStatus,
   RevenueType,
+  ServiceOrder,
+  ServiceOrderCategory,
+  ServiceOrderPriority,
+  ServiceOrderStatus,
   Store as StoreType,
   Tenant,
   TenantStatus,
@@ -46,6 +49,7 @@ type ModulePageProps = {
   commercialLeads: CommercialLead[];
   vacancyRecords: VacancyRecord[];
   utilityReadings: UtilityReading[];
+  serviceOrders: ServiceOrder[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -61,6 +65,7 @@ type ModulePageProps = {
   onSaveCommercialLead: (lead: CommercialLead) => void | Promise<void>;
   onSaveVacancyRecord: (record: VacancyRecord) => void | Promise<void>;
   onSaveUtilityReading: (reading: UtilityReading) => void | Promise<void>;
+  onSaveServiceOrder: (order: ServiceOrder) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -147,6 +152,34 @@ const utilityStatusLabel: Record<UtilityStatus, string> = {
   atencao: "Atencao",
   critico: "Critico"
 };
+
+const serviceOrderCategoryLabel: Record<ServiceOrderCategory, string> = {
+  eletrica: "Eletrica",
+  hidraulica: "Hidraulica",
+  civil: "Civil",
+  limpeza: "Limpeza",
+  seguranca: "Seguranca",
+  jardinagem: "Jardinagem",
+  comunicacao_visual: "Comunicacao visual",
+  ar_condicionado: "Ar condicionado"
+};
+
+const serviceOrderPriorityLabel: Record<ServiceOrderPriority, string> = {
+  baixa: "Baixa",
+  media: "Media",
+  alta: "Alta",
+  critica: "Critica"
+};
+
+const serviceOrderStatusLabel: Record<ServiceOrderStatus, string> = {
+  aberta: "Aberta",
+  em_execucao: "Em execucao",
+  aguardando_terceiro: "Aguardando terceiro",
+  concluida: "Concluida"
+};
+
+const serviceOrderStatuses: ServiceOrderStatus[] = ["aberta", "em_execucao", "aguardando_terceiro", "concluida"];
+const serviceOrderCategories: ServiceOrderCategory[] = ["eletrica", "hidraulica", "civil", "limpeza", "seguranca", "jardinagem", "comunicacao_visual", "ar_condicionado"];
 
 const enterpriseSchema = z.object({
   id: z.string().min(1),
@@ -311,6 +344,23 @@ const utilityReadingSchema = z.object({
   status: z.enum(["normal", "atencao", "critico"])
 });
 
+const serviceOrderSchema = z.object({
+  id: z.string().min(1),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  lojaId: z.string().trim(),
+  local: z.string().trim().min(2, "Informe o local."),
+  categoria: z.enum(["eletrica", "hidraulica", "civil", "limpeza", "seguranca", "jardinagem", "comunicacao_visual", "ar_condicionado"]),
+  prioridade: z.enum(["baixa", "media", "alta", "critica"]),
+  status: z.enum(["aberta", "em_execucao", "aguardando_terceiro", "concluida"]),
+  responsavel: z.string().trim().min(2, "Informe o responsavel."),
+  prazo: z.string().trim().min(8, "Informe o prazo."),
+  custoPrevisto: z.coerce.number().min(0, "Informe zero ou mais."),
+  custoRealizado: z.coerce.number().min(0, "Informe zero ou mais."),
+  fotosAntes: z.string().trim(),
+  fotosDepois: z.string().trim(),
+  descricao: z.string().trim().min(2, "Informe a descricao.")
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
@@ -323,6 +373,7 @@ type RevenueAuditFormValues = z.infer<typeof revenueAuditSchema>;
 type CommercialLeadFormValues = z.infer<typeof commercialLeadSchema>;
 type VacancyFormValues = z.infer<typeof vacancySchema>;
 type UtilityReadingFormValues = z.infer<typeof utilityReadingSchema>;
+type ServiceOrderFormValues = z.infer<typeof serviceOrderSchema>;
 
 export function ModulePage({
   module,
@@ -338,6 +389,7 @@ export function ModulePage({
   commercialLeads,
   vacancyRecords,
   utilityReadings,
+  serviceOrders,
   dataSource,
   syncError,
   onResetLocalData,
@@ -352,7 +404,8 @@ export function ModulePage({
   onSaveRevenueAuditRecord,
   onSaveCommercialLead,
   onSaveVacancyRecord,
-  onSaveUtilityReading
+  onSaveUtilityReading,
+  onSaveServiceOrder
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -439,7 +492,16 @@ export function ModulePage({
       />
     );
   }
-  if (module === "Operacoes") return <OperationsPage />;
+  if (module === "Operacoes") {
+    return (
+      <OperationsPage
+        enterprises={enterprises}
+        stores={stores}
+        serviceOrders={serviceOrders}
+        onSaveServiceOrder={onSaveServiceOrder}
+      />
+    );
+  }
   if (module === "Financeiro") {
     return (
       <FinancePage
@@ -1561,28 +1623,140 @@ function RevenueAuditPage({
   );
 }
 
-function OperationsPage() {
-  const lanes = ["Aberta", "Em execucao", "Aguardando terceiro", "Concluida"];
+function OperationsPage({
+  enterprises,
+  stores,
+  serviceOrders,
+  onSaveServiceOrder
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  serviceOrders: ServiceOrder[];
+  onSaveServiceOrder: (order: ServiceOrder) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [editingOrder, setEditingOrder] = useState<ServiceOrder | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedOrders = serviceOrders.filter((order) => selectedEnterpriseIds.has(order.empreendimentoId));
+  const openOrders = selectedOrders.filter((order) => order.status !== "concluida");
+  const criticalOrders = selectedOrders.filter((order) => order.prioridade === "critica" && order.status !== "concluida");
+  const plannedCost = selectedOrders.reduce((sum, order) => sum + order.custoPrevisto, 0);
+  const realizedCost = selectedOrders.reduce((sum, order) => sum + order.custoRealizado, 0);
+  const firstStore = selectedStores[0] ?? stores[0];
 
   return (
-    <Shell title="Operacoes" description="Ordens de servico, manutencao, prioridades e prazos.">
-      <div className="grid gap-3 xl:grid-cols-4">
-        {lanes.map((lane) => (
-          <div key={lane} className="panel min-h-[380px] p-4">
-            <div className="flex items-center gap-2">
-              <Wrench className="h-4 w-4 text-primary" />
-              <h2 className="font-bold uppercase">{lane}</h2>
-            </div>
-            <div className="mt-4 space-y-3">
-              {serviceOrders
-                .filter((order) => lane === "Aberta" ? order.status === "aberta" : order.status.replaceAll("_", " ") === lane.toLowerCase())
-                .map((order) => (
-                  <KanbanCard key={order.id} title={order.loja} subtitle={order.categoria} value={order.prazo} />
-                ))}
-            </div>
-          </div>
-        ))}
+    <Shell
+      title="Operacoes"
+      description="Ordens de servico, manutencao, prioridades, prazos, custos e evidencias antes/depois."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" onClick={() => setEditingOrder(emptyServiceOrder(firstStore, enterpriseId === "all" ? enterprises[0]?.id ?? "" : enterpriseId))}>
+            <Plus className="h-4 w-4" />
+            Ordem de servico
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="OS abertas" value={numberPt(openOrders.length)} tone={openOrders.length ? "danger" : "success"} />
+        <Kpi label="Criticas" value={numberPt(criticalOrders.length)} tone={criticalOrders.length ? "danger" : "success"} />
+        <Kpi label="Custo previsto" value={brl(plannedCost)} />
+        <Kpi label="Custo realizado" value={brl(realizedCost)} />
       </div>
+      <div className="grid gap-3 xl:grid-cols-4">
+        {serviceOrderStatuses.map((status) => {
+          const laneOrders = selectedOrders.filter((order) => order.status === status);
+
+          return (
+            <div key={status} className="panel min-h-[430px] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-primary" />
+                  <h2 className="font-bold uppercase">{serviceOrderStatusLabel[status]}</h2>
+                </div>
+                <span className="rounded-md bg-muted px-2 py-1 text-xs font-bold text-primary">{laneOrders.length}</span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {laneOrders.length ? (
+                  laneOrders.map((order) => (
+                    <button key={order.id} className="w-full text-left" onClick={() => setEditingOrder(order)}>
+                      <KanbanCard
+                        title={serviceOrderLocation(order, stores)}
+                        subtitle={`${serviceOrderCategoryLabel[order.categoria]} | ${serviceOrderPriorityLabel[order.prioridade]} | ${order.responsavel}`}
+                        value={`${order.prazo} | ${brl(order.custoPrevisto)}`}
+                      />
+                    </button>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border p-3 text-xs font-medium text-muted-foreground">
+                    Sem ordens nesta etapa.
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <DataTable
+          columns={["Local", "Categoria", "Prioridade", "Prazo", "Previsto", "Realizado", "Fotos", "Acoes"]}
+          rows={selectedOrders.map((order) => [
+            serviceOrderLocation(order, stores),
+            serviceOrderCategoryLabel[order.categoria],
+            serviceOrderPriorityLabel[order.prioridade],
+            order.prazo,
+            brl(order.custoPrevisto),
+            brl(order.custoRealizado),
+            serviceOrderEvidence(order),
+            "Editar"
+          ])}
+          onAction={(rowIndex) => setEditingOrder(selectedOrders[rowIndex])}
+        />
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Custos e evidencias</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Controle de responsavel, prazo, custo previsto, custo realizado e pastas de fotos antes/depois.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <Mini label="Ordens monitoradas" value={numberPt(selectedOrders.length)} />
+            <Mini label="Com foto antes" value={numberPt(selectedOrders.filter((order) => order.fotosAntes).length)} />
+            <Mini label="Com foto depois" value={numberPt(selectedOrders.filter((order) => order.fotosDepois).length)} />
+          </div>
+          <h3 className="mt-6 text-sm font-bold uppercase">Prazos criticos</h3>
+          <div className="mt-3 space-y-2">
+            {selectedOrders
+              .filter((order) => order.status !== "concluida")
+              .slice()
+              .sort((a, b) => a.prazo.localeCompare(b.prazo))
+              .slice(0, 4)
+              .map((order) => (
+                <button key={order.id} className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm" onClick={() => setEditingOrder(order)}>
+                  <p className="font-bold text-primary">{serviceOrderLocation(order, stores)}</p>
+                  <p className="text-muted-foreground">{order.prazo} | {serviceOrderCategoryLabel[order.categoria]} | {serviceOrderPriorityLabel[order.prioridade]}</p>
+                </button>
+              ))}
+          </div>
+        </div>
+      </div>
+      {editingOrder ? (
+        <ServiceOrderForm
+          order={editingOrder}
+          stores={stores}
+          enterprises={enterprises}
+          onClose={() => setEditingOrder(null)}
+          onSave={async (order) => {
+            await onSaveServiceOrder(order);
+            setEditingOrder(null);
+          }}
+        />
+      ) : null}
     </Shell>
   );
 }
@@ -2933,6 +3107,92 @@ function UtilityReadingForm({
   );
 }
 
+function ServiceOrderForm({
+  order,
+  stores,
+  enterprises,
+  onClose,
+  onSave
+}: {
+  order: ServiceOrder;
+  stores: StoreType[];
+  enterprises: Enterprise[];
+  onClose: () => void;
+  onSave: (order: ServiceOrder) => void;
+}) {
+  const storeOptions = useMemo(() => ["", ...stores.map((store) => store.id)], [stores]);
+  const storeLabels = useMemo(
+    () => ({
+      "": "Area comum / sem loja vinculada",
+      ...Object.fromEntries(stores.map((store) => [store.id, `${store.codigo} - ${store.nome}`]))
+    }),
+    [stores]
+  );
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<ServiceOrderFormValues>({
+    resolver: zodResolver(serviceOrderSchema),
+    defaultValues: order
+  });
+
+  return (
+    <Modal title="Ordem de servico" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormSelect label="Loja" error={errors.lojaId?.message} options={storeOptions} optionLabels={storeLabels} {...register("lojaId")} />
+          <FormInput label="Local" error={errors.local?.message} {...register("local")} />
+          <FormSelect
+            label="Categoria"
+            error={errors.categoria?.message}
+            options={serviceOrderCategories}
+            optionLabels={serviceOrderCategoryLabel}
+            {...register("categoria")}
+          />
+          <FormSelect
+            label="Prioridade"
+            error={errors.prioridade?.message}
+            options={["baixa", "media", "alta", "critica"]}
+            optionLabels={serviceOrderPriorityLabel}
+            {...register("prioridade")}
+          />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={serviceOrderStatuses}
+            optionLabels={serviceOrderStatusLabel}
+            {...register("status")}
+          />
+          <FormInput label="Responsavel" error={errors.responsavel?.message} {...register("responsavel")} />
+          <FormInput label="Prazo" type="date" error={errors.prazo?.message} {...register("prazo")} />
+          <FormInput label="Custo previsto" type="number" error={errors.custoPrevisto?.message} {...register("custoPrevisto")} />
+          <FormInput label="Custo realizado" type="number" error={errors.custoRealizado?.message} {...register("custoRealizado")} />
+          <FormInput label="Fotos antes" error={errors.fotosAntes?.message} {...register("fotosAntes")} />
+          <FormInput label="Fotos depois" error={errors.fotosDepois?.message} {...register("fotosDepois")} />
+          <div className="md:col-span-2">
+            <FormInput label="Descricao" error={errors.descricao?.message} {...register("descricao")} />
+          </div>
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -3226,6 +3486,18 @@ function utilityAlerts(readings: UtilityReading[], stores: StoreType[]) {
     .filter((alert): alert is { reading: UtilityReading; title: string; detail: string } => Boolean(alert));
 }
 
+function serviceOrderLocation(order: ServiceOrder, stores: StoreType[]) {
+  const store = stores.find((item) => item.id === order.lojaId);
+  return store ? `${store.codigo} - ${store.nome}` : order.local;
+}
+
+function serviceOrderEvidence(order: ServiceOrder) {
+  if (order.fotosAntes && order.fotosDepois) return "Antes e depois";
+  if (order.fotosAntes) return "Antes";
+  if (order.fotosDepois) return "Depois";
+  return "Pendente";
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -3421,6 +3693,27 @@ function emptyUtilityReading(store: StoreType | undefined, tipo: UtilityKind): U
     valor: 0,
     medidor: tipo === "energia" ? "CEMIG-" : "DMAE-",
     status: "normal"
+  };
+}
+
+function emptyServiceOrder(store: StoreType | undefined, empreendimentoId: string): ServiceOrder {
+  const resolvedEnterpriseId = store?.empreendimentoId ?? empreendimentoId;
+
+  return {
+    id: crypto.randomUUID(),
+    empreendimentoId: resolvedEnterpriseId,
+    lojaId: store?.id ?? "",
+    local: store ? `${store.codigo} - ${store.nome}` : "Area comum",
+    categoria: "eletrica",
+    prioridade: "media",
+    status: "aberta",
+    responsavel: "Operacoes",
+    prazo: new Date().toISOString().slice(0, 10),
+    custoPrevisto: 0,
+    custoRealizado: 0,
+    fotosAntes: "",
+    fotosDepois: "",
+    descricao: "Nova ordem de servico."
   };
 }
 

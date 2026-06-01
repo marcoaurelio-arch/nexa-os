@@ -586,10 +586,86 @@ export const utilityReadings: UtilityReading[] = [
 ];
 
 export const serviceOrders: ServiceOrder[] = [
-  { id: "os-1024", empreendimentoId: "villa-viseu", loja: "VV-02", categoria: "Ar condicionado", prioridade: "alta", status: "aberta", prazo: "2026-06-03" },
-  { id: "os-1025", empreendimentoId: "villa-viseu", loja: "Area comum", categoria: "Hidraulica", prioridade: "critica", status: "em_execucao", prazo: "2026-05-31" },
-  { id: "os-1026", empreendimentoId: "piazza-nicomedes", loja: "PN-01", categoria: "Civil", prioridade: "media", status: "aguardando_terceiro", prazo: "2026-06-09" },
-  { id: "os-1027", empreendimentoId: "bluemall-rondon", loja: "BR-01", categoria: "Eletrica", prioridade: "media", status: "aberta", prazo: "2026-06-05" }
+  {
+    id: "os-1024",
+    empreendimentoId: "villa-viseu",
+    lojaId: "vv-02",
+    local: "Sala tecnica da Clinica Vida",
+    categoria: "ar_condicionado",
+    prioridade: "alta",
+    status: "aberta",
+    responsavel: "Operacoes",
+    prazo: "2026-06-03",
+    custoPrevisto: 3200,
+    custoRealizado: 0,
+    fotosAntes: "drive://nexa/os-1024/antes",
+    fotosDepois: "",
+    descricao: "Ajuste preventivo em evaporadora com ruido acima do padrao."
+  },
+  {
+    id: "os-1025",
+    empreendimentoId: "villa-viseu",
+    lojaId: "",
+    local: "Area comum - bloco central",
+    categoria: "hidraulica",
+    prioridade: "critica",
+    status: "em_execucao",
+    responsavel: "Manutencao",
+    prazo: "2026-06-01",
+    custoPrevisto: 5800,
+    custoRealizado: 2100,
+    fotosAntes: "drive://nexa/os-1025/antes",
+    fotosDepois: "",
+    descricao: "Vazamento em prumada com risco de impacto em lojas vizinhas."
+  },
+  {
+    id: "os-1026",
+    empreendimentoId: "piazza-nicomedes",
+    lojaId: "pn-01",
+    local: "PN-01 - Cafe Jardim",
+    categoria: "civil",
+    prioridade: "media",
+    status: "aguardando_terceiro",
+    responsavel: "Engenharia",
+    prazo: "2026-06-09",
+    custoPrevisto: 7400,
+    custoRealizado: 0,
+    fotosAntes: "drive://nexa/os-1026/antes",
+    fotosDepois: "",
+    descricao: "Regularizacao de acabamento em fachada antes da vistoria final."
+  },
+  {
+    id: "os-1027",
+    empreendimentoId: "bluemall-rondon",
+    lojaId: "br-01",
+    local: "BR-01 - Smart Fit Hub",
+    categoria: "eletrica",
+    prioridade: "media",
+    status: "aberta",
+    responsavel: "Eletrica",
+    prazo: "2026-06-05",
+    custoPrevisto: 1900,
+    custoRealizado: 0,
+    fotosAntes: "drive://nexa/os-1027/antes",
+    fotosDepois: "",
+    descricao: "Inspecao em quadro dedicado apos oscilacao informada pelo lojista."
+  },
+  {
+    id: "os-1028",
+    empreendimentoId: "bluemall-centro",
+    lojaId: "bc-01",
+    local: "BC-01 - Odonto Mais",
+    categoria: "comunicacao_visual",
+    prioridade: "baixa",
+    status: "concluida",
+    responsavel: "Marketing",
+    prazo: "2026-05-29",
+    custoPrevisto: 1200,
+    custoRealizado: 1080,
+    fotosAntes: "drive://nexa/os-1028/antes",
+    fotosDepois: "drive://nexa/os-1028/depois",
+    descricao: "Substituicao de adesivo de vitrine e padronizacao de fachada."
+  }
 ];
 
 export const contractAlerts: ContractAlert[] = [
