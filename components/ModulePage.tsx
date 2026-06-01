@@ -489,6 +489,40 @@ type NotionHealth = {
   message?: string;
 };
 
+type NotionSyncStatus = {
+  checkedAt: string;
+  totalDatabases: number;
+  registeredDatabases: number;
+  dataSources: number;
+  pendingJobs: number;
+  processingJobs: number;
+  completedJobs: number;
+  failedJobs: number;
+  databases: Array<{
+    id: string;
+    nome: string;
+    slug: string;
+    status: string;
+    notion_database_id: string | null;
+    notion_data_source_id: string | null;
+    notion_url: string | null;
+    ultima_sincronizacao: string | null;
+    erro: string | null;
+  }>;
+  recentJobs: Array<{
+    id: string;
+    entidade: string;
+    entidade_id: string | null;
+    direcao: string;
+    status: string;
+    erro: string | null;
+    created_at: string;
+    iniciado_em: string | null;
+    finalizado_em: string | null;
+  }>;
+  error?: string;
+};
+
 export function ModulePage({
   module,
   enterprises,
@@ -1215,15 +1249,18 @@ function SettingsPage({
   const supabaseEnvReady = hasSupabaseEnv();
   const [health, setHealth] = useState<SupabaseHealth | null>(null);
   const [notionHealth, setNotionHealth] = useState<NotionHealth | null>(null);
+  const [notionSync, setNotionSync] = useState<NotionSyncStatus | null>(null);
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [checkingNotionHealth, setCheckingNotionHealth] = useState(false);
+  const [checkingNotionSync, setCheckingNotionSync] = useState(false);
+  const [queueingNotionSync, setQueueingNotionSync] = useState(false);
   const setupSteps = [
     { label: "Projeto Supabase criado", status: "manual" },
-    { label: "Migrations 001 a 009 aplicadas", status: "manual" },
+    { label: "Migrations 001 a 010 aplicadas", status: "manual" },
     { label: "NEXT_PUBLIC_SUPABASE_URL configurada", status: supabaseEnvReady ? "ok" : "pendente" },
     { label: "NEXT_PUBLIC_SUPABASE_ANON_KEY configurada", status: supabaseEnvReady ? "ok" : "pendente" },
     { label: "CRUD conectado ao banco real", status: dataSource === "supabase" ? "ok" : "pendente" },
-    { label: "Notion preparado para sync", status: "manual" }
+    { label: "Notion preparado para sync", status: (notionSync?.dataSources ?? 0) >= 23 ? "ok" : "manual" }
   ];
   const healthStatus = health?.status ?? "nao verificado";
   const notionHealthStatus = notionHealth?.status ?? "nao verificado";
@@ -1268,9 +1305,51 @@ function SettingsPage({
     }
   }
 
+  async function checkNotionSync() {
+    setCheckingNotionSync(true);
+
+    try {
+      const response = await fetch("/api/notion/sync", { cache: "no-store" });
+      const payload = await response.json() as NotionSyncStatus;
+      setNotionSync(payload);
+    } catch (error) {
+      setNotionSync({
+        checkedAt: new Date().toISOString(),
+        totalDatabases: 0,
+        registeredDatabases: 0,
+        dataSources: 0,
+        pendingJobs: 0,
+        processingJobs: 0,
+        completedJobs: 0,
+        failedJobs: 0,
+        databases: [],
+        recentJobs: [],
+        error: error instanceof Error ? error.message : "Falha ao consultar sync Notion"
+      });
+    } finally {
+      setCheckingNotionSync(false);
+    }
+  }
+
+  async function queueNotionSync() {
+    setQueueingNotionSync(true);
+
+    try {
+      await fetch("/api/notion/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      await checkNotionSync();
+    } finally {
+      setQueueingNotionSync(false);
+    }
+  }
+
   useEffect(() => {
     void checkSupabaseHealth();
     void checkNotionHealth();
+    void checkNotionSync();
   }, []);
 
   return (
@@ -1321,6 +1400,41 @@ function SettingsPage({
         </div>
         {notionHealth?.botName ? <p className="mt-3 text-sm text-muted-foreground">Conexao: {notionHealth.botName}</p> : null}
         {notionHealth?.message ? <p className="mt-1 text-sm text-muted-foreground">{notionHealth.message}</p> : null}
+      </div>
+      <div className="panel p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="font-bold uppercase">Sync Notion</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Inventario das bases Notion registradas no Supabase e fila de sincronizacao inicial.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button className="control inline-flex items-center justify-center" onClick={() => void checkNotionSync()} disabled={checkingNotionSync}>
+              {checkingNotionSync ? "Atualizando" : "Atualizar status"}
+            </button>
+            <button className="control inline-flex items-center justify-center" onClick={() => void queueNotionSync()} disabled={queueingNotionSync || (notionSync?.dataSources ?? 0) === 0}>
+              {queueingNotionSync ? "Enfileirando" : "Preparar sync inicial"}
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <Mini label="Bases registradas" value={`${numberPt(notionSync?.registeredDatabases ?? 0)}/${numberPt(notionSync?.totalDatabases ?? 23)}`} />
+          <Mini label="Data sources" value={numberPt(notionSync?.dataSources ?? 0)} />
+          <Mini label="Jobs pendentes" value={numberPt(notionSync?.pendingJobs ?? 0)} />
+          <Mini label="Jobs com erro" value={numberPt(notionSync?.failedJobs ?? 0)} />
+        </div>
+        {notionSync?.error ? <p className="mt-3 text-sm text-red-600">{notionSync.error}</p> : null}
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {(notionSync?.databases ?? []).slice(0, 6).map((database) => (
+            <div key={database.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+              <span className="font-semibold text-primary">{database.nome}</span>
+              <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
+                database.notion_data_source_id ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
+              }`}>
+                {database.notion_data_source_id ? "vinculada" : "pendente"}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
       <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
         <div className="panel p-5">

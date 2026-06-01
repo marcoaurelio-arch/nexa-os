@@ -422,3 +422,16 @@ POST /api/notion/databases
 ```
 
 Ao criar bases pela API, o `POST /api/notion/databases` registra automaticamente no Supabase os campos `notion_database_id`, `notion_data_source_id`, `notion_url`, `status` e `ultima_sincronizacao`.
+
+## 6. Fila de sincronizacao
+
+A tela `Configuracoes` tambem chama:
+
+```txt
+GET /api/notion/sync
+POST /api/notion/sync
+```
+
+O `GET` lista o inventario registrado em `notion_databases`, confere quantas bases possuem `notion_data_source_id` e resume a fila `notion_sync_jobs`.
+
+O `POST` prepara a sincronizacao inicial criando um job `pendente` por base Notion vinculada. Nesta etapa o job ainda nao envia dados para o Notion; ele cria a fila operacional para o worker/processador que fara o push Nexa OS -> Notion quando `NOTION_API_KEY` estiver configurado.
