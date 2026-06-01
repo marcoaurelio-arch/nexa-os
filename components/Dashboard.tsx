@@ -27,7 +27,7 @@ import {
 import { buildContractAlerts } from "@/lib/contracts";
 import { contracts, enterprises, serviceOrders, tenants } from "@/lib/data";
 import { brl, chartRows, filterByEnterprise, getDashboardMetrics, numberPt, percent } from "@/lib/metrics";
-import type { Contract, Enterprise, ServiceOrder, Store, Tenant } from "@/lib/types";
+import type { Contract, Enterprise, Payable, Receivable, ServiceOrder, Store, Tenant } from "@/lib/types";
 
 type MetricCardProps = {
   label: string;
@@ -69,19 +69,23 @@ export function Dashboard({
   storeRows,
   tenantRows = tenants,
   contractRows = contracts,
+  receivableRows,
+  payableRows,
   serviceOrderRows = serviceOrders
 }: {
   enterpriseRows?: Enterprise[];
   storeRows: Store[];
   tenantRows?: Tenant[];
   contractRows?: Contract[];
+  receivableRows?: Receivable[];
+  payableRows?: Payable[];
   serviceOrderRows?: ServiceOrder[];
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
-  const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows), [enterpriseId, enterpriseRows, storeRows]);
+  const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows, receivableRows, payableRows), [enterpriseId, enterpriseRows, payableRows, receivableRows, storeRows]);
   const filteredOrders = filterByEnterprise(serviceOrderRows, enterpriseId);
   const filteredAlerts = filterByEnterprise(buildContractAlerts(contractRows, storeRows, tenantRows), enterpriseId);
-  const charts = chartRows(enterpriseRows, storeRows);
+  const charts = chartRows(enterpriseRows, storeRows, receivableRows);
 
   return (
     <AppViewport>

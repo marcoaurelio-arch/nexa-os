@@ -1,5 +1,5 @@
 import { enterprises, revenues, stores } from "./data";
-import type { Enterprise, Store } from "./types";
+import type { Enterprise, Payable, Receivable, Store } from "./types";
 
 export function brl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -30,7 +30,9 @@ export function filterByEnterprise<T extends { empreendimentoId: string }>(
 export function getDashboardMetrics(
   enterpriseId: string,
   enterpriseRows: Enterprise[] = enterprises,
-  storeRows: Store[] = stores
+  storeRows: Store[] = stores,
+  receivableRows?: Receivable[],
+  payableRows?: Payable[]
 ) {
   const selectedEnterprises =
     enterpriseId === "all"
@@ -39,6 +41,8 @@ export function getDashboardMetrics(
   const selectedEnterpriseIds = new Set(selectedEnterprises.map((item) => item.id));
   const selectedStores = storeRows.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
   const selectedRevenues = revenues.filter((revenue) => selectedEnterpriseIds.has(revenue.empreendimentoId));
+  const selectedReceivables = receivableRows?.filter((receivable) => selectedEnterpriseIds.has(receivable.empreendimentoId) && receivable.status !== "cancelado") ?? [];
+  const selectedPayables = payableRows?.filter((payable) => selectedEnterpriseIds.has(payable.empreendimentoId) && payable.status !== "cancelado") ?? [];
 
   const totalAbl = selectedEnterprises.reduce((sum, item) => sum + item.abl, 0);
   const occupiedAbl = selectedStores
@@ -50,18 +54,28 @@ export function getDashboardMetrics(
     .filter((store) => store.status !== "ocupada")
     .reduce((sum, store) => sum + store.aluguel, 0);
 
-  const revenue = selectedRevenues.reduce(
-    (acc, item) => ({
-      aluguel: acc.aluguel + item.aluguel,
-      condominio: acc.condominio + item.condominio,
-      fundo: acc.fundo + item.fundo,
-      fpp: acc.fpp + item.fpp,
-      vencidas: acc.vencidas + item.vencidas,
-      receber: acc.receber + item.receber,
-      pagar: acc.pagar + item.pagar
-    }),
-    { aluguel: 0, condominio: 0, fundo: 0, fpp: 0, vencidas: 0, receber: 0, pagar: 0 }
-  );
+  const revenue = receivableRows
+    ? {
+        aluguel: selectedReceivables.filter((item) => item.receita === "aluguel").reduce((sum, item) => sum + item.valor, 0),
+        condominio: selectedReceivables.filter((item) => item.receita === "condominio").reduce((sum, item) => sum + item.valor, 0),
+        fundo: selectedReceivables.filter((item) => item.receita === "fundo_promocao").reduce((sum, item) => sum + item.valor, 0),
+        fpp: selectedReceivables.filter((item) => item.receita === "fpp").reduce((sum, item) => sum + item.valor, 0),
+        vencidas: selectedReceivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0),
+        receber: selectedReceivables.filter((item) => item.status === "aberto" || item.status === "vencido").reduce((sum, item) => sum + item.valor, 0),
+        pagar: selectedPayables.filter((item) => item.status === "aberto" || item.status === "vencido").reduce((sum, item) => sum + item.valor, 0)
+      }
+    : selectedRevenues.reduce(
+        (acc, item) => ({
+          aluguel: acc.aluguel + item.aluguel,
+          condominio: acc.condominio + item.condominio,
+          fundo: acc.fundo + item.fundo,
+          fpp: acc.fpp + item.fpp,
+          vencidas: acc.vencidas + item.vencidas,
+          receber: acc.receber + item.receber,
+          pagar: acc.pagar + item.pagar
+        }),
+        { aluguel: 0, condominio: 0, fundo: 0, fpp: 0, vencidas: 0, receber: 0, pagar: 0 }
+      );
 
   return {
     totalEmpreendimentos: selectedEnterprises.length,
@@ -82,9 +96,10 @@ export function getDashboardMetrics(
   };
 }
 
-export function chartRows(enterpriseRows: Enterprise[] = enterprises, storeRows: Store[] = stores) {
+export function chartRows(enterpriseRows: Enterprise[] = enterprises, storeRows: Store[] = stores, receivableRows?: Receivable[]) {
   return enterpriseRows.map((enterprise) => {
     const enterpriseRevenue = revenues.find((item) => item.empreendimentoId === enterprise.id);
+    const enterpriseReceivables = receivableRows?.filter((item) => item.empreendimentoId === enterprise.id && item.status !== "cancelado");
     const enterpriseStores = storeRows.filter((store) => store.empreendimentoId === enterprise.id);
     const occupiedArea = enterpriseStores
       .filter((store) => store.status === "ocupada")
@@ -92,7 +107,9 @@ export function chartRows(enterpriseRows: Enterprise[] = enterprises, storeRows:
 
     return {
       name: enterprise.nome.replace("Bluemall ", "BM "),
-      receita: enterpriseRevenue
+      receita: enterpriseReceivables
+        ? enterpriseReceivables.reduce((sum, item) => sum + item.valor, 0)
+        : enterpriseRevenue
         ? enterpriseRevenue.aluguel + enterpriseRevenue.condominio + enterpriseRevenue.fundo + enterpriseRevenue.fpp
         : 0,
       ocupacao: enterprise.abl > 0 ? Math.round((occupiedArea / enterprise.abl) * 100) : 0,

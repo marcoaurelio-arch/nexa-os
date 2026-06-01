@@ -31,6 +31,24 @@ GET /api/health/supabase
 
 Esse endpoint verifica se as variaveis foram carregadas no servidor e consulta a tabela `empreendimentos`. Quando retornar `ok`, o app esta pronto para operar com dados reais.
 
+## Leitura dos dados reais
+
+O frontend carrega a carteira por:
+
+```txt
+GET /api/assets
+```
+
+Essa rota roda no servidor com `SUPABASE_SERVICE_ROLE_KEY`, respeitando a decisao de manter a chave sensivel fora do browser. O app continua usando fallback local quando a rota nao estiver disponivel.
+
+## Aplicar migrations pela Management API
+
+Quando `SUPABASE_ACCESS_TOKEN` e `SUPABASE_PROJECT_REF` estiverem definidos no ambiente, e possivel aplicar as migrations com:
+
+```bash
+npm run supabase:apply
+```
+
 ## Ordem das migrations
 
 - `001_nexa_os_core.sql`

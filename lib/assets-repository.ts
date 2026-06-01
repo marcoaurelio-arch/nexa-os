@@ -93,6 +93,17 @@ export function resetLocalAssetData() {
 }
 
 export async function fetchAssetData(): Promise<AssetData | null> {
+  if (typeof window !== "undefined") {
+    const response = await fetch("/api/assets", { cache: "no-store" });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error ?? "Falha ao carregar dados do Supabase");
+    }
+
+    return response.json() as Promise<AssetData>;
+  }
+
   const supabase = createBrowserSupabaseClient();
 
   if (!supabase) {

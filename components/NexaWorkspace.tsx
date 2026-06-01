@@ -151,7 +151,15 @@ export function NexaWorkspace() {
   return (
     <AppShell activeModule={activeModule} onModuleChange={setActiveModule}>
       {activeModule === "Dashboard" ? (
-        <Dashboard enterpriseRows={enterpriseRows} storeRows={storeRows} tenantRows={tenantRows} contractRows={contractRows} serviceOrderRows={serviceOrderRows} />
+        <Dashboard
+          enterpriseRows={enterpriseRows}
+          storeRows={storeRows}
+          tenantRows={tenantRows}
+          contractRows={contractRows}
+          receivableRows={receivableRows}
+          payableRows={payableRows}
+          serviceOrderRows={serviceOrderRows}
+        />
       ) : (
         <ModulePage
           module={activeModule}
