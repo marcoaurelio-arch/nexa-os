@@ -381,3 +381,15 @@ Propriedades:
 10. Demais bases analiticas e de apoio.
 
 Essa ordem reduz retrabalho porque as relacoes principais ja existem quando as bases dependentes forem criadas.
+
+## 4. Automacao via Nexa OS
+
+A especificacao das 23 bases tambem existe em codigo em `lib/notion/schema.ts`. Esse manifesto sera usado pelo integrador da Notion API para:
+
+- criar databases na ordem correta;
+- registrar o `notion_database_id` em `notion_databases`;
+- mapear propriedades, relations e tipos de campos;
+- enfileirar sincronizacoes em `notion_sync_jobs`;
+- manter o PostgreSQL/Supabase como fonte oficial dos dados.
+
+A migration `009_reporting_access_notion.sql` cria as tabelas de apoio para esse fluxo.

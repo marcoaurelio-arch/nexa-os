@@ -485,6 +485,164 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["juridico"]["Insert"]>;
       };
+      perfis_acesso: {
+        Row: {
+          id: string;
+          nome: string;
+          descricao: string;
+          ativo: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          nome: string;
+          descricao: string;
+          ativo?: boolean;
+        };
+        Update: Partial<Database["public"]["Tables"]["perfis_acesso"]["Insert"]>;
+      };
+      perfil_modulos: {
+        Row: {
+          perfil_id: string;
+          modulo: string;
+          pode_visualizar: boolean;
+          pode_editar: boolean;
+          created_at: string;
+        };
+        Insert: {
+          perfil_id: string;
+          modulo: string;
+          pode_visualizar?: boolean;
+          pode_editar?: boolean;
+        };
+        Update: Partial<Database["public"]["Tables"]["perfil_modulos"]["Insert"]>;
+      };
+      relatorios_mensais: {
+        Row: {
+          id: string;
+          empreendimento_id: string | null;
+          competencia: string;
+          titulo: string;
+          status: string;
+          resumo: string | null;
+          secoes: Json;
+          recomendacoes: Json;
+          indicadores: Json;
+          pdf_url: string | null;
+          notion_page_id: string | null;
+          gerado_por: string | null;
+          gerado_em: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          empreendimento_id?: string | null;
+          competencia: string;
+          titulo: string;
+          status?: string;
+          resumo?: string | null;
+          secoes?: Json;
+          recomendacoes?: Json;
+          indicadores?: Json;
+          pdf_url?: string | null;
+          notion_page_id?: string | null;
+          gerado_por?: string | null;
+          gerado_em?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["relatorios_mensais"]["Insert"]>;
+      };
+      indicadores: {
+        Row: {
+          id: string;
+          empreendimento_id: string | null;
+          relatorio_id: string | null;
+          competencia: string;
+          categoria: string;
+          indicador: string;
+          valor: number;
+          unidade: string;
+          origem: string;
+          meta: number | null;
+          variacao: number | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          empreendimento_id?: string | null;
+          relatorio_id?: string | null;
+          competencia: string;
+          categoria: string;
+          indicador: string;
+          valor?: number;
+          unidade?: string;
+          origem?: string;
+          meta?: number | null;
+          variacao?: number | null;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["indicadores"]["Insert"]>;
+      };
+      notion_databases: {
+        Row: {
+          id: string;
+          nome: string;
+          slug: string;
+          notion_database_id: string | null;
+          status: string;
+          schema: Json;
+          relacoes: Json;
+          ultima_sincronizacao: string | null;
+          erro: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          nome: string;
+          slug: string;
+          notion_database_id?: string | null;
+          status?: string;
+          schema?: Json;
+          relacoes?: Json;
+          ultima_sincronizacao?: string | null;
+          erro?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["notion_databases"]["Insert"]>;
+      };
+      notion_sync_jobs: {
+        Row: {
+          id: string;
+          database_id: string | null;
+          entidade: string;
+          entidade_id: string | null;
+          direcao: string;
+          status: string;
+          payload: Json;
+          erro: string | null;
+          iniciado_em: string | null;
+          finalizado_em: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          database_id?: string | null;
+          entidade: string;
+          entidade_id?: string | null;
+          direcao?: string;
+          status?: string;
+          payload?: Json;
+          erro?: string | null;
+          iniciado_em?: string | null;
+          finalizado_em?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["notion_sync_jobs"]["Insert"]>;
+      };
     };
   };
 };

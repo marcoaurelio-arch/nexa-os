@@ -13,6 +13,7 @@ Plataforma proprietaria da Nexa Malls para gestao, comercializacao e operacao de
 - Persistencia local com fallback
 - Estrutura Supabase/PostgreSQL
 - Documentacao de arquitetura e databases Notion
+- BI, relatorio mensal automatico e controle de acesso por perfil
 
 ## Empreendimentos seed
 
@@ -54,7 +55,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-A migration inicial esta em `supabase/migrations/001_nexa_os_core.sql`.
+As migrations estao em `supabase/migrations/`:
+
+- `001_nexa_os_core.sql`: tabelas operacionais e seeds iniciais.
+- `002_rls_enums_tenant.sql`: RLS, usuarios, perfis base e multiempreendimento.
+- `003` a `008`: comercializacao, vacancia, consumo, OS, documentos e juridico.
+- `009_reporting_access_notion.sql`: relatorios mensais, indicadores, matriz de acesso e controle de sync com Notion.
+
+O manifesto TypeScript das 23 bases Notion esta em `lib/notion/schema.ts`.
 
 ## Documentacao
 
