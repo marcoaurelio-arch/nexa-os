@@ -515,6 +515,23 @@ export function ModulePage({
       />
     );
   }
+  if (module === "BI") {
+    return (
+      <BusinessIntelligencePage
+        enterprises={enterprises}
+        stores={stores}
+        contracts={contracts}
+        receivables={receivables}
+        payables={payables}
+        fppRecords={fppRecords}
+        revenueAuditRecords={revenueAuditRecords}
+        commercialLeads={commercialLeads}
+        vacancyRecords={vacancyRecords}
+        serviceOrders={serviceOrders}
+        legalCases={legalCases}
+      />
+    );
+  }
 
   if (module === "Lojas") {
     return (
@@ -707,6 +724,164 @@ function Shell({
       </header>
       <div className="space-y-5 px-4 py-5 lg:px-7">{children}</div>
     </div>
+  );
+}
+
+function BusinessIntelligencePage({
+  enterprises,
+  stores,
+  contracts,
+  receivables,
+  payables,
+  fppRecords,
+  revenueAuditRecords,
+  commercialLeads,
+  vacancyRecords,
+  serviceOrders,
+  legalCases
+}: {
+  enterprises: Enterprise[];
+  stores: StoreType[];
+  contracts: Contract[];
+  receivables: Receivable[];
+  payables: Payable[];
+  fppRecords: FppRecord[];
+  revenueAuditRecords: RevenueAuditRecord[];
+  commercialLeads: CommercialLead[];
+  vacancyRecords: VacancyRecord[];
+  serviceOrders: ServiceOrder[];
+  legalCases: LegalCase[];
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
+  const selectedStoreIds = new Set(selectedStores.map((store) => store.id));
+  const selectedContracts = contracts.filter((contract) => selectedStoreIds.has(contract.lojaId));
+  const selectedReceivables = receivables.filter((item) => selectedEnterpriseIds.has(item.empreendimentoId));
+  const selectedPayables = payables.filter((item) => selectedEnterpriseIds.has(item.empreendimentoId));
+  const selectedFpp = fppRecords.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const selectedAudits = revenueAuditRecords.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const selectedLeads = commercialLeads.filter((lead) => selectedEnterpriseIds.has(lead.empreendimentoId));
+  const selectedVacancies = vacancyRecords.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const selectedOrders = serviceOrders.filter((order) => selectedEnterpriseIds.has(order.empreendimentoId));
+  const selectedLegal = legalCases.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+
+  const activeReceivables = selectedReceivables.filter((item) => item.status !== "cancelado");
+  const realEstateRevenue = activeReceivables
+    .filter((item) => ["aluguel", "condominio", "fundo_promocao", "fpp"].includes(item.receita))
+    .reduce((sum, item) => sum + item.valor, 0);
+  const receivedRevenue = activeReceivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const openReceivables = activeReceivables.filter((item) => item.status === "aberto" || item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const overdueReceivables = activeReceivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const paidPayables = selectedPayables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const openPayables = selectedPayables.filter((item) => item.status === "aberto" || item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const totalArea = selectedStores.reduce((sum, store) => sum + store.areaTotal, 0);
+  const occupiedStores = selectedStores.filter((store) => ["ocupada", "implantacao", "em_obra"].includes(store.status));
+  const vacantStores = selectedStores.filter((store) => ["disponivel", "negociacao", "inativa"].includes(store.status));
+  const occupancyRate = selectedStores.length ? occupiedStores.length / selectedStores.length : 0;
+  const lostRevenue = selectedVacancies.length
+    ? selectedVacancies.reduce((sum, record) => sum + record.receitaPotencial, 0)
+    : vacantStores.reduce((sum, store) => sum + store.aluguel, 0);
+  const condominiumReceivables = selectedReceivables.filter((item) => ["condominio", "multa", "juros"].includes(item.receita));
+  const condominiumPayables = selectedPayables.filter((item) => item.centroCusto.toLowerCase().includes("condominio"));
+  const condominiumRevenue = condominiumReceivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const condominiumExpenses = condominiumPayables.reduce((sum, item) => sum + item.valor, 0);
+  const fundRevenue = selectedReceivables.filter((item) => item.receita === "fundo_promocao" && item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const fundExpenses = selectedPayables.filter((item) => item.centroCusto.toLowerCase().includes("fundo")).reduce((sum, item) => sum + item.valor, 0);
+  const marketingExpenses = selectedPayables
+    .filter((item) => ["marketing", "eventos", "trafego pago", "redes sociais", "producao audiovisual", "decoracao", "material grafico"].includes(item.categoria.toLowerCase()))
+    .reduce((sum, item) => sum + item.valor, 0);
+  const fppComplement = selectedFpp.reduce((sum, record) => sum + fppBilling(record).valorComplementar, 0);
+  const averageAuditDivergence = selectedAudits.length
+    ? selectedAudits.reduce((sum, record) => sum + auditDivergence(record), 0) / selectedAudits.length
+    : 0;
+  const pipelineValue = selectedLeads.reduce((sum, lead) => sum + lead.valorProposta, 0);
+  const openOrders = selectedOrders.filter((order) => order.status !== "concluida");
+  const criticalOrders = selectedOrders.filter((order) => order.prioridade === "critica" && order.status !== "concluida");
+  const activeLegal = selectedLegal.filter((record) => record.status !== "concluido");
+  const highRiskLegal = selectedLegal.filter((record) => record.risco === "alto" || record.status === "critico");
+  const legalExposure = selectedLegal.reduce((sum, record) => sum + record.valorCausa, 0);
+  const contractAlerts = buildContractAlerts(selectedContracts, selectedStores, []);
+
+  const dashboards = [
+    { title: "Executivo", items: [["Receita imobiliaria", brl(realEstateRevenue)], ["Ocupacao", percent(occupancyRate)], ["ABL monitorada", `${numberPt(totalArea)} m2`]] },
+    { title: "Comercial", items: [["Pipeline", brl(pipelineValue)], ["Propostas", numberPt(selectedLeads.filter((lead) => lead.etapa === "proposta").length)], ["Contratos", numberPt(selectedLeads.filter((lead) => lead.etapa === "contrato").length)]] },
+    { title: "Financeiro", items: [["A receber", brl(openReceivables)], ["Vencidas", brl(overdueReceivables)], ["A pagar", brl(openPayables)]] },
+    { title: "Operacoes", items: [["OS abertas", numberPt(openOrders.length)], ["Criticas", numberPt(criticalOrders.length)], ["Custo realizado", brl(selectedOrders.reduce((sum, order) => sum + order.custoRealizado, 0))]] },
+    { title: "Condominio", items: [["Arrecadado", brl(condominiumRevenue)], ["Despesas", brl(condominiumExpenses)], ["Custo por m2", brl(totalArea > 0 ? condominiumExpenses / totalArea : 0)]] },
+    { title: "Fundo de Promocao", items: [["Arrecadado", brl(fundRevenue)], ["Utilizado", brl(fundExpenses)], ["Saldo", brl(fundRevenue - fundExpenses)]] },
+    { title: "FPP", items: [["Registros", numberPt(selectedFpp.length)], ["Complementar", brl(fppComplement)], ["Auditado", brl(selectedFpp.reduce((sum, record) => sum + record.faturamentoAuditado, 0))]] },
+    { title: "Vacancia", items: [["Lojas vagas", numberPt(vacantStores.length)], ["Receita perdida", brl(lostRevenue)], ["Registros", numberPt(selectedVacancies.length)]] },
+    { title: "Juridico", items: [["Casos ativos", numberPt(activeLegal.length)], ["Risco alto", numberPt(highRiskLegal.length)], ["Exposicao", brl(legalExposure)]] },
+    { title: "Marketing", items: [["Investimento", brl(marketingExpenses)], ["Fundo disponivel", brl(fundRevenue - fundExpenses)], ["Eventos/Redes", numberPt(selectedPayables.filter((item) => ["Eventos", "Redes sociais"].includes(item.categoria)).length)]] }
+  ];
+
+  return (
+    <Shell
+      title="Business Intelligence"
+      description="Dashboards executivo, comercial, financeiro, operacoes, condominio, fundo, FPP, vacancia, juridico e marketing."
+      action={
+        <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+          <option value="all">Todos os empreendimentos</option>
+          {enterprises.map((enterprise) => (
+            <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+          ))}
+        </select>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Receita consolidada" value={brl(realEstateRevenue)} tone="success" />
+        <Kpi label="Saldo operacional" value={brl(receivedRevenue - paidPayables)} tone={receivedRevenue >= paidPayables ? "success" : "danger"} />
+        <Kpi label="Alertas contratos" value={numberPt(contractAlerts.length)} tone={contractAlerts.length ? "danger" : "success"} />
+        <Kpi label="Divergencia auditoria" value={percent(averageAuditDivergence)} tone={averageAuditDivergence > 0.1 ? "danger" : "default"} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+        <div className="grid gap-3 lg:grid-cols-2">
+          {dashboards.map((dashboard) => (
+            <div key={dashboard.title} className="panel p-5">
+              <h2 className="font-bold uppercase">{dashboard.title}</h2>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {dashboard.items.map(([label, value]) => (
+                  <Mini key={label} label={label} value={value} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="space-y-3">
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Ranking de ativos</h2>
+            <div className="mt-4 space-y-2">
+              {enterprises
+                .filter((enterprise) => selectedEnterpriseIds.has(enterprise.id))
+                .map((enterprise) => {
+                  const enterpriseStores = stores.filter((store) => store.empreendimentoId === enterprise.id);
+                  const revenue = activeReceivables.filter((item) => item.empreendimentoId === enterprise.id).reduce((sum, item) => sum + item.valor, 0);
+                  const occupied = enterpriseStores.filter((store) => store.status === "ocupada").length;
+                  return (
+                    <div key={enterprise.id} className="rounded-lg border border-border px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold text-primary">{enterprise.nome}</span>
+                        <span className="font-bold">{brl(revenue)}</span>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">{numberPt(occupied)} ocupadas de {numberPt(enterpriseStores.length)} lojas</p>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Sinais criticos</h2>
+            <div className="mt-4 grid gap-3">
+              <Mini label="Inadimplencia" value={brl(overdueReceivables)} />
+              <Mini label="OS criticas" value={numberPt(criticalOrders.length)} />
+              <Mini label="Juridico alto risco" value={numberPt(highRiskLegal.length)} />
+              <Mini label="Vacancia financeira" value={brl(lostRevenue)} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </Shell>
   );
 }
 

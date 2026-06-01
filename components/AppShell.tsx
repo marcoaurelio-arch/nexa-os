@@ -22,6 +22,7 @@ import type { ReactNode } from "react";
 
 export const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, active: true },
+  { label: "BI", icon: BarChart3 },
   { label: "Empreendimentos", icon: Building2 },
   { label: "Lojas", icon: Store },
   { label: "Lojistas", icon: Users },
