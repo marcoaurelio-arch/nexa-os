@@ -9,6 +9,7 @@ import { navItems } from "@/components/AppShell";
 import { accessProfiles } from "@/lib/access-control";
 import { buildContractAlerts } from "@/lib/contracts";
 import { brl, numberPt, percent } from "@/lib/metrics";
+import { hasSupabaseEnv } from "@/lib/supabase/client";
 import type {
   CommercialLead,
   CommercialStage,
@@ -702,7 +703,9 @@ export function ModulePage({
       />
     );
   }
-  if (module === "Configuracoes") return <SettingsPage />;
+  if (module === "Configuracoes") {
+    return <SettingsPage dataSource={dataSource} syncError={syncError} onResetLocalData={onResetLocalData} />;
+  }
 
   return (
     <Shell title={module} description="Modulo em estruturacao para a proxima sprint do Nexa OS.">
@@ -1180,20 +1183,75 @@ function MonthlyReportPage({
   );
 }
 
-function SettingsPage() {
+function SettingsPage({
+  dataSource,
+  syncError,
+  onResetLocalData
+}: {
+  dataSource: "mock" | "supabase";
+  syncError: string | null;
+  onResetLocalData: () => void;
+}) {
   const moduleLabels = navItems.map((item) => item.label);
   const totalGrants = accessProfiles.reduce((sum, profile) => sum + profile.modules.length, 0);
+  const supabaseEnvReady = hasSupabaseEnv();
+  const setupSteps = [
+    { label: "Projeto Supabase criado", status: "manual" },
+    { label: "Migrations 001 a 009 aplicadas", status: "manual" },
+    { label: "NEXT_PUBLIC_SUPABASE_URL configurada", status: supabaseEnvReady ? "ok" : "pendente" },
+    { label: "NEXT_PUBLIC_SUPABASE_ANON_KEY configurada", status: supabaseEnvReady ? "ok" : "pendente" },
+    { label: "CRUD conectado ao banco real", status: dataSource === "supabase" ? "ok" : "pendente" },
+    { label: "Notion preparado para sync", status: "manual" }
+  ];
 
   return (
     <Shell
       title="Configuracoes"
-      description="Governanca do Nexa OS com perfis, matriz de acesso e visibilidade de modulos por area."
+      description="Governanca, fonte de dados, matriz de acesso e preparacao do ambiente real."
     >
+      <SyncBanner dataSource={dataSource} syncError={syncError} onResetLocalData={onResetLocalData} />
       <div className="grid gap-3 md:grid-cols-4">
         <Kpi label="Perfis" value={numberPt(accessProfiles.length)} />
         <Kpi label="Modulos governados" value={numberPt(moduleLabels.length)} />
         <Kpi label="Permissoes ativas" value={numberPt(totalGrants)} tone="success" />
-        <Kpi label="Perfil master" value="Diretoria" />
+        <Kpi label="Supabase" value={dataSource === "supabase" ? "Conectado" : "Pendente"} tone={dataSource === "supabase" ? "success" : "danger"} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
+        <div className="panel p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-bold uppercase">Implantacao Supabase</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Checklist para sair do mock local e operar com PostgreSQL/Supabase como fonte oficial.</p>
+            </div>
+            <Badge>{supabaseEnvReady ? "env ok" : "env pendente"}</Badge>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {setupSteps.map((step) => (
+              <div key={step.label} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                <span className="font-semibold text-primary">{step.label}</span>
+                <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
+                  step.status === "ok" ? "bg-emerald-100 text-emerald-700" : step.status === "manual" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                }`}>
+                  {step.status === "ok" ? "ok" : step.status === "manual" ? "manual" : "pendente"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="panel p-5">
+          <h2 className="font-bold uppercase">Comandos de preparacao</h2>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="rounded-lg bg-muted p-3">
+              <p className="text-xs font-bold uppercase text-muted-foreground">Verificar estrutura local</p>
+              <code className="mt-2 block break-all text-primary">npm run supabase:check</code>
+            </div>
+            <div className="rounded-lg bg-muted p-3">
+              <p className="text-xs font-bold uppercase text-muted-foreground">Configurar ambiente</p>
+              <code className="mt-2 block break-all text-primary">cp .env.example .env.local</code>
+            </div>
+            <p className="text-muted-foreground">Depois de preencher `.env.local`, reinicie o servidor para carregar as credenciais públicas do Supabase.</p>
+          </div>
+        </div>
       </div>
       <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
         <div className="space-y-3">

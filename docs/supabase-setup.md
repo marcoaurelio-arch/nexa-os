@@ -1,0 +1,38 @@
+# Nexa OS - Setup Supabase
+
+## Objetivo
+
+Preparar o Supabase/PostgreSQL como fonte oficial do Nexa OS, substituindo o mock local usado no desenvolvimento.
+
+## Checklist
+
+1. Criar projeto no Supabase.
+2. Copiar `.env.example` para `.env.local`.
+3. Preencher `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+4. Aplicar as migrations em `supabase/migrations` na ordem `001` a `009`.
+5. Reiniciar o servidor Next.js.
+6. Abrir `Configuracoes` e confirmar que a fonte de dados mudou para `Supabase`.
+
+## Verificacao local
+
+```bash
+npm run supabase:check
+```
+
+Esse comando confere migrations, `.env.example`, `.env.local`, manifesto Notion e rota de criacao das bases Notion.
+
+## Ordem das migrations
+
+- `001_nexa_os_core.sql`
+- `002_rls_enums_tenant.sql`
+- `003_commercial_pipeline.sql`
+- `004_vacancy_occupancy.sql`
+- `005_utilities_consumption.sql`
+- `006_service_orders.sql`
+- `007_documents_management.sql`
+- `008_legal_management.sql`
+- `009_reporting_access_notion.sql`
+
+## Observacao
+
+O app continua funcionando com dados locais quando o Supabase nao esta configurado. Depois que as credenciais e as tabelas estiverem prontas, o `fetchAssetData()` passa a carregar os dados reais automaticamente.

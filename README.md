@@ -65,10 +65,12 @@ As migrations estao em `supabase/migrations/`:
 - `009_reporting_access_notion.sql`: relatorios mensais, indicadores, matriz de acesso e controle de sync com Notion.
 
 O manifesto TypeScript das 23 bases Notion esta em `lib/notion/schema.ts`.
+O passo a passo de implantacao do banco esta em `docs/supabase-setup.md`.
 
 ## Documentacao
 
 - `docs/arquitetura.md`
 - `docs/nexa-os-entrega-inicial.md`
 - `docs/nexa-os-notion-databases.md`
+- `docs/supabase-setup.md`
 - `docs/nexa-os-schema-inicial.sql`
