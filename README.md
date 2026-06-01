@@ -53,6 +53,8 @@ Copie `.env.example` para `.env.local` e preencha:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+NOTION_API_KEY=
+NOTION_PARENT_PAGE_ID=
 ```
 
 As migrations estao em `supabase/migrations/`:
