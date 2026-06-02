@@ -462,3 +462,15 @@ Se o Notion retornar erro de acesso, compartilhe a pagina `NEXA OS` e a base `01
   "retryErrors": true
 }
 ```
+
+O processador tambem suporta `lojas`, criando registros na base `02 Lojas` e relacionando cada loja ao empreendimento correspondente no Notion:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["lojas"],
+  "retryErrors": true
+}
+```
+
+Para esse fluxo, a base `02 Lojas` tambem precisa estar compartilhada com a integracao `Integracao`.
