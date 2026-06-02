@@ -580,3 +580,25 @@ O processador tambem suporta `auditoria-faturamento`, criando registros na base 
 ```
 
 Para esse fluxo, a base `11 Auditoria de Faturamento` precisa estar compartilhada com a integracao `Integracao`.
+
+O processador tambem suporta `leads`, criando oportunidades comerciais na base `12 Leads` com relacao ao empreendimento e loja alvo:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["leads"],
+  "retryErrors": true
+}
+```
+
+O processador tambem suporta `propostas`, derivando propostas dos leads nas etapas `proposta`, `negociacao` e `contrato`, e criando registros na base `13 Propostas` com relacao ao lead e a loja:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["propostas"],
+  "retryErrors": true
+}
+```
+
+Para esses fluxos, as bases `12 Leads` e `13 Propostas` precisam estar compartilhadas com a integracao `Integracao`.

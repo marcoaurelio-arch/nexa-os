@@ -14,6 +14,7 @@ type PayableRow = Database["public"]["Tables"]["despesas"]["Row"];
 type DelinquencyRow = Database["public"]["Tables"]["inadimplencias"]["Row"];
 type FppRow = Database["public"]["Tables"]["fpp"]["Row"];
 type RevenueAuditRow = Database["public"]["Tables"]["auditoria_faturamento"]["Row"];
+type CommercialLeadRow = Database["public"]["Tables"]["comercial_leads"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -96,7 +97,11 @@ export async function POST(request: Request) {
                           ? await syncFpp(client, token, job)
                           : job.entidade === "auditoria-faturamento"
                             ? await syncRevenueAudits(client, token, job)
-                            : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                            : job.entidade === "leads"
+                              ? await syncCommercialLeads(client, token, job)
+                              : job.entidade === "propostas"
+                                ? await syncCommercialProposals(client, token, job)
+                                : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -1190,6 +1195,177 @@ async function syncRevenueAudits(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncCommercialLeads(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, enterprisesRegistryResult] = await Promise.all([
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "lojas").single(),
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "empreendimentos").single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [leadsResult, storesResult, enterprisesResult] = await Promise.all([
+    client
+      .from("comercial_leads")
+      .select("id,loja_id,empreendimento_id,empresa,segmento,responsavel,proxima_acao,data_proxima_acao,historico,etapa,valor_proposta,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("data_proxima_acao", { ascending: true }),
+    client.from("lojas").select("id,codigo").is("deleted_at", null),
+    client.from("empreendimentos").select("id,nome").is("deleted_at", null)
+  ]);
+
+  if (leadsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: leadsResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  const leads = (leadsResult.data ?? []) as CommercialLeadRow[];
+  const storeCodesById = new Map<string, string>((storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo]));
+  const enterpriseNamesById = new Map<string, string>((enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome]));
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingCompanies = await getExistingTitleValues(token, dataSourceId, "Empresa");
+  let created = 0;
+  let skipped = 0;
+
+  for (const lead of leads) {
+    if (existingCompanies.has(lead.empresa)) {
+      skipped += 1;
+      continue;
+    }
+
+    const storeCode = lead.loja_id ? storeCodesById.get(lead.loja_id) : null;
+    const enterpriseName = enterpriseNamesById.get(lead.empreendimento_id);
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildCommercialLeadProperties(
+          lead,
+          storeCode ? storePageIdsByCode.get(storeCode) : null,
+          enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar lead ${lead.empresa}.` };
+    }
+
+    created += 1;
+    existingCompanies.add(lead.empresa);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Leads sincronizados: ${created} criados, ${skipped} ignorados.`
+  };
+}
+
+async function syncCommercialProposals(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, leadsRegistryResult] = await Promise.all([
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "lojas").single(),
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "leads").single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (leadsRegistryResult.error || !leadsRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: leadsRegistryResult.error?.message ?? "Data source de Leads nao encontrado." };
+  }
+
+  const [leadsResult, storesResult] = await Promise.all([
+    client
+      .from("comercial_leads")
+      .select("id,loja_id,empreendimento_id,empresa,segmento,responsavel,proxima_acao,data_proxima_acao,historico,etapa,valor_proposta,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .in("etapa", ["proposta", "negociacao", "contrato"])
+      .order("data_proxima_acao", { ascending: true }),
+    client.from("lojas").select("id,codigo").is("deleted_at", null)
+  ]);
+
+  if (leadsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: leadsResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  const proposalLeads = (leadsResult.data ?? []) as CommercialLeadRow[];
+  const storeCodesById = new Map<string, string>((storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo]));
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const leadPageIdsByCompany = await getTitlePageMap(token, leadsRegistryResult.data.notion_data_source_id, "Empresa");
+  const existingProposals = await getExistingTitleValues(token, dataSourceId, "Proposta");
+  let created = 0;
+  let skipped = 0;
+
+  for (const lead of proposalLeads) {
+    const proposalName = buildCommercialProposalName(lead);
+
+    if (existingProposals.has(proposalName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const storeCode = lead.loja_id ? storeCodesById.get(lead.loja_id) : null;
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildCommercialProposalProperties(
+          lead,
+          proposalName,
+          leadPageIdsByCompany.get(lead.empresa),
+          storeCode ? storePageIdsByCode.get(storeCode) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar proposta ${proposalName}.` };
+    }
+
+    created += 1;
+    existingProposals.add(proposalName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Propostas sincronizadas: ${created} criadas, ${skipped} ignoradas.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -1394,6 +1570,36 @@ function buildRevenueAuditProperties(
   };
 }
 
+function buildCommercialLeadProperties(lead: CommercialLeadRow, storePageId?: string | null, enterprisePageId?: string | null) {
+  return {
+    Empresa: title(lead.empresa),
+    Empreendimento: relation(enterprisePageId),
+    "Loja Alvo": relation(storePageId),
+    Segmento: select(toNotionStoreSegment(lead.segmento)),
+    Etapa: select(toNotionCommercialStage(lead.etapa)),
+    "Próxima Ação": richText(lead.proxima_acao ?? ""),
+    "Data Próxima Ação": date(lead.data_proxima_acao),
+    "Histórico": richText(lead.historico ?? "")
+  };
+}
+
+function buildCommercialProposalProperties(
+  lead: CommercialLeadRow,
+  proposalName: string,
+  leadPageId?: string | null,
+  storePageId?: string | null
+) {
+  return {
+    Proposta: title(proposalName),
+    Lead: relation(leadPageId),
+    Loja: relation(storePageId),
+    "Valor Aluguel": number(lead.valor_proposta),
+    "Prazo meses": number(toCommercialProposalTerm(lead.etapa)),
+    Status: select(toNotionProposalStatus(lead.etapa)),
+    "Condições": richText(buildCommercialProposalTerms(lead))
+  };
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -1462,6 +1668,9 @@ function toNotionStoreSegment(segment?: string | null) {
     serviços: "Serviços",
     saude: "Serviços",
     saúde: "Serviços",
+    gastronomia: "Alimentação",
+    conveniencia: "Serviços",
+    conveniência: "Serviços",
     mercado: "Supermercado",
     supermercado: "Supermercado",
     fitness: "Fitness",
@@ -1575,6 +1784,14 @@ function buildRevenueAuditName(audit: RevenueAuditRow, source: RevenueAuditSourc
     audit.competencia,
     source,
     audit.id.slice(0, 8)
+  ].join(" | ");
+}
+
+function buildCommercialProposalName(lead: CommercialLeadRow) {
+  return [
+    lead.empresa,
+    "Proposta",
+    lead.data_proxima_acao ?? lead.id.slice(0, 8)
   ].join(" | ");
 }
 
@@ -1787,6 +2004,49 @@ function toNotionRevenueAuditAlert(audit: RevenueAuditRow) {
   if (divergence > 0.1) return ">10%";
   if (divergence > 0.05) return ">5%";
   return "OK";
+}
+
+function toNotionCommercialStage(stage: string) {
+  const map: Record<string, string> = {
+    disponivel: "Disponível",
+    prospeccao: "Prospecção",
+    prospecção: "Prospecção",
+    lead: "Lead",
+    visita: "Visita",
+    proposta: "Proposta",
+    negociacao: "Negociação",
+    negociação: "Negociação",
+    contrato: "Contrato",
+    implantacao: "Implantação",
+    implantação: "Implantação",
+    inauguracao: "Inauguração",
+    inauguração: "Inauguração"
+  };
+
+  return map[stage] ?? "Lead";
+}
+
+function toNotionProposalStatus(stage: string) {
+  const map: Record<string, string> = {
+    proposta: "Enviada",
+    negociacao: "Em análise",
+    negociação: "Em análise",
+    contrato: "Aceita"
+  };
+
+  return map[stage] ?? "Enviada";
+}
+
+function toCommercialProposalTerm(stage: string) {
+  return stage === "contrato" ? 60 : 48;
+}
+
+function buildCommercialProposalTerms(lead: CommercialLeadRow) {
+  return [
+    lead.historico,
+    lead.proxima_acao ? `Proxima acao: ${lead.proxima_acao}` : null,
+    lead.responsavel ? `Responsavel: ${lead.responsavel}` : null
+  ].filter(Boolean).join("\n");
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {
