@@ -17,6 +17,9 @@ type RevenueAuditRow = Database["public"]["Tables"]["auditoria_faturamento"]["Ro
 type CommercialLeadRow = Database["public"]["Tables"]["comercial_leads"]["Row"];
 type VacancyRow = Database["public"]["Tables"]["vacancia"]["Row"];
 type UtilityReadingRow = Database["public"]["Tables"]["consumos"]["Row"];
+type ServiceOrderRow = Database["public"]["Tables"]["ordens_servico"]["Row"];
+type DocumentRow = Database["public"]["Tables"]["documentos"]["Row"];
+type LegalCaseRow = Database["public"]["Tables"]["juridico"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -40,6 +43,43 @@ type UtilityPropertyNames = {
   alertType: string;
 };
 
+type ServiceOrderPropertyNames = {
+  title: string;
+  enterprise?: string;
+  store?: string;
+  category?: string;
+  status?: string;
+  priority?: string;
+  deadline?: string;
+  plannedCost?: string;
+  actualCost?: string;
+  description?: string;
+  beforeFiles?: string;
+  afterFiles?: string;
+};
+
+type DocumentPropertyNames = {
+  title: string;
+  enterprise?: string;
+  store?: string;
+  type?: string;
+  file?: string;
+  driveUrl?: string;
+  validity?: string;
+};
+
+type LegalPropertyNames = {
+  title: string;
+  enterprise?: string;
+  store?: string;
+  tenant?: string;
+  type?: string;
+  status?: string;
+  opening?: string;
+  closing?: string;
+  description?: string;
+};
+
 function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -59,7 +99,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas", "vacancia", "ocupacao", "energia", "agua"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas", "vacancia", "ocupacao", "energia", "agua", "os", "documentos", "juridico"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -123,7 +163,13 @@ export async function POST(request: Request) {
                                       ? await syncUtilities(client, token, job, "energia")
                                       : job.entidade === "agua"
                                         ? await syncUtilities(client, token, job, "agua")
-                                        : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                                        : job.entidade === "os"
+                                          ? await syncServiceOrders(client, token, job)
+                                          : job.entidade === "documentos"
+                                            ? await syncDocuments(client, token, job)
+                                            : job.entidade === "juridico"
+                                              ? await syncLegalCases(client, token, job)
+                                              : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -1651,6 +1697,308 @@ async function syncUtilities(client: any, token: string, job: SyncJob, kind: "en
   };
 }
 
+async function syncServiceOrders(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, enterprisesRegistryResult] = await Promise.all([
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "lojas").single(),
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "empreendimentos").single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [ordersResult, storesResult, enterprisesResult] = await Promise.all([
+    client
+      .from("ordens_servico")
+      .select("id,empreendimento_id,loja_id,local,categoria,prioridade,status,responsavel,prazo,custo_previsto,custo_realizado,fotos_antes,fotos_depois,descricao,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("prazo", { ascending: true }),
+    client.from("lojas").select("id,codigo").is("deleted_at", null),
+    client.from("empreendimentos").select("id,nome").is("deleted_at", null)
+  ]);
+
+  if (ordersResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: ordersResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  const propertyNames = await getServiceOrderPropertyNames(token, dataSourceId);
+  const orders = (ordersResult.data ?? []) as ServiceOrderRow[];
+  const storeCodesById = new Map<string, string>((storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo]));
+  const enterpriseNamesById = new Map<string, string>((enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome]));
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingOrders = await getExistingTitleValues(token, dataSourceId, propertyNames.title);
+  let created = 0;
+  let skipped = 0;
+
+  for (const order of orders) {
+    const storeCode = order.loja_id ? storeCodesById.get(order.loja_id) : null;
+    const enterpriseName = enterpriseNamesById.get(order.empreendimento_id);
+    const orderName = buildServiceOrderName(order, storeCode);
+
+    if (existingOrders.has(orderName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildServiceOrderProperties(
+          order,
+          orderName,
+          propertyNames,
+          storeCode ? storePageIdsByCode.get(storeCode) : null,
+          enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar OS ${orderName}.` };
+    }
+
+    created += 1;
+    existingOrders.add(orderName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `OS sincronizadas: ${created} ordens criadas, ${skipped} ignoradas.`
+  };
+}
+
+async function syncDocuments(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, enterprisesRegistryResult] = await Promise.all([
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "lojas").single(),
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "empreendimentos").single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [documentsResult, storesResult, enterprisesResult] = await Promise.all([
+    client
+      .from("documentos")
+      .select("id,loja_id,empreendimento_id,categoria,titulo,status,vencimento,pasta_drive_url,arquivo_url,responsavel,observacoes,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("titulo", { ascending: true }),
+    client.from("lojas").select("id,codigo").is("deleted_at", null),
+    client.from("empreendimentos").select("id,nome").is("deleted_at", null)
+  ]);
+
+  if (documentsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: documentsResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  const propertyNames = await getDocumentPropertyNames(token, dataSourceId);
+  const documents = (documentsResult.data ?? []) as DocumentRow[];
+  const storeCodesById = new Map<string, string>((storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo]));
+  const enterpriseNamesById = new Map<string, string>((enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome]));
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingDocuments = await getExistingTitleValues(token, dataSourceId, propertyNames.title);
+  let created = 0;
+  let skipped = 0;
+
+  for (const document of documents) {
+    const storeCode = storeCodesById.get(document.loja_id);
+    const enterpriseName = enterpriseNamesById.get(document.empreendimento_id);
+    const documentName = buildDocumentName(document, storeCode);
+
+    if (existingDocuments.has(documentName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildDocumentProperties(
+          document,
+          documentName,
+          propertyNames,
+          storeCode ? storePageIdsByCode.get(storeCode) : null,
+          enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar documento ${documentName}.` };
+    }
+
+    created += 1;
+    existingDocuments.add(documentName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Documentos sincronizados: ${created} documentos criados, ${skipped} ignorados.`
+  };
+}
+
+async function syncLegalCases(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, enterprisesRegistryResult, tenantsRegistryResult] = await Promise.all([
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "lojas").single(),
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "empreendimentos").single(),
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "lojistas").single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  if (tenantsRegistryResult.error || !tenantsRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: tenantsRegistryResult.error?.message ?? "Data source de Lojistas nao encontrado." };
+  }
+
+  const [legalResult, storesResult, enterprisesResult, contractsResult, tenantsResult] = await Promise.all([
+    client
+      .from("juridico")
+      .select("id,loja_id,empreendimento_id,contrato_id,tipo,titulo,parte_contraria,valor_causa,prazo,status,risco,responsavel,historico,proxima_acao,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("prazo", { ascending: true }),
+    client.from("lojas").select("id,codigo").is("deleted_at", null),
+    client.from("empreendimentos").select("id,nome").is("deleted_at", null),
+    client.from("contratos").select("id,lojista_id").is("deleted_at", null),
+    client.from("lojistas").select("id,nome_fantasia").is("deleted_at", null)
+  ]);
+
+  if (legalResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: legalResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  if (contractsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: contractsResult.error.message };
+  }
+
+  if (tenantsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: tenantsResult.error.message };
+  }
+
+  const propertyNames = await getLegalPropertyNames(token, dataSourceId);
+  const legalCases = (legalResult.data ?? []) as LegalCaseRow[];
+  const storeCodesById = new Map<string, string>((storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo]));
+  const enterpriseNamesById = new Map<string, string>((enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome]));
+  const tenantNamesById = new Map<string, string>((tenantsResult.data ?? []).map((tenant: { id: string; nome_fantasia: string }) => [tenant.id, tenant.nome_fantasia]));
+  const tenantNamesByContractId = new Map<string, string>();
+
+  for (const contract of contractsResult.data ?? []) {
+    const tenantName = tenantNamesById.get((contract as { lojista_id: string }).lojista_id);
+    if (tenantName) tenantNamesByContractId.set((contract as { id: string }).id, tenantName);
+  }
+
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const tenantPageIdsByName = await getTitlePageMap(token, tenantsRegistryResult.data.notion_data_source_id, "Nome Fantasia");
+  const existingCases = await getExistingTitleValues(token, dataSourceId, propertyNames.title);
+  let created = 0;
+  let skipped = 0;
+
+  for (const legalCase of legalCases) {
+    const storeCode = storeCodesById.get(legalCase.loja_id);
+    const enterpriseName = enterpriseNamesById.get(legalCase.empreendimento_id);
+    const tenantName = legalCase.contrato_id ? tenantNamesByContractId.get(legalCase.contrato_id) : null;
+    const caseName = buildLegalCaseName(legalCase, storeCode);
+
+    if (existingCases.has(caseName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildLegalProperties(
+          legalCase,
+          caseName,
+          propertyNames,
+          storeCode ? storePageIdsByCode.get(storeCode) : null,
+          enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null,
+          tenantName ? tenantPageIdsByName.get(tenantName) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar caso juridico ${caseName}.` };
+    }
+
+    created += 1;
+    existingCases.add(caseName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Juridico sincronizado: ${created} casos criados, ${skipped} ignorados.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -1671,6 +2019,58 @@ async function getUtilityPropertyNames(token: string, dataSourceId: string, kind
     variation: pickPropertyName(propertyNames, ["Variação %", "Variação", "Variacao"]),
     alert,
     alertType: properties[alert]?.type ?? "select"
+  };
+}
+
+async function getServiceOrderPropertyNames(token: string, dataSourceId: string): Promise<ServiceOrderPropertyNames> {
+  const properties = await getDataSourceProperties(token, dataSourceId);
+  const propertyNames = new Set(Object.keys(properties));
+
+  return {
+    title: pickPropertyName(propertyNames, ["OS", "Ordem"]),
+    enterprise: pickOptionalPropertyName(propertyNames, ["Empreendimento"]),
+    store: pickOptionalPropertyName(propertyNames, ["Loja"]),
+    category: pickOptionalPropertyName(propertyNames, ["Categoria"]),
+    status: pickOptionalPropertyName(propertyNames, ["Status"]),
+    priority: pickOptionalPropertyName(propertyNames, ["Prioridade"]),
+    deadline: pickOptionalPropertyName(propertyNames, ["Prazo"]),
+    plannedCost: pickOptionalPropertyName(propertyNames, ["Custo Previsto", "Custo previsto"]),
+    actualCost: pickOptionalPropertyName(propertyNames, ["Custo Realizado", "Custo realizado"]),
+    description: pickOptionalPropertyName(propertyNames, ["Descrição", "Descricao"]),
+    beforeFiles: pickOptionalPropertyName(propertyNames, ["Fotos Antes", "Fotos antes"]),
+    afterFiles: pickOptionalPropertyName(propertyNames, ["Fotos Depois", "Fotos depois"])
+  };
+}
+
+async function getDocumentPropertyNames(token: string, dataSourceId: string): Promise<DocumentPropertyNames> {
+  const properties = await getDataSourceProperties(token, dataSourceId);
+  const propertyNames = new Set(Object.keys(properties));
+
+  return {
+    title: pickPropertyName(propertyNames, ["Documento"]),
+    enterprise: pickOptionalPropertyName(propertyNames, ["Empreendimento"]),
+    store: pickOptionalPropertyName(propertyNames, ["Loja"]),
+    type: pickOptionalPropertyName(propertyNames, ["Tipo", "Categoria"]),
+    file: pickOptionalPropertyName(propertyNames, ["Arquivo"]),
+    driveUrl: pickOptionalPropertyName(propertyNames, ["Link Drive", "Google Drive URL"]),
+    validity: pickOptionalPropertyName(propertyNames, ["Validade"])
+  };
+}
+
+async function getLegalPropertyNames(token: string, dataSourceId: string): Promise<LegalPropertyNames> {
+  const properties = await getDataSourceProperties(token, dataSourceId);
+  const propertyNames = new Set(Object.keys(properties));
+
+  return {
+    title: pickPropertyName(propertyNames, ["Processo", "Caso"]),
+    enterprise: pickOptionalPropertyName(propertyNames, ["Empreendimento"]),
+    store: pickOptionalPropertyName(propertyNames, ["Loja"]),
+    tenant: pickOptionalPropertyName(propertyNames, ["Lojista"]),
+    type: pickOptionalPropertyName(propertyNames, ["Tipo"]),
+    status: pickOptionalPropertyName(propertyNames, ["Status"]),
+    opening: pickOptionalPropertyName(propertyNames, ["Abertura"]),
+    closing: pickOptionalPropertyName(propertyNames, ["Encerramento"]),
+    description: pickOptionalPropertyName(propertyNames, ["Descrição", "Descricao", "Pendencias", "Pendências"])
   };
 }
 
@@ -1990,6 +2390,77 @@ function buildUtilityProperties(
   return properties;
 }
 
+function buildServiceOrderProperties(
+  order: ServiceOrderRow,
+  orderName: string,
+  propertyNames: ServiceOrderPropertyNames,
+  storePageId?: string | null,
+  enterprisePageId?: string | null
+) {
+  const properties: Record<string, unknown> = {
+    [propertyNames.title]: title(orderName)
+  };
+
+  if (propertyNames.enterprise) properties[propertyNames.enterprise] = relation(enterprisePageId);
+  if (propertyNames.store) properties[propertyNames.store] = relation(storePageId);
+  if (propertyNames.category) properties[propertyNames.category] = select(toNotionServiceCategory(order.categoria));
+  if (propertyNames.status) properties[propertyNames.status] = select(toNotionServiceStatus(order.status));
+  if (propertyNames.priority) properties[propertyNames.priority] = select(toNotionPriority(order.prioridade));
+  if (propertyNames.deadline) properties[propertyNames.deadline] = date(order.prazo);
+  if (propertyNames.plannedCost) properties[propertyNames.plannedCost] = number(order.custo_previsto);
+  if (propertyNames.actualCost) properties[propertyNames.actualCost] = number(order.custo_realizado);
+  if (propertyNames.description) properties[propertyNames.description] = richText(buildServiceOrderDescription(order));
+  if (propertyNames.beforeFiles) properties[propertyNames.beforeFiles] = files(order.fotos_antes, "Fotos Antes");
+  if (propertyNames.afterFiles) properties[propertyNames.afterFiles] = files(order.fotos_depois, "Fotos Depois");
+
+  return properties;
+}
+
+function buildDocumentProperties(
+  document: DocumentRow,
+  documentName: string,
+  propertyNames: DocumentPropertyNames,
+  storePageId?: string | null,
+  enterprisePageId?: string | null
+) {
+  const properties: Record<string, unknown> = {
+    [propertyNames.title]: title(documentName)
+  };
+
+  if (propertyNames.enterprise) properties[propertyNames.enterprise] = relation(enterprisePageId);
+  if (propertyNames.store) properties[propertyNames.store] = relation(storePageId);
+  if (propertyNames.type) properties[propertyNames.type] = select(toNotionDocumentType(document.categoria));
+  if (propertyNames.file) properties[propertyNames.file] = files(document.arquivo_url, document.titulo);
+  if (propertyNames.driveUrl) properties[propertyNames.driveUrl] = url(document.pasta_drive_url);
+  if (propertyNames.validity) properties[propertyNames.validity] = date(document.vencimento);
+
+  return properties;
+}
+
+function buildLegalProperties(
+  legalCase: LegalCaseRow,
+  caseName: string,
+  propertyNames: LegalPropertyNames,
+  storePageId?: string | null,
+  enterprisePageId?: string | null,
+  tenantPageId?: string | null
+) {
+  const properties: Record<string, unknown> = {
+    [propertyNames.title]: title(caseName)
+  };
+
+  if (propertyNames.enterprise) properties[propertyNames.enterprise] = relation(enterprisePageId);
+  if (propertyNames.store) properties[propertyNames.store] = relation(storePageId);
+  if (propertyNames.tenant) properties[propertyNames.tenant] = relation(tenantPageId);
+  if (propertyNames.type) properties[propertyNames.type] = select(toNotionLegalType(legalCase.tipo));
+  if (propertyNames.status) properties[propertyNames.status] = select(toNotionLegalStatus(legalCase.status));
+  if (propertyNames.opening) properties[propertyNames.opening] = date(legalCase.created_at.slice(0, 10));
+  if (propertyNames.closing) properties[propertyNames.closing] = date(legalCase.status === "concluido" ? legalCase.prazo : null);
+  if (propertyNames.description) properties[propertyNames.description] = richText(buildLegalDescription(legalCase));
+
+  return properties;
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -2027,7 +2498,15 @@ function date(value?: string | null) {
 }
 
 function files(url?: string | null, name = "Arquivo") {
-  return { files: url ? [{ name, external: { url } }] : [] };
+  return { files: isWebUrl(url) ? [{ name, external: { url } }] : [] };
+}
+
+function url(value?: string | null) {
+  return { url: isWebUrl(value) ? value : null };
+}
+
+function isWebUrl(value?: string | null) {
+  return Boolean(value && /^https?:\/\//i.test(value));
 }
 
 function toNotionEnterpriseStatus(status: string) {
@@ -2212,6 +2691,31 @@ function buildUtilityMeasurementName(reading: UtilityReadingRow, kind: "energia"
     toUtilityKindLabel(kind),
     reading.competencia,
     reading.id.slice(0, 8)
+  ].join(" | ");
+}
+
+function buildServiceOrderName(order: ServiceOrderRow, storeCode?: string | null) {
+  return [
+    "OS",
+    order.id.slice(-4),
+    storeCode ?? order.local,
+    order.prazo
+  ].join(" | ");
+}
+
+function buildDocumentName(document: DocumentRow, storeCode?: string) {
+  return [
+    storeCode ?? "Loja",
+    document.titulo,
+    document.id.slice(0, 8)
+  ].join(" | ");
+}
+
+function buildLegalCaseName(legalCase: LegalCaseRow, storeCode?: string) {
+  return [
+    storeCode ?? "Loja",
+    legalCase.titulo,
+    legalCase.id.slice(0, 8)
   ].join(" | ");
 }
 
@@ -2521,6 +3025,140 @@ function toNotionUtilityAlert(reading: UtilityReadingRow, kind: "energia" | "agu
 
 function isUtilityAlert(reading: UtilityReadingRow, kind: "energia" | "agua") {
   return toNotionUtilityAlert(reading, kind) !== "Normal";
+}
+
+function toNotionServiceCategory(category: string) {
+  const normalized = category.toLowerCase();
+  const map: Record<string, string> = {
+    eletrica: "Elétrica",
+    elétrica: "Elétrica",
+    hidraulica: "Hidráulica",
+    hidráulica: "Hidráulica",
+    civil: "Civil",
+    limpeza: "Limpeza",
+    seguranca: "Segurança",
+    segurança: "Segurança",
+    jardinagem: "Jardinagem",
+    comunicacao_visual: "Comunicação Visual",
+    "comunicação visual": "Comunicação Visual",
+    ar_condicionado: "Ar Condicionado",
+    "ar condicionado": "Ar Condicionado"
+  };
+
+  return map[normalized] ?? "Civil";
+}
+
+function toNotionServiceStatus(status: string) {
+  const normalized = status.toLowerCase();
+  const map: Record<string, string> = {
+    aberta: "Aberta",
+    em_execucao: "Em andamento",
+    "em execução": "Em andamento",
+    aguardando_terceiro: "Aguardando",
+    aguardando: "Aguardando",
+    concluida: "Concluída",
+    concluída: "Concluída",
+    cancelada: "Cancelada"
+  };
+
+  return map[normalized] ?? "Aberta";
+}
+
+function toNotionPriority(priority: string) {
+  const normalized = priority.toLowerCase();
+  const map: Record<string, string> = {
+    baixa: "Baixa",
+    media: "Média",
+    média: "Média",
+    alta: "Alta",
+    critica: "Crítica",
+    crítica: "Crítica"
+  };
+
+  return map[normalized] ?? "Média";
+}
+
+function toNotionDocumentType(category: string) {
+  const normalized = category.toLowerCase();
+  const map: Record<string, string> = {
+    contratos: "Contrato",
+    contrato: "Contrato",
+    aditivos: "Aditivo",
+    aditivo: "Aditivo",
+    garantias: "Garantia",
+    garantia: "Garantia",
+    seguros: "Seguro",
+    seguro: "Seguro",
+    alvaras: "Alvará",
+    alvará: "Alvará",
+    avcb: "AVCB",
+    vistorias: "Vistoria",
+    vistoria: "Vistoria",
+    licencas: "Licença",
+    licenças: "Licença",
+    plantas: "Planta",
+    planta: "Planta",
+    projetos: "Projeto",
+    projeto: "Projeto",
+    fotos: "Foto",
+    foto: "Foto"
+  };
+
+  return map[normalized] ?? "Contrato";
+}
+
+function toNotionLegalType(type: string) {
+  const normalized = type.toLowerCase();
+  const map: Record<string, string> = {
+    notificacao: "Notificação",
+    notificação: "Notificação",
+    acao_judicial: "Ação Judicial",
+    "ação judicial": "Ação Judicial",
+    garantia: "Garantia",
+    renovacao: "Renovação",
+    renovação: "Renovação",
+    pendencia: "Pendência",
+    pendência: "Pendência",
+    contrato: "Pendência"
+  };
+
+  return map[normalized] ?? "Pendência";
+}
+
+function toNotionLegalStatus(status: string) {
+  const normalized = status.toLowerCase();
+  const map: Record<string, string> = {
+    aberto: "Aberto",
+    em_andamento: "Em andamento",
+    aguardando: "Em andamento",
+    critico: "Em andamento",
+    crítico: "Em andamento",
+    concluido: "Encerrado",
+    concluído: "Encerrado",
+    suspenso: "Suspenso"
+  };
+
+  return map[normalized] ?? "Aberto";
+}
+
+function buildServiceOrderDescription(order: ServiceOrderRow) {
+  return [
+    order.descricao,
+    order.local ? `Local: ${order.local}` : null,
+    order.responsavel ? `Responsavel: ${order.responsavel}` : null
+  ].filter(Boolean).join("\n");
+}
+
+function buildLegalDescription(legalCase: LegalCaseRow) {
+  return [
+    legalCase.historico,
+    legalCase.proxima_acao ? `Proxima acao: ${legalCase.proxima_acao}` : null,
+    legalCase.parte_contraria ? `Parte contraria: ${legalCase.parte_contraria}` : null,
+    legalCase.valor_causa > 0 ? `Valor da causa: ${legalCase.valor_causa}` : null,
+    legalCase.risco ? `Risco: ${legalCase.risco}` : null,
+    legalCase.responsavel ? `Responsavel: ${legalCase.responsavel}` : null,
+    legalCase.prazo ? `Prazo: ${legalCase.prazo}` : null
+  ].filter(Boolean).join("\n");
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {

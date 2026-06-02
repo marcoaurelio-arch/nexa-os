@@ -646,3 +646,35 @@ O processador tambem suporta `agua`, criando medicoes na base `17 Agua` a partir
 ```
 
 Para esses fluxos, as bases `16 Energia` e `17 Agua` precisam estar compartilhadas com a integracao `Integracao`.
+
+O processador tambem suporta `os`, criando ordens de servico na base `18 Ordens de Serviço` com relacao a empreendimento e loja, categoria, prioridade, status, prazo, custos e descricao operacional:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["os"],
+  "retryErrors": true
+}
+```
+
+O processador tambem suporta `documentos`, criando registros na base `20 Documentos` com tipo, validade, relacao com empreendimento e loja e links externos quando houver URL web valida:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["documentos"],
+  "retryErrors": true
+}
+```
+
+O processador tambem suporta `juridico`, criando casos na base `19 Jurídico` com relacao a empreendimento, loja e lojista quando o caso estiver ligado a um contrato:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["juridico"],
+  "retryErrors": true
+}
+```
+
+Para esses fluxos, as bases `18 Ordens de Serviço`, `19 Jurídico` e `20 Documentos` precisam estar compartilhadas com a integracao `Integracao`.
