@@ -522,3 +522,15 @@ O processador tambem suporta `despesas`, criando registros na base `06 Despesas`
 ```
 
 Para esse fluxo, a base `06 Despesas` precisa estar compartilhada com a integracao `Integracao`.
+
+O processador tambem suporta `inadimplencia`, criando registros na base `07 Inadimplência` e relacionando cada caso a loja, receita e lojista quando essas relacoes existirem:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["inadimplencia"],
+  "retryErrors": true
+}
+```
+
+Para esse fluxo, a base `07 Inadimplência` precisa estar compartilhada com a integracao `Integracao`.

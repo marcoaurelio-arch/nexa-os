@@ -11,6 +11,7 @@ type TenantRow = Database["public"]["Tables"]["lojistas"]["Row"];
 type ContractRow = Database["public"]["Tables"]["contratos"]["Row"];
 type ReceivableRow = Database["public"]["Tables"]["receitas"]["Row"];
 type PayableRow = Database["public"]["Tables"]["despesas"]["Row"];
+type DelinquencyRow = Database["public"]["Tables"]["inadimplencias"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -83,7 +84,9 @@ export async function POST(request: Request) {
                 ? await syncReceivables(client, token, job)
                 : job.entidade === "despesas"
                   ? await syncPayables(client, token, job)
-                  : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                  : job.entidade === "inadimplencia"
+                    ? await syncDelinquencies(client, token, job)
+                    : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -706,6 +709,150 @@ async function syncPayables(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncDelinquencies(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, receivablesRegistryResult, tenantsRegistryResult] = await Promise.all([
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "lojas")
+      .single(),
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "receitas")
+      .single(),
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "lojistas")
+      .single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (receivablesRegistryResult.error || !receivablesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: receivablesRegistryResult.error?.message ?? "Data source de Receitas nao encontrado." };
+  }
+
+  if (tenantsRegistryResult.error || !tenantsRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: tenantsRegistryResult.error?.message ?? "Data source de Lojistas nao encontrado." };
+  }
+
+  const [delinquenciesResult, storesResult, receivablesResult, tenantsResult] = await Promise.all([
+    client
+      .from("inadimplencias")
+      .select("id,receita_id,loja_id,valor,dias_atraso,historico,negociacao,responsavel,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("dias_atraso", { ascending: false }),
+    client
+      .from("lojas")
+      .select("id,codigo")
+      .is("deleted_at", null),
+    client
+      .from("receitas")
+      .select("id,loja_id,competencia,receita,vencimento")
+      .is("deleted_at", null),
+    client
+      .from("lojistas")
+      .select("id,nome_fantasia,loja_id")
+      .is("deleted_at", null)
+  ]);
+
+  if (delinquenciesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: delinquenciesResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (receivablesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: receivablesResult.error.message };
+  }
+
+  if (tenantsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: tenantsResult.error.message };
+  }
+
+  const delinquencies = (delinquenciesResult.data ?? []) as DelinquencyRow[];
+  const storeCodesById = new Map<string, string>(
+    (storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo])
+  );
+  const receivablesById = new Map<string, Pick<ReceivableRow, "loja_id" | "competencia" | "receita" | "vencimento">>(
+    (receivablesResult.data ?? []).map((receivable: Pick<ReceivableRow, "id" | "loja_id" | "competencia" | "receita" | "vencimento">) => [
+      receivable.id,
+      receivable
+    ])
+  );
+  const tenantNamesByStoreId = new Map<string, string>(
+    (tenantsResult.data ?? [])
+      .filter((tenant: { loja_id: string | null }) => tenant.loja_id)
+      .map((tenant: { nome_fantasia: string; loja_id: string }) => [tenant.loja_id, tenant.nome_fantasia])
+  );
+
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const receivablePageIdsByLaunch = await getTitlePageMap(token, receivablesRegistryResult.data.notion_data_source_id, "Lançamento");
+  const tenantPageIdsByName = await getTitlePageMap(token, tenantsRegistryResult.data.notion_data_source_id, "Nome Fantasia");
+  const existingCases = await getExistingTitleValues(token, dataSourceId, "Caso");
+  let created = 0;
+  let skipped = 0;
+
+  for (const delinquency of delinquencies) {
+    const storeCode = storeCodesById.get(delinquency.loja_id);
+    const receivable = delinquency.receita_id ? receivablesById.get(delinquency.receita_id) : null;
+    const receivableStoreCode = receivable ? storeCodesById.get(receivable.loja_id) : storeCode;
+    const receivableLaunch = receivable ? buildReceivableLaunch(receivable as ReceivableRow, receivableStoreCode) : null;
+    const tenantName = tenantNamesByStoreId.get(delinquency.loja_id);
+    const caseName = buildDelinquencyCase(delinquency, storeCode, receivable);
+
+    if (existingCases.has(caseName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildDelinquencyProperties(
+          delinquency,
+          caseName,
+          storeCode ? storePageIdsByCode.get(storeCode) : null,
+          receivableLaunch ? receivablePageIdsByLaunch.get(receivableLaunch) : null,
+          tenantName ? tenantPageIdsByName.get(tenantName) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        created,
+        skipped,
+        message: response.message ?? `Falha ao criar inadimplencia ${caseName}.`
+      };
+    }
+
+    created += 1;
+    existingCases.add(caseName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Inadimplencia sincronizada: ${created} casos criados, ${skipped} ignorados.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -838,6 +985,25 @@ function buildPayableProperties(payable: PayableRow, launch: string, enterpriseP
   };
 }
 
+function buildDelinquencyProperties(
+  delinquency: DelinquencyRow,
+  caseName: string,
+  storePageId?: string | null,
+  receivablePageId?: string | null,
+  tenantPageId?: string | null
+) {
+  return {
+    Caso: title(caseName),
+    Loja: relation(storePageId),
+    Receita: relation(receivablePageId),
+    Lojista: relation(tenantPageId),
+    Valor: number(delinquency.valor),
+    "Dias Atraso": number(delinquency.dias_atraso),
+    "Histórico": richText(delinquency.historico ?? ""),
+    Etapa: select(toNotionDelinquencyStage(delinquency.status, delinquency.dias_atraso))
+  };
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -961,6 +1127,20 @@ function buildPayableLaunch(payable: PayableRow, enterpriseName?: string) {
   ].join(" | ");
 }
 
+function buildDelinquencyCase(
+  delinquency: DelinquencyRow,
+  storeCode?: string,
+  receivable?: Pick<ReceivableRow, "competencia" | "receita" | "vencimento"> | null
+) {
+  return [
+    storeCode ?? "Loja",
+    receivable ? toNotionRevenueType(receivable.receita) : "Receita",
+    receivable?.competencia ?? "Competencia",
+    `${delinquency.dias_atraso} dias`,
+    toNotionDelinquencyStage(delinquency.status, delinquency.dias_atraso)
+  ].join(" | ");
+}
+
 function toCompetenceDate(competence: string) {
   return competence.length === 7 ? `${competence}-01` : competence;
 }
@@ -1064,6 +1244,23 @@ function toNotionCostCenter(costCenter: string) {
   };
 
   return map[normalized] ?? "Administrativo";
+}
+
+function toNotionDelinquencyStage(status: string, daysLate: number) {
+  const map: Record<string, string> = {
+    negociacao: "Negociação",
+    juridico: "Jurídico",
+    jurídico: "Jurídico",
+    regularizado: "Quitado",
+    quitado: "Quitado"
+  };
+
+  if (map[status]) return map[status];
+  if (daysLate >= 90) return "90 dias";
+  if (daysLate >= 60) return "60 dias";
+  if (daysLate >= 30) return "30 dias";
+  if (daysLate >= 15) return "15 dias";
+  return "5 dias";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {
