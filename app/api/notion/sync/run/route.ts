@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -86,7 +86,11 @@ export async function POST(request: Request) {
                   ? await syncPayables(client, token, job)
                   : job.entidade === "inadimplencia"
                     ? await syncDelinquencies(client, token, job)
-                    : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                    : job.entidade === "condominio"
+                      ? await syncLedger(client, token, job, "condominio")
+                      : job.entidade === "fundo-promocao"
+                        ? await syncLedger(client, token, job, "fundo-promocao")
+                        : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -853,6 +857,116 @@ async function syncDelinquencies(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncLedger(client: any, token: string, job: SyncJob, ledger: "condominio" | "fundo-promocao") {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const enterprisesRegistryResult = await client
+    .from("notion_databases")
+    .select("notion_data_source_id")
+    .eq("slug", "empreendimentos")
+    .single();
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [receivablesResult, payablesResult, enterprisesResult] = await Promise.all([
+    client
+      .from("receitas")
+      .select("id,loja_id,empreendimento_id,competencia,receita,valor,vencimento,recebimento,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("vencimento", { ascending: true }),
+    client
+      .from("despesas")
+      .select("id,empreendimento_id,fornecedor,categoria,competencia,valor,vencimento,pagamento,centro_custo,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("vencimento", { ascending: true }),
+    client
+      .from("empreendimentos")
+      .select("id,nome")
+      .is("deleted_at", null)
+  ]);
+
+  if (receivablesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: receivablesResult.error.message };
+  }
+
+  if (payablesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: payablesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  const enterpriseNamesById = new Map<string, string>(
+    (enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome])
+  );
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingLaunches = await getExistingTitleValues(token, dataSourceId, "Lançamento");
+  const receivables = ((receivablesResult.data ?? []) as ReceivableRow[]).filter((receivable) => ledgerReceivableFilter(receivable, ledger));
+  const payables = ((payablesResult.data ?? []) as PayableRow[]).filter((payable) => ledgerPayableFilter(payable, ledger));
+  const entries = [
+    ...receivables.map((receivable) => ({
+      launch: buildLedgerReceivableLaunch(receivable, ledger, enterpriseNamesById.get(receivable.empreendimento_id)),
+      enterpriseId: receivable.empreendimento_id,
+      properties: (enterprisePageId?: string | null) => buildLedgerReceivableProperties(receivable, ledger, enterprisePageId)
+    })),
+    ...payables.map((payable) => ({
+      launch: buildLedgerPayableLaunch(payable, ledger, enterpriseNamesById.get(payable.empreendimento_id)),
+      enterpriseId: payable.empreendimento_id,
+      properties: (enterprisePageId?: string | null) => buildLedgerPayableProperties(payable, ledger, enterprisePageId)
+    }))
+  ];
+  let created = 0;
+  let skipped = 0;
+
+  for (const entry of entries) {
+    if (existingLaunches.has(entry.launch)) {
+      skipped += 1;
+      continue;
+    }
+
+    const enterpriseName = enterpriseNamesById.get(entry.enterpriseId);
+    const enterprisePageId = enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null;
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: {
+          "Lançamento": title(entry.launch),
+          ...entry.properties(enterprisePageId)
+        }
+      })
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        created,
+        skipped,
+        message: response.message ?? `Falha ao criar lancamento ${entry.launch}.`
+      };
+    }
+
+    created += 1;
+    existingLaunches.add(entry.launch);
+  }
+
+  const label = ledger === "condominio" ? "Condominio" : "Fundo de promocao";
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `${label} sincronizado: ${created} lancamentos criados, ${skipped} ignorados.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -1004,6 +1118,28 @@ function buildDelinquencyProperties(
   };
 }
 
+function buildLedgerReceivableProperties(receivable: ReceivableRow, ledger: "condominio" | "fundo-promocao", enterprisePageId?: string | null) {
+  return {
+    Empreendimento: relation(enterprisePageId),
+    Natureza: select("Receita"),
+    Categoria: select(ledger === "condominio" ? toNotionCondominiumRevenueCategory(receivable.receita) : "Arrecadado"),
+    "Competência": date(toCompetenceDate(receivable.competencia)),
+    Valor: number(receivable.valor),
+    Status: select(toNotionLedgerStatus(receivable.status))
+  };
+}
+
+function buildLedgerPayableProperties(payable: PayableRow, ledger: "condominio" | "fundo-promocao", enterprisePageId?: string | null) {
+  return {
+    Empreendimento: relation(enterprisePageId),
+    Natureza: select("Despesa"),
+    Categoria: select(ledger === "condominio" ? toNotionExpenseCategory(payable.categoria) : toNotionPromotionExpenseCategory(payable.categoria)),
+    "Competência": date(toCompetenceDate(payable.competencia)),
+    Valor: number(payable.valor),
+    Status: select(toNotionLedgerStatus(payable.status))
+  };
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -1141,6 +1277,32 @@ function buildDelinquencyCase(
   ].join(" | ");
 }
 
+function buildLedgerReceivableLaunch(receivable: ReceivableRow, ledger: "condominio" | "fundo-promocao", enterpriseName?: string) {
+  const category = ledger === "condominio" ? toNotionCondominiumRevenueCategory(receivable.receita) : "Arrecadado";
+
+  return [
+    enterpriseName ?? "Empreendimento",
+    "Receita",
+    category,
+    receivable.competencia,
+    receivable.vencimento,
+    receivable.id.slice(0, 8)
+  ].join(" | ");
+}
+
+function buildLedgerPayableLaunch(payable: PayableRow, ledger: "condominio" | "fundo-promocao", enterpriseName?: string) {
+  const category = ledger === "condominio" ? toNotionExpenseCategory(payable.categoria) : toNotionPromotionExpenseCategory(payable.categoria);
+
+  return [
+    enterpriseName ?? "Empreendimento",
+    "Despesa",
+    category,
+    payable.fornecedor,
+    payable.competencia,
+    payable.vencimento
+  ].join(" | ");
+}
+
 function toCompetenceDate(competence: string) {
   return competence.length === 7 ? `${competence}-01` : competence;
 }
@@ -1261,6 +1423,57 @@ function toNotionDelinquencyStage(status: string, daysLate: number) {
   if (daysLate >= 30) return "30 dias";
   if (daysLate >= 15) return "15 dias";
   return "5 dias";
+}
+
+function ledgerReceivableFilter(receivable: ReceivableRow, ledger: "condominio" | "fundo-promocao") {
+  if (ledger === "condominio") return ["condominio", "multa", "juros"].includes(receivable.receita);
+  return receivable.receita === "fundo_promocao";
+}
+
+function ledgerPayableFilter(payable: PayableRow, ledger: "condominio" | "fundo-promocao") {
+  const costCenter = payable.centro_custo.toLowerCase();
+  if (ledger === "condominio") return ["condominio", "condomínio"].includes(costCenter);
+  return ["fundo promocao", "fundo promoção"].includes(costCenter);
+}
+
+function toNotionCondominiumRevenueCategory(type: string) {
+  const map: Record<string, string> = {
+    condominio: "Condomínio",
+    multa: "Multa",
+    juros: "Juros"
+  };
+
+  return map[type] ?? "Condomínio";
+}
+
+function toNotionPromotionExpenseCategory(category: string) {
+  const normalized = category.toLowerCase();
+  const map: Record<string, string> = {
+    marketing: "Marketing",
+    eventos: "Eventos",
+    "trafego pago": "Tráfego Pago",
+    "tráfego pago": "Tráfego Pago",
+    "redes sociais": "Redes Sociais",
+    "producao audiovisual": "Audiovisual",
+    "produção audiovisual": "Audiovisual",
+    audiovisual: "Audiovisual",
+    decoracao: "Decoração",
+    decoração: "Decoração",
+    "material grafico": "Material Gráfico",
+    "material gráfico": "Material Gráfico"
+  };
+
+  return map[normalized] ?? "Marketing";
+}
+
+function toNotionLedgerStatus(status: string) {
+  const map: Record<string, string> = {
+    pago: "Realizado",
+    recebido: "Realizado",
+    cancelado: "Cancelado"
+  };
+
+  return map[status] ?? "Previsto";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {

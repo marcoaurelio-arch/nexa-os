@@ -534,3 +534,25 @@ O processador tambem suporta `inadimplencia`, criando registros na base `07 Inad
 ```
 
 Para esse fluxo, a base `07 Inadimplência` precisa estar compartilhada com a integracao `Integracao`.
+
+O processador tambem suporta `condominio`, consolidando receitas condominiais, multas, juros e despesas de centro de custo Condominio na base `08 Condomínio`:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["condominio"],
+  "retryErrors": true
+}
+```
+
+O processador tambem suporta `fundo-promocao`, consolidando receitas de fundo de promocao e despesas promocionais na base `09 Fundo de Promoção`:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["fundo-promocao"],
+  "retryErrors": true
+}
+```
+
+Para esses fluxos, as bases `08 Condomínio` e `09 Fundo de Promoção` precisam estar compartilhadas com a integracao `Integracao`.
