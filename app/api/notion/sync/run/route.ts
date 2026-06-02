@@ -13,6 +13,7 @@ type ReceivableRow = Database["public"]["Tables"]["receitas"]["Row"];
 type PayableRow = Database["public"]["Tables"]["despesas"]["Row"];
 type DelinquencyRow = Database["public"]["Tables"]["inadimplencias"]["Row"];
 type FppRow = Database["public"]["Tables"]["fpp"]["Row"];
+type RevenueAuditRow = Database["public"]["Tables"]["auditoria_faturamento"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -93,7 +94,9 @@ export async function POST(request: Request) {
                         ? await syncLedger(client, token, job, "fundo-promocao")
                         : job.entidade === "fpp"
                           ? await syncFpp(client, token, job)
-                          : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                          : job.entidade === "auditoria-faturamento"
+                            ? await syncRevenueAudits(client, token, job)
+                            : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -1099,6 +1102,94 @@ async function syncFpp(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncRevenueAudits(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const storesRegistryResult = await client
+    .from("notion_databases")
+    .select("notion_data_source_id")
+    .eq("slug", "lojas")
+    .single();
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  const [auditsResult, storesResult] = await Promise.all([
+    client
+      .from("auditoria_faturamento")
+      .select("id,loja_id,empreendimento_id,competencia,relatorio_erp,relatorio_pdv,stone,rede,cielo,pix,ifood,delivery,faturamento_anterior,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("competencia", { ascending: false }),
+    client
+      .from("lojas")
+      .select("id,codigo")
+      .is("deleted_at", null)
+  ]);
+
+  if (auditsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: auditsResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  const audits = (auditsResult.data ?? []) as RevenueAuditRow[];
+  const storeCodesById = new Map<string, string>(
+    (storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo])
+  );
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const existingRecords = await getExistingTitleValues(token, dataSourceId, "Registro");
+  let created = 0;
+  let skipped = 0;
+
+  for (const audit of audits) {
+    const storeCode = storeCodesById.get(audit.loja_id);
+    const storePageId = storeCode ? storePageIdsByCode.get(storeCode) : null;
+
+    for (const source of buildRevenueAuditSources(audit)) {
+      const name = buildRevenueAuditName(audit, source.name, storeCode);
+
+      if (existingRecords.has(name)) {
+        skipped += 1;
+        continue;
+      }
+
+      const response = await notionFetch(token, "/pages", {
+        method: "POST",
+        body: JSON.stringify({
+          parent: { data_source_id: dataSourceId },
+          properties: buildRevenueAuditProperties(audit, name, source, storePageId)
+        })
+      });
+
+      if (!response.ok) {
+        return {
+          ok: false,
+          created,
+          skipped,
+          message: response.message ?? `Falha ao criar auditoria ${name}.`
+        };
+      }
+
+      created += 1;
+      existingRecords.add(name);
+    }
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Auditoria de faturamento sincronizada: ${created} registros criados, ${skipped} ignorados.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -1285,6 +1376,24 @@ function buildFppProperties(record: FppRow, name: string, storePageId?: string |
   };
 }
 
+function buildRevenueAuditProperties(
+  audit: RevenueAuditRow,
+  name: string,
+  source: { name: RevenueAuditSource; value: number },
+  storePageId?: string | null
+) {
+  return {
+    Registro: title(name),
+    Loja: relation(storePageId),
+    "Competência": date(toCompetenceDate(audit.competencia)),
+    Fonte: select(source.name),
+    Valor: number(source.value),
+    "Faturamento Declarado": number(audit.relatorio_erp),
+    "Faturamento Auditado": number(auditPaymentTotal(audit)),
+    Alerta: select(toNotionRevenueAuditAlert(audit))
+  };
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -1454,6 +1563,18 @@ function buildFppName(record: FppRow, storeCode?: string) {
     "FPP",
     record.competencia,
     record.id.slice(0, 8)
+  ].join(" | ");
+}
+
+type RevenueAuditSource = "ERP" | "PDV" | "Stone" | "Rede" | "Cielo" | "PIX" | "iFood" | "Delivery";
+
+function buildRevenueAuditName(audit: RevenueAuditRow, source: RevenueAuditSource, storeCode?: string) {
+  return [
+    storeCode ?? "Loja",
+    "Auditoria",
+    audit.competencia,
+    source,
+    audit.id.slice(0, 8)
   ].join(" | ");
 }
 
@@ -1628,6 +1749,44 @@ function toNotionLedgerStatus(status: string) {
   };
 
   return map[status] ?? "Previsto";
+}
+
+function buildRevenueAuditSources(audit: RevenueAuditRow) {
+  const sources: Array<{ name: RevenueAuditSource; value: number }> = [
+    { name: "ERP", value: audit.relatorio_erp },
+    { name: "PDV", value: audit.relatorio_pdv },
+    { name: "Stone", value: audit.stone },
+    { name: "Rede", value: audit.rede },
+    { name: "Cielo", value: audit.cielo },
+    { name: "PIX", value: audit.pix },
+    { name: "iFood", value: audit.ifood },
+    { name: "Delivery", value: audit.delivery }
+  ];
+
+  return sources.filter((source) => source.value > 0);
+}
+
+function auditPaymentTotal(audit: RevenueAuditRow) {
+  return audit.stone + audit.rede + audit.cielo + audit.pix + audit.ifood + audit.delivery;
+}
+
+function auditDivergence(audit: RevenueAuditRow) {
+  return audit.relatorio_erp > 0 ? Math.abs(audit.relatorio_erp - auditPaymentTotal(audit)) / audit.relatorio_erp : 0;
+}
+
+function auditDrop(audit: RevenueAuditRow) {
+  const current = auditPaymentTotal(audit);
+  return audit.faturamento_anterior > 0 ? Math.max((audit.faturamento_anterior - current) / audit.faturamento_anterior, 0) : 0;
+}
+
+function toNotionRevenueAuditAlert(audit: RevenueAuditRow) {
+  const divergence = auditDivergence(audit);
+  const drop = auditDrop(audit);
+
+  if (drop > 0.2) return "Queda>20%";
+  if (divergence > 0.1) return ">10%";
+  if (divergence > 0.05) return ">5%";
+  return "OK";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {

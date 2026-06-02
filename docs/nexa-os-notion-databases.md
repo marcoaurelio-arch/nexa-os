@@ -568,3 +568,15 @@ O processador tambem suporta `fpp`, criando apuracoes na base `10 FPP` com relac
 ```
 
 Para esse fluxo, a base `10 FPP` precisa estar compartilhada com a integracao `Integracao`.
+
+O processador tambem suporta `auditoria-faturamento`, criando registros na base `11 Auditoria de Faturamento` por fonte de faturamento com valor maior que zero. Cada linha relaciona a loja e preenche ERP, total auditado por meios de pagamento, fonte, valor e alerta:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["auditoria-faturamento"],
+  "retryErrors": true
+}
+```
+
+Para esse fluxo, a base `11 Auditoria de Faturamento` precisa estar compartilhada com a integracao `Integracao`.
