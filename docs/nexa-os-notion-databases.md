@@ -624,3 +624,25 @@ O processador tambem suporta `ocupacao`, criando snapshots mensais na base `15 O
 ```
 
 Para esses fluxos, as bases `14 Vacância` e `15 Ocupação` precisam estar compartilhadas com a integracao `Integracao`.
+
+O processador tambem suporta `energia`, criando medicoes na base `16 Energia` a partir dos registros de consumo com `tipo = energia`. Cada medicao relaciona empreendimento, loja, competencia, consumo, valor, variacao percentual e alerta:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["energia"],
+  "retryErrors": true
+}
+```
+
+O processador tambem suporta `agua`, criando medicoes na base `17 Agua` a partir dos registros de consumo com `tipo = agua`. O alerta destaca consumo anormal e possivel vazamento:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["agua"],
+  "retryErrors": true
+}
+```
+
+Para esses fluxos, as bases `16 Energia` e `17 Agua` precisam estar compartilhadas com a integracao `Integracao`.

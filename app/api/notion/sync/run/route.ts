@@ -16,6 +16,7 @@ type FppRow = Database["public"]["Tables"]["fpp"]["Row"];
 type RevenueAuditRow = Database["public"]["Tables"]["auditoria_faturamento"]["Row"];
 type CommercialLeadRow = Database["public"]["Tables"]["comercial_leads"]["Row"];
 type VacancyRow = Database["public"]["Tables"]["vacancia"]["Row"];
+type UtilityReadingRow = Database["public"]["Tables"]["consumos"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -25,6 +26,18 @@ type SyncJob = {
     notion_data_source_id?: string;
     [key: string]: unknown;
   };
+};
+
+type UtilityPropertyNames = {
+  title: string;
+  enterprise?: string;
+  store: string;
+  competence: string;
+  consumption: string;
+  value: string;
+  variation: string;
+  alert: string;
+  alertType: string;
 };
 
 function createAdminClient() {
@@ -46,7 +59,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas", "vacancia", "ocupacao"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas", "vacancia", "ocupacao", "energia", "agua"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -106,7 +119,11 @@ export async function POST(request: Request) {
                                   ? await syncVacancies(client, token, job)
                                   : job.entidade === "ocupacao"
                                     ? await syncOccupancy(client, token, job)
-                                    : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                                    : job.entidade === "energia"
+                                      ? await syncUtilities(client, token, job, "energia")
+                                      : job.entidade === "agua"
+                                        ? await syncUtilities(client, token, job, "agua")
+                                        : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -1540,9 +1557,141 @@ async function syncOccupancy(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncUtilities(client: any, token: string, job: SyncJob, kind: "energia" | "agua") {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, enterprisesRegistryResult] = await Promise.all([
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "lojas").single(),
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "empreendimentos").single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [readingsResult, storesResult, enterprisesResult] = await Promise.all([
+    client
+      .from("consumos")
+      .select("id,loja_id,empreendimento_id,tipo,competencia,consumo,consumo_anterior,valor,medidor,status,created_at,updated_at,deleted_at")
+      .eq("tipo", kind)
+      .is("deleted_at", null)
+      .order("competencia", { ascending: true }),
+    client.from("lojas").select("id,codigo").is("deleted_at", null),
+    client.from("empreendimentos").select("id,nome").is("deleted_at", null)
+  ]);
+
+  if (readingsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: readingsResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  const propertyNames = await getUtilityPropertyNames(token, dataSourceId, kind);
+  const readings = (readingsResult.data ?? []) as UtilityReadingRow[];
+  const storeCodesById = new Map<string, string>((storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo]));
+  const enterpriseNamesById = new Map<string, string>((enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome]));
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingMeasurements = await getExistingTitleValues(token, dataSourceId, propertyNames.title);
+  let created = 0;
+  let skipped = 0;
+
+  for (const reading of readings) {
+    const storeCode = storeCodesById.get(reading.loja_id);
+    const enterpriseName = enterpriseNamesById.get(reading.empreendimento_id);
+    const measurementName = buildUtilityMeasurementName(reading, kind, storeCode);
+
+    if (existingMeasurements.has(measurementName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildUtilityProperties(
+          reading,
+          kind,
+          measurementName,
+          propertyNames,
+          storeCode ? storePageIdsByCode.get(storeCode) : null,
+          enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar medicao ${measurementName}.` };
+    }
+
+    created += 1;
+    existingMeasurements.add(measurementName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `${toUtilityKindLabel(kind)} sincronizada: ${created} medicoes criadas, ${skipped} ignoradas.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
+}
+
+async function getUtilityPropertyNames(token: string, dataSourceId: string, kind: "energia" | "agua"): Promise<UtilityPropertyNames> {
+  const properties = await getDataSourceProperties(token, dataSourceId);
+  const propertyNames = new Set(Object.keys(properties));
+  const alert = pickPropertyName(propertyNames, ["Alerta"]);
+
+  return {
+    title: pickPropertyName(propertyNames, ["Registro", "Medição", "Medicao"]),
+    enterprise: pickOptionalPropertyName(propertyNames, ["Empreendimento"]),
+    store: pickPropertyName(propertyNames, ["Loja"]),
+    competence: pickPropertyName(propertyNames, ["Competência", "Competencia"]),
+    consumption: pickPropertyName(propertyNames, kind === "energia" ? ["Consumo kWh", "Consumo"] : ["Consumo m3", "Consumo"]),
+    value: pickPropertyName(propertyNames, ["Valor"]),
+    variation: pickPropertyName(propertyNames, ["Variação %", "Variação", "Variacao"]),
+    alert,
+    alertType: properties[alert]?.type ?? "select"
+  };
+}
+
+async function getDataSourceProperties(token: string, dataSourceId: string) {
+  const response = await notionFetch(token, `/data_sources/${dataSourceId}`, {
+    method: "GET"
+  });
+
+  if (!response.ok) {
+    throw new Error(response.message ?? "Falha ao consultar propriedades do data source do Notion.");
+  }
+
+  return response.properties ?? {};
+}
+
+function pickPropertyName(properties: Set<string>, candidates: string[]) {
+  return candidates.find((candidate) => properties.has(candidate)) ?? candidates[0];
+}
+
+function pickOptionalPropertyName(properties: Set<string>, candidates: string[]) {
+  return candidates.find((candidate) => properties.has(candidate));
 }
 
 async function getTitlePageMap(token: string, dataSourceId: string, titleProperty: string) {
@@ -1813,6 +1962,34 @@ function buildOccupancyProperties(
   };
 }
 
+function buildUtilityProperties(
+  reading: UtilityReadingRow,
+  kind: "energia" | "agua",
+  measurementName: string,
+  propertyNames: UtilityPropertyNames,
+  storePageId?: string | null,
+  enterprisePageId?: string | null
+) {
+  const properties: Record<string, unknown> = {
+    [propertyNames.title]: title(measurementName),
+    [propertyNames.store]: relation(storePageId),
+    [propertyNames.competence]: date(toCompetenceDate(reading.competencia)),
+    [propertyNames.consumption]: number(reading.consumo),
+    [propertyNames.value]: number(reading.valor),
+    [propertyNames.variation]: number(calculateUtilityVariation(reading))
+  };
+
+  if (propertyNames.enterprise) {
+    properties[propertyNames.enterprise] = relation(enterprisePageId);
+  }
+
+  properties[propertyNames.alert] = propertyNames.alertType === "checkbox"
+    ? checkbox(isUtilityAlert(reading, kind))
+    : select(toNotionUtilityAlert(reading, kind));
+
+  return properties;
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -1827,6 +2004,10 @@ function select(name: string) {
 
 function number(value: number) {
   return { number: value };
+}
+
+function checkbox(value: boolean) {
+  return { checkbox: value };
 }
 
 function relation(pageId?: string | null) {
@@ -2022,6 +2203,15 @@ function buildOccupancySnapshotName(enterpriseName: string, competence: string) 
     enterpriseName,
     "Ocupacao",
     competence
+  ].join(" | ");
+}
+
+function buildUtilityMeasurementName(reading: UtilityReadingRow, kind: "energia" | "agua", storeCode?: string) {
+  return [
+    storeCode ?? "Loja",
+    toUtilityKindLabel(kind),
+    reading.competencia,
+    reading.id.slice(0, 8)
   ].join(" | ");
 }
 
@@ -2298,6 +2488,39 @@ function toNotionVacancyClassification(criticality: string) {
   };
 
   return map[normalized] ?? "Normal";
+}
+
+function calculateUtilityVariation(reading: UtilityReadingRow) {
+  return reading.consumo_anterior > 0
+    ? (reading.consumo - reading.consumo_anterior) / reading.consumo_anterior
+    : 0;
+}
+
+function toUtilityKindLabel(kind: "energia" | "agua") {
+  return kind === "energia" ? "Energia" : "Agua";
+}
+
+function toNotionUtilityAlert(reading: UtilityReadingRow, kind: "energia" | "agua") {
+  const normalized = reading.status.toLowerCase();
+  const variation = calculateUtilityVariation(reading);
+
+  if (normalized === "critico" || normalized === "crítico") {
+    return kind === "agua" ? "Vazamento" : "Consumo anormal";
+  }
+
+  if (normalized === "atencao" || normalized === "atenção") {
+    return kind === "energia" ? "Consumo acima da média" : "Consumo anormal";
+  }
+
+  if (variation > 0.2) {
+    return kind === "energia" ? "Consumo acima da média" : "Consumo anormal";
+  }
+
+  return "Normal";
+}
+
+function isUtilityAlert(reading: UtilityReadingRow, kind: "energia" | "agua") {
+  return toNotionUtilityAlert(reading, kind) !== "Normal";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {
