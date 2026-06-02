@@ -474,3 +474,15 @@ O processador tambem suporta `lojas`, criando registros na base `02 Lojas` e rel
 ```
 
 Para esse fluxo, a base `02 Lojas` tambem precisa estar compartilhada com a integracao `Integracao`.
+
+O processador tambem suporta `lojistas`, criando registros na base `03 Lojistas` e relacionando cada lojista a sua loja e empreendimento:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["lojistas"],
+  "retryErrors": true
+}
+```
+
+Para esse fluxo, a base `03 Lojistas` precisa estar compartilhada com a integracao `Integracao`.

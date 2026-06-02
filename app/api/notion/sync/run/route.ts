@@ -7,6 +7,7 @@ const NOTION_API_URL = "https://api.notion.com/v1";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
 type StoreRow = Database["public"]["Tables"]["lojas"]["Row"];
+type TenantRow = Database["public"]["Tables"]["lojistas"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -71,7 +72,9 @@ export async function POST(request: Request) {
         ? await syncEnterprises(client, token, job)
         : job.entidade === "lojas"
           ? await syncStores(client, token, job)
-          : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+          : job.entidade === "lojistas"
+            ? await syncTenants(client, token, job)
+            : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -238,6 +241,117 @@ async function syncStores(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncTenants(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, enterprisesRegistryResult] = await Promise.all([
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "lojas")
+      .single(),
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "empreendimentos")
+      .single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [tenantsResult, storesResult, enterprisesResult] = await Promise.all([
+    client
+      .from("lojistas")
+      .select("id,nome_fantasia,razao_social,cnpj,responsavel_legal,telefone,whatsapp,email,endereco,segmento,loja_id,data_entrada,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("nome_fantasia", { ascending: true }),
+    client
+      .from("lojas")
+      .select("id,codigo,empreendimento_id")
+      .is("deleted_at", null),
+    client
+      .from("empreendimentos")
+      .select("id,nome")
+      .is("deleted_at", null)
+  ]);
+
+  if (tenantsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: tenantsResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  const tenants = (tenantsResult.data ?? []) as TenantRow[];
+  const storesById = new Map<string, { codigo: string; empreendimento_id: string }>(
+    (storesResult.data ?? []).map((store: { id: string; codigo: string; empreendimento_id: string }) => [
+      store.id,
+      { codigo: store.codigo, empreendimento_id: store.empreendimento_id }
+    ])
+  );
+  const enterpriseNamesById = new Map<string, string>(
+    (enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome])
+  );
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingNames = await getExistingTitleValues(token, dataSourceId, "Nome Fantasia");
+  let created = 0;
+  let skipped = 0;
+
+  for (const tenant of tenants) {
+    if (existingNames.has(tenant.nome_fantasia)) {
+      skipped += 1;
+      continue;
+    }
+
+    const store = tenant.loja_id ? storesById.get(tenant.loja_id) : null;
+    const storePageId = store ? storePageIdsByCode.get(store.codigo) : null;
+    const enterpriseName = store ? enterpriseNamesById.get(store.empreendimento_id) : null;
+    const enterprisePageId = enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null;
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildTenantProperties(tenant, storePageId, enterprisePageId)
+      })
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        created,
+        skipped,
+        message: response.message ?? `Falha ao criar lojista ${tenant.nome_fantasia}.`
+      };
+    }
+
+    created += 1;
+    existingNames.add(tenant.nome_fantasia);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Lojistas sincronizados: ${created} criados, ${skipped} ignorados.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -299,6 +413,24 @@ function buildStoreProperties(store: StoreRow, enterprisePageId?: string | null)
   };
 }
 
+function buildTenantProperties(tenant: TenantRow, storePageId?: string | null, enterprisePageId?: string | null) {
+  return {
+    "Nome Fantasia": title(tenant.nome_fantasia),
+    "Razão Social": richText(tenant.razao_social),
+    CNPJ: richText(tenant.cnpj),
+    "Responsável Legal": richText(tenant.responsavel_legal ?? ""),
+    Telefone: phone(tenant.telefone),
+    WhatsApp: phone(tenant.whatsapp),
+    "E-mail": email(tenant.email),
+    "Endereço": richText(tenant.endereco ?? ""),
+    Segmento: select(toNotionStoreSegment(tenant.segmento)),
+    Status: select(toNotionTenantStatus(tenant.status)),
+    "Data Entrada": date(tenant.data_entrada),
+    "Loja Vinculada": relation(storePageId),
+    Empreendimento: relation(enterprisePageId)
+  };
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -317,6 +449,18 @@ function number(value: number) {
 
 function relation(pageId?: string | null) {
   return { relation: pageId ? [{ id: pageId }] : [] };
+}
+
+function phone(value?: string | null) {
+  return { phone_number: value || null };
+}
+
+function email(value?: string | null) {
+  return { email: value || null };
+}
+
+function date(value?: string | null) {
+  return value ? { date: { start: value } } : { date: null };
 }
 
 function toNotionEnterpriseStatus(status: string) {
@@ -366,6 +510,17 @@ function toNotionStoreSegment(segment?: string | null) {
 function toNotionStoreType(store: StoreRow) {
   if (store.area_total_m2 >= 800) return "Âncora";
   return "Satélite";
+}
+
+function toNotionTenantStatus(status: string) {
+  const map: Record<string, string> = {
+    ativo: "Ativo",
+    implantacao: "Prospecto",
+    inadimplente: "Ativo",
+    inativo: "Inativo"
+  };
+
+  return map[status] ?? "Ativo";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {
