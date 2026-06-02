@@ -602,3 +602,25 @@ O processador tambem suporta `propostas`, derivando propostas dos leads nas etap
 ```
 
 Para esses fluxos, as bases `12 Leads` e `13 Propostas` precisam estar compartilhadas com a integracao `Integracao`.
+
+O processador tambem suporta `vacancia`, criando registros na base `14 Vacância` com relacao ao empreendimento e a loja. A classificacao e a receita perdida usam os campos operacionais do PostgreSQL:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["vacancia"],
+  "retryErrors": true
+}
+```
+
+O processador tambem suporta `ocupacao`, criando snapshots mensais na base `15 Ocupação` por empreendimento. Os totais de lojas, ocupadas, vagas e vacancia financeira sao calculados a partir da base de lojas:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["ocupacao"],
+  "retryErrors": true
+}
+```
+
+Para esses fluxos, as bases `14 Vacância` e `15 Ocupação` precisam estar compartilhadas com a integracao `Integracao`.

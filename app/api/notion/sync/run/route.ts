@@ -15,6 +15,7 @@ type DelinquencyRow = Database["public"]["Tables"]["inadimplencias"]["Row"];
 type FppRow = Database["public"]["Tables"]["fpp"]["Row"];
 type RevenueAuditRow = Database["public"]["Tables"]["auditoria_faturamento"]["Row"];
 type CommercialLeadRow = Database["public"]["Tables"]["comercial_leads"]["Row"];
+type VacancyRow = Database["public"]["Tables"]["vacancia"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas", "vacancia", "ocupacao"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -101,7 +102,11 @@ export async function POST(request: Request) {
                               ? await syncCommercialLeads(client, token, job)
                               : job.entidade === "propostas"
                                 ? await syncCommercialProposals(client, token, job)
-                                : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                                : job.entidade === "vacancia"
+                                  ? await syncVacancies(client, token, job)
+                                  : job.entidade === "ocupacao"
+                                    ? await syncOccupancy(client, token, job)
+                                    : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -1366,6 +1371,175 @@ async function syncCommercialProposals(client: any, token: string, job: SyncJob)
   };
 }
 
+async function syncVacancies(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, enterprisesRegistryResult] = await Promise.all([
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "lojas").single(),
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "empreendimentos").single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [vacanciesResult, storesResult, enterprisesResult] = await Promise.all([
+    client
+      .from("vacancia")
+      .select("id,loja_id,empreendimento_id,inicio_vacancia,motivo,criticidade,estrategia,receita_potencial,responsavel,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("inicio_vacancia", { ascending: true }),
+    client.from("lojas").select("id,codigo").is("deleted_at", null),
+    client.from("empreendimentos").select("id,nome").is("deleted_at", null)
+  ]);
+
+  if (vacanciesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: vacanciesResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  const vacancies = (vacanciesResult.data ?? []) as VacancyRow[];
+  const storeCodesById = new Map<string, string>((storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo]));
+  const enterpriseNamesById = new Map<string, string>((enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome]));
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingRecords = await getExistingTitleValues(token, dataSourceId, "Registro");
+  let created = 0;
+  let skipped = 0;
+
+  for (const vacancy of vacancies) {
+    const storeCode = storeCodesById.get(vacancy.loja_id);
+    const enterpriseName = enterpriseNamesById.get(vacancy.empreendimento_id);
+    const name = buildVacancyName(vacancy, storeCode);
+
+    if (existingRecords.has(name)) {
+      skipped += 1;
+      continue;
+    }
+
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildVacancyProperties(
+          vacancy,
+          name,
+          storeCode ? storePageIdsByCode.get(storeCode) : null,
+          enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar vacancia ${name}.` };
+    }
+
+    created += 1;
+    existingRecords.add(name);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Vacancia sincronizada: ${created} registros criados, ${skipped} ignorados.`
+  };
+}
+
+async function syncOccupancy(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const enterprisesRegistryResult = await client
+    .from("notion_databases")
+    .select("notion_data_source_id")
+    .eq("slug", "empreendimentos")
+    .single();
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [enterprisesResult, storesResult] = await Promise.all([
+    client.from("empreendimentos").select("id,nome").is("deleted_at", null).order("nome", { ascending: true }),
+    client
+      .from("lojas")
+      .select("id,empreendimento_id,codigo,nome,area_total_m2,segmento,status,valor_aluguel,valor_condominio,valor_fundo_promocao,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+  ]);
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  const competence = new Date().toISOString().slice(0, 7);
+  const enterprises = (enterprisesResult.data ?? []) as Array<Pick<EnterpriseRow, "id" | "nome">>;
+  const stores = (storesResult.data ?? []) as StoreRow[];
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingSnapshots = await getExistingTitleValues(token, dataSourceId, "Snapshot");
+  let created = 0;
+  let skipped = 0;
+
+  for (const enterprise of enterprises) {
+    const enterpriseStores = stores.filter((store) => store.empreendimento_id === enterprise.id);
+    const snapshotName = buildOccupancySnapshotName(enterprise.nome, competence);
+
+    if (existingSnapshots.has(snapshotName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildOccupancyProperties(
+          enterprise.nome,
+          competence,
+          enterpriseStores,
+          enterprisePageIdsByName.get(enterprise.nome)
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar ocupacao ${snapshotName}.` };
+    }
+
+    created += 1;
+    existingSnapshots.add(snapshotName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Ocupacao sincronizada: ${created} snapshots criados, ${skipped} ignorados.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -1600,6 +1774,45 @@ function buildCommercialProposalProperties(
   };
 }
 
+function buildVacancyProperties(
+  vacancy: VacancyRow,
+  name: string,
+  storePageId?: string | null,
+  enterprisePageId?: string | null
+) {
+  return {
+    Registro: title(name),
+    Empreendimento: relation(enterprisePageId),
+    Loja: relation(storePageId),
+    "Data Desocupação": date(vacancy.inicio_vacancia),
+    "Receita Perdida": number(vacancy.receita_potencial),
+    "Classificação": select(toNotionVacancyClassification(vacancy.criticidade))
+  };
+}
+
+function buildOccupancyProperties(
+  enterpriseName: string,
+  competence: string,
+  stores: StoreRow[],
+  enterprisePageId?: string | null
+) {
+  const totalStores = stores.length;
+  const occupiedStores = stores.filter(isOccupiedStore).length;
+  const vacantStores = totalStores - occupiedStores;
+  const potentialRent = stores.reduce((sum, store) => sum + store.valor_aluguel, 0);
+  const lostRent = stores.filter((store) => !isOccupiedStore(store)).reduce((sum, store) => sum + store.valor_aluguel, 0);
+
+  return {
+    Snapshot: title(buildOccupancySnapshotName(enterpriseName, competence)),
+    Empreendimento: relation(enterprisePageId),
+    "Competência": date(toCompetenceDate(competence)),
+    "Total Lojas": number(totalStores),
+    Ocupadas: number(occupiedStores),
+    Vagas: number(vacantStores),
+    "Vacância Financeira": number(potentialRent > 0 ? lostRent / potentialRent : 0)
+  };
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -1792,6 +2005,23 @@ function buildCommercialProposalName(lead: CommercialLeadRow) {
     lead.empresa,
     "Proposta",
     lead.data_proxima_acao ?? lead.id.slice(0, 8)
+  ].join(" | ");
+}
+
+function buildVacancyName(vacancy: VacancyRow, storeCode?: string) {
+  return [
+    storeCode ?? "Loja",
+    "Vacancia",
+    vacancy.inicio_vacancia,
+    vacancy.id.slice(0, 8)
+  ].join(" | ");
+}
+
+function buildOccupancySnapshotName(enterpriseName: string, competence: string) {
+  return [
+    enterpriseName,
+    "Ocupacao",
+    competence
   ].join(" | ");
 }
 
@@ -2047,6 +2277,27 @@ function buildCommercialProposalTerms(lead: CommercialLeadRow) {
     lead.proxima_acao ? `Proxima acao: ${lead.proxima_acao}` : null,
     lead.responsavel ? `Responsavel: ${lead.responsavel}` : null
   ].filter(Boolean).join("\n");
+}
+
+function isOccupiedStore(store: StoreRow) {
+  return ["ocupada", "implantacao", "em_obra"].includes(store.status);
+}
+
+function toNotionVacancyClassification(criticality: string) {
+  const normalized = criticality.toLowerCase();
+  const map: Record<string, string> = {
+    alta: "Crítica",
+    critica: "Crítica",
+    crítica: "Crítica",
+    estrategica: "Estratégica",
+    estratégica: "Estratégica",
+    media: "Normal",
+    média: "Normal",
+    baixa: "Normal",
+    normal: "Normal"
+  };
+
+  return map[normalized] ?? "Normal";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {
