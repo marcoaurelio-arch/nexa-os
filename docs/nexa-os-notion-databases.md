@@ -678,3 +678,35 @@ O processador tambem suporta `juridico`, criando casos na base `19 Jurídico` co
 ```
 
 Para esses fluxos, as bases `18 Ordens de Serviço`, `19 Jurídico` e `20 Documentos` precisam estar compartilhadas com a integracao `Integracao`.
+
+O processador tambem suporta `marketing`, criando acoes na base `21 Marketing` a partir de despesas de marketing/fundo de promocao. Quando houver lancamento correspondente na base `09 Fundo de Promoção`, a acao e relacionada ao fundo:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["marketing"],
+  "retryErrors": true
+}
+```
+
+O processador tambem suporta `relatorios`, criando registros na base `22 Relatórios`. Se `relatorios_mensais` ainda estiver vazio, o sync deriva um snapshot mensal por empreendimento a partir dos dados operacionais:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["relatorios"],
+  "retryErrors": true
+}
+```
+
+O processador tambem suporta `indicadores`, criando registros na base `23 Indicadores`. Se a tabela `indicadores` ainda estiver vazia, o sync deriva KPIs iniciais de ocupacao, vacancia, receita, inadimplencia e NOI por empreendimento:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["indicadores"],
+  "retryErrors": true
+}
+```
+
+Para esses fluxos, as bases `21 Marketing`, `22 Relatórios` e `23 Indicadores` precisam estar compartilhadas com a integracao `Integracao`.

@@ -20,6 +20,8 @@ type UtilityReadingRow = Database["public"]["Tables"]["consumos"]["Row"];
 type ServiceOrderRow = Database["public"]["Tables"]["ordens_servico"]["Row"];
 type DocumentRow = Database["public"]["Tables"]["documentos"]["Row"];
 type LegalCaseRow = Database["public"]["Tables"]["juridico"]["Row"];
+type ReportRow = Database["public"]["Tables"]["relatorios_mensais"]["Row"];
+type IndicatorRow = Database["public"]["Tables"]["indicadores"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -80,6 +82,38 @@ type LegalPropertyNames = {
   description?: string;
 };
 
+type MarketingPropertyNames = {
+  title: string;
+  enterprise?: string;
+  fund?: string;
+  channel?: string;
+  competence?: string;
+  investment?: string;
+  description?: string;
+  result?: string;
+};
+
+type ReportPropertyNames = {
+  title: string;
+  enterprise?: string;
+  competence?: string;
+  pdf?: string;
+  summary?: string;
+  generatedAt?: string;
+};
+
+type IndicatorPropertyNames = {
+  title: string;
+  enterprise?: string;
+  competence?: string;
+  key?: string;
+  value?: string;
+  target?: string;
+};
+
+type ReportSyncRecord = Pick<ReportRow, "id" | "empreendimento_id" | "competencia" | "titulo" | "status" | "resumo" | "recomendacoes" | "pdf_url" | "gerado_em" | "created_at">;
+type IndicatorSyncRecord = Pick<IndicatorRow, "id" | "empreendimento_id" | "competencia" | "categoria" | "indicador" | "valor" | "unidade" | "meta" | "variacao" | "status">;
+
 function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -99,7 +133,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas", "vacancia", "ocupacao", "energia", "agua", "os", "documentos", "juridico"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas", "vacancia", "ocupacao", "energia", "agua", "os", "documentos", "juridico", "marketing", "relatorios", "indicadores"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -169,7 +203,13 @@ export async function POST(request: Request) {
                                             ? await syncDocuments(client, token, job)
                                             : job.entidade === "juridico"
                                               ? await syncLegalCases(client, token, job)
-                                              : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                                              : job.entidade === "marketing"
+                                                ? await syncMarketing(client, token, job)
+                                                : job.entidade === "relatorios"
+                                                  ? await syncReports(client, token, job)
+                                                  : job.entidade === "indicadores"
+                                                    ? await syncIndicators(client, token, job)
+                                                    : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -1999,6 +2039,273 @@ async function syncLegalCases(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncMarketing(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [enterprisesRegistryResult, fundRegistryResult] = await Promise.all([
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "empreendimentos").single(),
+    client.from("notion_databases").select("notion_data_source_id").eq("slug", "fundo-promocao").single()
+  ]);
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  if (fundRegistryResult.error || !fundRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: fundRegistryResult.error?.message ?? "Data source de Fundo de Promocao nao encontrado." };
+  }
+
+  const [payablesResult, enterprisesResult] = await Promise.all([
+    client
+      .from("despesas")
+      .select("id,empreendimento_id,fornecedor,categoria,competencia,valor,vencimento,pagamento,centro_custo,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("competencia", { ascending: true }),
+    client.from("empreendimentos").select("id,nome").is("deleted_at", null)
+  ]);
+
+  if (payablesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: payablesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  const propertyNames = await getMarketingPropertyNames(token, dataSourceId);
+  const payables = ((payablesResult.data ?? []) as PayableRow[]).filter(isMarketingPayable);
+  const enterpriseNamesById = new Map<string, string>((enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome]));
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const fundTitleProperty = await getTitlePropertyName(token, fundRegistryResult.data.notion_data_source_id, ["Lançamento", "Lancamento"]);
+  const fundPageIdsByLaunch = propertyNames.fund ? await getTitlePageMap(token, fundRegistryResult.data.notion_data_source_id, fundTitleProperty) : new Map<string, string>();
+  const existingActions = await getExistingTitleValues(token, dataSourceId, propertyNames.title);
+  let created = 0;
+  let skipped = 0;
+
+  for (const payable of payables) {
+    const enterpriseName = enterpriseNamesById.get(payable.empreendimento_id);
+    const actionName = buildMarketingActionName(payable, enterpriseName);
+
+    if (existingActions.has(actionName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const fundLaunch = buildLedgerPayableLaunch(payable, "fundo-promocao", enterpriseName);
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildMarketingProperties(
+          payable,
+          actionName,
+          propertyNames,
+          enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null,
+          fundPageIdsByLaunch.get(fundLaunch)
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar acao de marketing ${actionName}.` };
+    }
+
+    created += 1;
+    existingActions.add(actionName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Marketing sincronizado: ${created} acoes criadas, ${skipped} ignoradas.`
+  };
+}
+
+async function syncReports(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const enterprisesRegistryResult = await client
+    .from("notion_databases")
+    .select("notion_data_source_id")
+    .eq("slug", "empreendimentos")
+    .single();
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [reportsResult, enterprisesResult, storesResult, receivablesResult, payablesResult] = await Promise.all([
+    client
+      .from("relatorios_mensais")
+      .select("id,empreendimento_id,competencia,titulo,status,resumo,secoes,recomendacoes,indicadores,pdf_url,notion_page_id,gerado_por,gerado_em,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("competencia", { ascending: true }),
+    client.from("empreendimentos").select("id,nome,abl_m2").is("deleted_at", null).order("nome", { ascending: true }),
+    client.from("lojas").select("id,empreendimento_id,status,valor_aluguel").is("deleted_at", null),
+    client.from("receitas").select("id,empreendimento_id,competencia,receita,valor,status").is("deleted_at", null),
+    client.from("despesas").select("id,empreendimento_id,competencia,valor,status").is("deleted_at", null)
+  ]);
+
+  for (const result of [reportsResult, enterprisesResult, storesResult, receivablesResult, payablesResult]) {
+    if (result.error) {
+      return { ok: false, created: 0, skipped: 0, message: result.error.message };
+    }
+  }
+
+  const propertyNames = await getReportPropertyNames(token, dataSourceId);
+  const enterpriseNamesById = new Map<string, string>((enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome]));
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingReports = await getExistingTitleValues(token, dataSourceId, propertyNames.title);
+  const reports = (reportsResult.data?.length
+    ? reportsResult.data as ReportSyncRecord[]
+    : deriveReports(
+      enterprisesResult.data ?? [],
+      storesResult.data ?? [],
+      receivablesResult.data ?? [],
+      payablesResult.data ?? []
+    )
+  );
+  let created = 0;
+  let skipped = 0;
+
+  for (const report of reports) {
+    const reportName = buildReportName(report);
+
+    if (existingReports.has(reportName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const enterpriseName = report.empreendimento_id ? enterpriseNamesById.get(report.empreendimento_id) : null;
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildReportProperties(
+          report,
+          reportName,
+          propertyNames,
+          enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar relatorio ${reportName}.` };
+    }
+
+    created += 1;
+    existingReports.add(reportName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Relatorios sincronizados: ${created} relatorios criados, ${skipped} ignorados.`
+  };
+}
+
+async function syncIndicators(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const enterprisesRegistryResult = await client
+    .from("notion_databases")
+    .select("notion_data_source_id")
+    .eq("slug", "empreendimentos")
+    .single();
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [indicatorsResult, enterprisesResult, storesResult, receivablesResult, payablesResult, delinquenciesResult] = await Promise.all([
+    client
+      .from("indicadores")
+      .select("id,empreendimento_id,relatorio_id,competencia,categoria,indicador,valor,unidade,origem,meta,variacao,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("competencia", { ascending: true }),
+    client.from("empreendimentos").select("id,nome,abl_m2").is("deleted_at", null).order("nome", { ascending: true }),
+    client.from("lojas").select("id,empreendimento_id,status,valor_aluguel").is("deleted_at", null),
+    client.from("receitas").select("id,loja_id,empreendimento_id,competencia,receita,valor,status").is("deleted_at", null),
+    client.from("despesas").select("id,empreendimento_id,competencia,valor,status").is("deleted_at", null),
+    client.from("inadimplencias").select("id,loja_id,valor,dias_atraso,status").is("deleted_at", null)
+  ]);
+
+  for (const result of [indicatorsResult, enterprisesResult, storesResult, receivablesResult, payablesResult, delinquenciesResult]) {
+    if (result.error) {
+      return { ok: false, created: 0, skipped: 0, message: result.error.message };
+    }
+  }
+
+  const propertyNames = await getIndicatorPropertyNames(token, dataSourceId);
+  const enterpriseNamesById = new Map<string, string>((enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome]));
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingIndicators = await getExistingTitleValues(token, dataSourceId, propertyNames.title);
+  const indicators = (indicatorsResult.data?.length
+    ? indicatorsResult.data as IndicatorSyncRecord[]
+    : deriveIndicators(
+      enterprisesResult.data ?? [],
+      storesResult.data ?? [],
+      receivablesResult.data ?? [],
+      payablesResult.data ?? [],
+      delinquenciesResult.data ?? []
+    )
+  );
+  let created = 0;
+  let skipped = 0;
+
+  for (const indicator of indicators) {
+    const indicatorName = buildIndicatorName(indicator);
+
+    if (existingIndicators.has(indicatorName)) {
+      skipped += 1;
+      continue;
+    }
+
+    const enterpriseName = indicator.empreendimento_id ? enterpriseNamesById.get(indicator.empreendimento_id) : null;
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildIndicatorProperties(
+          indicator,
+          indicatorName,
+          propertyNames,
+          enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, created, skipped, message: response.message ?? `Falha ao criar indicador ${indicatorName}.` };
+    }
+
+    created += 1;
+    existingIndicators.add(indicatorName);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Indicadores sincronizados: ${created} indicadores criados, ${skipped} ignorados.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -2074,6 +2381,50 @@ async function getLegalPropertyNames(token: string, dataSourceId: string): Promi
   };
 }
 
+async function getMarketingPropertyNames(token: string, dataSourceId: string): Promise<MarketingPropertyNames> {
+  const properties = await getDataSourceProperties(token, dataSourceId);
+  const propertyNames = new Set(Object.keys(properties));
+
+  return {
+    title: pickPropertyName(propertyNames, ["Ação", "Acao"]),
+    enterprise: pickOptionalPropertyName(propertyNames, ["Empreendimento"]),
+    fund: pickOptionalPropertyName(propertyNames, ["Fundo de Promoção", "Fundo promocao", "Fundo promoção"]),
+    channel: pickOptionalPropertyName(propertyNames, ["Canal", "Categoria"]),
+    competence: pickOptionalPropertyName(propertyNames, ["Competência", "Competencia"]),
+    investment: pickOptionalPropertyName(propertyNames, ["Investimento", "Orcamento", "Orçamento"]),
+    description: pickOptionalPropertyName(propertyNames, ["Descrição", "Descricao"]),
+    result: pickOptionalPropertyName(propertyNames, ["Resultado"])
+  };
+}
+
+async function getReportPropertyNames(token: string, dataSourceId: string): Promise<ReportPropertyNames> {
+  const properties = await getDataSourceProperties(token, dataSourceId);
+  const propertyNames = new Set(Object.keys(properties));
+
+  return {
+    title: pickPropertyName(propertyNames, ["Relatório", "Relatorio"]),
+    enterprise: pickOptionalPropertyName(propertyNames, ["Empreendimento"]),
+    competence: pickOptionalPropertyName(propertyNames, ["Competência", "Competencia"]),
+    pdf: pickOptionalPropertyName(propertyNames, ["PDF"]),
+    summary: pickOptionalPropertyName(propertyNames, ["Resumo", "Recomendacoes", "Recomendações"]),
+    generatedAt: pickOptionalPropertyName(propertyNames, ["Gerado em"])
+  };
+}
+
+async function getIndicatorPropertyNames(token: string, dataSourceId: string): Promise<IndicatorPropertyNames> {
+  const properties = await getDataSourceProperties(token, dataSourceId);
+  const propertyNames = new Set(Object.keys(properties));
+
+  return {
+    title: pickPropertyName(propertyNames, ["Indicador"]),
+    enterprise: pickOptionalPropertyName(propertyNames, ["Empreendimento"]),
+    competence: pickOptionalPropertyName(propertyNames, ["Competência", "Competencia"]),
+    key: pickOptionalPropertyName(propertyNames, ["Chave", "Categoria"]),
+    value: pickOptionalPropertyName(propertyNames, ["Valor"]),
+    target: pickOptionalPropertyName(propertyNames, ["Meta"])
+  };
+}
+
 async function getDataSourceProperties(token: string, dataSourceId: string) {
   const response = await notionFetch(token, `/data_sources/${dataSourceId}`, {
     method: "GET"
@@ -2092,6 +2443,16 @@ function pickPropertyName(properties: Set<string>, candidates: string[]) {
 
 function pickOptionalPropertyName(properties: Set<string>, candidates: string[]) {
   return candidates.find((candidate) => properties.has(candidate));
+}
+
+async function getTitlePropertyName(token: string, dataSourceId: string, candidates: string[]) {
+  const properties = await getDataSourceProperties(token, dataSourceId);
+  const propertyNames = new Set(Object.keys(properties));
+  const candidate = pickOptionalPropertyName(propertyNames, candidates);
+
+  if (candidate) return candidate;
+
+  return Object.entries(properties).find(([, property]) => (property as { type?: string })?.type === "title")?.[0] ?? candidates[0];
 }
 
 async function getTitlePageMap(token: string, dataSourceId: string, titleProperty: string) {
@@ -2461,6 +2822,66 @@ function buildLegalProperties(
   return properties;
 }
 
+function buildMarketingProperties(
+  payable: PayableRow,
+  actionName: string,
+  propertyNames: MarketingPropertyNames,
+  enterprisePageId?: string | null,
+  fundPageId?: string | null
+) {
+  const properties: Record<string, unknown> = {
+    [propertyNames.title]: title(actionName)
+  };
+
+  if (propertyNames.enterprise) properties[propertyNames.enterprise] = relation(enterprisePageId);
+  if (propertyNames.fund) properties[propertyNames.fund] = relation(fundPageId);
+  if (propertyNames.channel) properties[propertyNames.channel] = select(toNotionMarketingChannel(payable.categoria));
+  if (propertyNames.competence) properties[propertyNames.competence] = date(toCompetenceDate(payable.competencia));
+  if (propertyNames.investment) properties[propertyNames.investment] = number(payable.valor);
+  if (propertyNames.description) properties[propertyNames.description] = richText(buildMarketingDescription(payable));
+  if (propertyNames.result) properties[propertyNames.result] = richText(toNotionMarketingResult(payable.status));
+
+  return properties;
+}
+
+function buildReportProperties(
+  report: ReportSyncRecord,
+  reportName: string,
+  propertyNames: ReportPropertyNames,
+  enterprisePageId?: string | null
+) {
+  const properties: Record<string, unknown> = {
+    [propertyNames.title]: title(reportName)
+  };
+
+  if (propertyNames.enterprise) properties[propertyNames.enterprise] = relation(enterprisePageId);
+  if (propertyNames.competence) properties[propertyNames.competence] = date(toCompetenceDate(report.competencia));
+  if (propertyNames.pdf) properties[propertyNames.pdf] = files(report.pdf_url, "Relatorio");
+  if (propertyNames.summary) properties[propertyNames.summary] = richText(buildReportSummary(report));
+  if (propertyNames.generatedAt) properties[propertyNames.generatedAt] = date(report.gerado_em?.slice(0, 10) ?? report.created_at.slice(0, 10));
+
+  return properties;
+}
+
+function buildIndicatorProperties(
+  indicator: IndicatorSyncRecord,
+  indicatorName: string,
+  propertyNames: IndicatorPropertyNames,
+  enterprisePageId?: string | null
+) {
+  const properties: Record<string, unknown> = {
+    [propertyNames.title]: title(indicatorName)
+  };
+
+  if (propertyNames.enterprise) properties[propertyNames.enterprise] = relation(enterprisePageId);
+  if (propertyNames.competence) properties[propertyNames.competence] = date(toCompetenceDate(indicator.competencia));
+  if (propertyNames.key) properties[propertyNames.key] = select(toNotionIndicatorKey(indicator.categoria, indicator.indicador));
+  if (propertyNames.value) properties[propertyNames.value] = number(indicator.valor);
+  if (propertyNames.target) properties[propertyNames.target] = indicator.meta === null ? { number: null } : number(indicator.meta);
+
+  return properties;
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -2716,6 +3137,33 @@ function buildLegalCaseName(legalCase: LegalCaseRow, storeCode?: string) {
     storeCode ?? "Loja",
     legalCase.titulo,
     legalCase.id.slice(0, 8)
+  ].join(" | ");
+}
+
+function buildMarketingActionName(payable: PayableRow, enterpriseName?: string) {
+  return [
+    enterpriseName ?? "Empreendimento",
+    toNotionMarketingChannel(payable.categoria),
+    payable.fornecedor,
+    payable.competencia,
+    payable.id.slice(0, 8)
+  ].join(" | ");
+}
+
+function buildReportName(report: ReportSyncRecord) {
+  return [
+    report.titulo,
+    report.competencia,
+    report.id.slice(0, 8)
+  ].join(" | ");
+}
+
+function buildIndicatorName(indicator: IndicatorSyncRecord) {
+  return [
+    indicator.indicador,
+    indicator.competencia,
+    indicator.empreendimento_id?.slice(0, 8) ?? "portfolio",
+    indicator.id.slice(0, 8)
   ].join(" | ");
 }
 
@@ -3159,6 +3607,183 @@ function buildLegalDescription(legalCase: LegalCaseRow) {
     legalCase.responsavel ? `Responsavel: ${legalCase.responsavel}` : null,
     legalCase.prazo ? `Prazo: ${legalCase.prazo}` : null
   ].filter(Boolean).join("\n");
+}
+
+function isMarketingPayable(payable: PayableRow) {
+  const category = payable.categoria.toLowerCase();
+  const costCenter = payable.centro_custo.toLowerCase();
+
+  return ["fundo promocao", "fundo promoção"].includes(costCenter)
+    || ["marketing", "eventos", "trafego pago", "tráfego pago", "redes sociais", "producao audiovisual", "produção audiovisual", "decoracao", "decoração", "material grafico", "material gráfico"].includes(category);
+}
+
+function toNotionMarketingChannel(category: string) {
+  const normalized = category.toLowerCase();
+  const map: Record<string, string> = {
+    eventos: "Evento",
+    evento: "Evento",
+    marketing: "Outro",
+    trafego_pago: "Tráfego Pago",
+    "trafego pago": "Tráfego Pago",
+    "tráfego pago": "Tráfego Pago",
+    redes_sociais: "Redes Sociais",
+    "redes sociais": "Redes Sociais",
+    producao_audiovisual: "Audiovisual",
+    "produção audiovisual": "Audiovisual",
+    audiovisual: "Audiovisual",
+    material_grafico: "Material Gráfico",
+    "material grafico": "Material Gráfico",
+    "material gráfico": "Material Gráfico"
+  };
+
+  return map[normalized] ?? "Outro";
+}
+
+function buildMarketingDescription(payable: PayableRow) {
+  return [
+    `Fornecedor: ${payable.fornecedor}`,
+    `Categoria: ${payable.categoria}`,
+    `Centro de custo: ${payable.centro_custo}`,
+    `Vencimento: ${payable.vencimento}`,
+    payable.pagamento ? `Pagamento: ${payable.pagamento}` : null
+  ].filter(Boolean).join("\n");
+}
+
+function toNotionMarketingResult(status: string) {
+  const map: Record<string, string> = {
+    pago: "Realizado",
+    aberto: "Em andamento",
+    vencido: "Pendente",
+    previsto: "Previsto",
+    cancelado: "Cancelado"
+  };
+
+  return map[status] ?? "Em acompanhamento";
+}
+
+function deriveReports(
+  enterprises: Array<Pick<EnterpriseRow, "id" | "nome" | "abl_m2">>,
+  stores: Array<Pick<StoreRow, "empreendimento_id" | "status">>,
+  receivables: Array<Pick<ReceivableRow, "empreendimento_id" | "competencia" | "valor" | "status">>,
+  payables: Array<Pick<PayableRow, "empreendimento_id" | "competencia" | "valor" | "status">>
+): ReportSyncRecord[] {
+  const competence = latestCompetence([...receivables, ...payables]) ?? new Date().toISOString().slice(0, 7);
+
+  return enterprises.map((enterprise) => {
+    const enterpriseStores = stores.filter((store) => store.empreendimento_id === enterprise.id);
+    const occupied = enterpriseStores.filter((store) => ["ocupada", "implantacao", "em_obra"].includes(store.status)).length;
+    const revenue = receivables
+      .filter((receivable) => receivable.empreendimento_id === enterprise.id && receivable.competencia === competence)
+      .reduce((sum, receivable) => sum + receivable.valor, 0);
+    const expenses = payables
+      .filter((payable) => payable.empreendimento_id === enterprise.id && payable.competencia === competence)
+      .reduce((sum, payable) => sum + payable.valor, 0);
+
+    return {
+      id: `derived-report-${enterprise.id}-${competence}`,
+      empreendimento_id: enterprise.id,
+      competencia: competence,
+      titulo: `Relatorio mensal - ${enterprise.nome}`,
+      status: "gerado",
+      resumo: `Ocupacao de ${occupied}/${enterpriseStores.length} lojas, receita de ${revenue} e despesas de ${expenses} na competencia ${competence}.`,
+      recomendacoes: [`Acompanhar ocupacao, receita, inadimplencia e saldo operacional de ${enterprise.nome}.`],
+      pdf_url: null,
+      gerado_em: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    };
+  });
+}
+
+function deriveIndicators(
+  enterprises: Array<Pick<EnterpriseRow, "id" | "nome" | "abl_m2">>,
+  stores: Array<Pick<StoreRow, "id" | "empreendimento_id" | "status" | "valor_aluguel">>,
+  receivables: Array<Pick<ReceivableRow, "empreendimento_id" | "competencia" | "valor" | "status">>,
+  payables: Array<Pick<PayableRow, "empreendimento_id" | "competencia" | "valor" | "status">>,
+  delinquencies: Array<Pick<DelinquencyRow, "loja_id" | "valor" | "status">>
+): IndicatorSyncRecord[] {
+  const competence = latestCompetence([...receivables, ...payables]) ?? new Date().toISOString().slice(0, 7);
+  const indicators: IndicatorSyncRecord[] = [];
+
+  for (const enterprise of enterprises) {
+    const enterpriseStores = stores.filter((store) => store.empreendimento_id === enterprise.id);
+    const occupiedStores = enterpriseStores.filter((store) => ["ocupada", "implantacao", "em_obra"].includes(store.status));
+    const potentialRent = enterpriseStores.reduce((sum, store) => sum + store.valor_aluguel, 0);
+    const lostRent = enterpriseStores.filter((store) => !["ocupada", "implantacao", "em_obra"].includes(store.status)).reduce((sum, store) => sum + store.valor_aluguel, 0);
+    const revenue = receivables
+      .filter((receivable) => receivable.empreendimento_id === enterprise.id && receivable.competencia === competence)
+      .reduce((sum, receivable) => sum + receivable.valor, 0);
+    const expenses = payables
+      .filter((payable) => payable.empreendimento_id === enterprise.id && payable.competencia === competence)
+      .reduce((sum, payable) => sum + payable.valor, 0);
+    const storeIds = new Set(enterpriseStores.map((store) => store.id));
+    const delinquency = delinquencies
+      .filter((item) => storeIds.has(item.loja_id) && item.status !== "regularizado")
+      .reduce((sum, item) => sum + item.valor, 0);
+
+    indicators.push(
+      makeDerivedIndicator(enterprise.id, competence, "Ocupação", "Taxa de ocupacao", enterpriseStores.length ? occupiedStores.length / enterpriseStores.length : 0, "%", 0.95),
+      makeDerivedIndicator(enterprise.id, competence, "Vacância", "Vacancia financeira", potentialRent > 0 ? lostRent / potentialRent : 0, "%", 0.05),
+      makeDerivedIndicator(enterprise.id, competence, "Receita", "Receita total", revenue, "R$", null),
+      makeDerivedIndicator(enterprise.id, competence, "Inadimplência", "Inadimplencia total", delinquency, "R$", 0),
+      makeDerivedIndicator(enterprise.id, competence, "NOI", "Saldo operacional", revenue - expenses, "R$", null)
+    );
+  }
+
+  return indicators;
+}
+
+function makeDerivedIndicator(
+  enterpriseId: string,
+  competence: string,
+  category: string,
+  indicator: string,
+  value: number,
+  unit: string,
+  target: number | null
+): IndicatorSyncRecord {
+  return {
+    id: `derived-indicator-${enterpriseId}-${competence}-${indicator.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+    empreendimento_id: enterpriseId,
+    competencia: competence,
+    categoria: category,
+    indicador: indicator,
+    valor: value,
+    unidade: unit,
+    meta: target,
+    variacao: null,
+    status: "normal"
+  };
+}
+
+function latestCompetence(records: Array<{ competencia: string }>) {
+  return records.map((record) => record.competencia).sort().at(-1) ?? null;
+}
+
+function buildReportSummary(report: ReportSyncRecord) {
+  return [
+    report.resumo,
+    jsonToText(report.recomendacoes)
+  ].filter(Boolean).join("\n");
+}
+
+function jsonToText(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => String(item)).join("\n");
+  if (value && typeof value === "object") return Object.entries(value).map(([key, item]) => `${key}: ${String(item)}`).join("\n");
+  return value ? String(value) : "";
+}
+
+function toNotionIndicatorKey(category: string, indicator: string) {
+  const normalized = `${category} ${indicator}`.toLowerCase();
+
+  if (normalized.includes("ocup")) return "Ocupação";
+  if (normalized.includes("vac")) return "Vacância";
+  if (normalized.includes("receita")) return "Receita";
+  if (normalized.includes("inadimpl")) return "Inadimplência";
+  if (normalized.includes("noi") || normalized.includes("saldo")) return "NOI";
+  if (normalized.includes("cap")) return "Cap Rate";
+  if (normalized.includes("custo")) return "Custo m2";
+  if (normalized.includes("fpp")) return "FPP";
+  return "Receita";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {
