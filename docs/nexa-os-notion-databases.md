@@ -486,3 +486,15 @@ O processador tambem suporta `lojistas`, criando registros na base `03 Lojistas`
 ```
 
 Para esse fluxo, a base `03 Lojistas` precisa estar compartilhada com a integracao `Integracao`.
+
+O processador tambem suporta `contratos`, criando registros na base `04 Contratos` e relacionando cada contrato a sua loja e lojista:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["contratos"],
+  "retryErrors": true
+}
+```
+
+Para esse fluxo, a base `04 Contratos` precisa estar compartilhada com a integracao `Integracao`.

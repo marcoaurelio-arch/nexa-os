@@ -8,6 +8,7 @@ const NOTION_API_URL = "https://api.notion.com/v1";
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
 type StoreRow = Database["public"]["Tables"]["lojas"]["Row"];
 type TenantRow = Database["public"]["Tables"]["lojistas"]["Row"];
+type ContractRow = Database["public"]["Tables"]["contratos"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -74,7 +75,9 @@ export async function POST(request: Request) {
           ? await syncStores(client, token, job)
           : job.entidade === "lojistas"
             ? await syncTenants(client, token, job)
-            : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+            : job.entidade === "contratos"
+              ? await syncContracts(client, token, job)
+              : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -352,6 +355,116 @@ async function syncTenants(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncContracts(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, tenantsRegistryResult] = await Promise.all([
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "lojas")
+      .single(),
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "lojistas")
+      .single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (tenantsRegistryResult.error || !tenantsRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: tenantsRegistryResult.error?.message ?? "Data source de Lojistas nao encontrado." };
+  }
+
+  const [contractsResult, storesResult, tenantsResult] = await Promise.all([
+    client
+      .from("contratos")
+      .select("id,loja_id,lojista_id,data_inicio,data_termino,prazo_meses,aluguel_minimo,indice_reajuste,garantia,seguro,contrato_url,aditivos,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("data_termino", { ascending: true }),
+    client
+      .from("lojas")
+      .select("id,codigo")
+      .is("deleted_at", null),
+    client
+      .from("lojistas")
+      .select("id,nome_fantasia")
+      .is("deleted_at", null)
+  ]);
+
+  if (contractsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: contractsResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (tenantsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: tenantsResult.error.message };
+  }
+
+  const contracts = (contractsResult.data ?? []) as ContractRow[];
+  const storeCodesById = new Map<string, string>(
+    (storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo])
+  );
+  const tenantNamesById = new Map<string, string>(
+    (tenantsResult.data ?? []).map((tenant: { id: string; nome_fantasia: string }) => [tenant.id, tenant.nome_fantasia])
+  );
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const tenantPageIdsByName = await getTitlePageMap(token, tenantsRegistryResult.data.notion_data_source_id, "Nome Fantasia");
+  const existingIdentifiers = await getExistingTitleValues(token, dataSourceId, "Identificador");
+  let created = 0;
+  let skipped = 0;
+
+  for (const contract of contracts) {
+    const storeCode = storeCodesById.get(contract.loja_id);
+    const tenantName = tenantNamesById.get(contract.lojista_id);
+    const identifier = buildContractIdentifier(contract, storeCode, tenantName);
+
+    if (existingIdentifiers.has(identifier)) {
+      skipped += 1;
+      continue;
+    }
+
+    const storePageId = storeCode ? storePageIdsByCode.get(storeCode) : null;
+    const tenantPageId = tenantName ? tenantPageIdsByName.get(tenantName) : null;
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildContractProperties(contract, identifier, storePageId, tenantPageId)
+      })
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        created,
+        skipped,
+        message: response.message ?? `Falha ao criar contrato ${identifier}.`
+      };
+    }
+
+    created += 1;
+    existingIdentifiers.add(identifier);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Contratos sincronizados: ${created} criados, ${skipped} ignorados.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -431,6 +544,23 @@ function buildTenantProperties(tenant: TenantRow, storePageId?: string | null, e
   };
 }
 
+function buildContractProperties(contract: ContractRow, identifier: string, storePageId?: string | null, tenantPageId?: string | null) {
+  return {
+    Identificador: title(identifier),
+    Loja: relation(storePageId),
+    Lojista: relation(tenantPageId),
+    "Início": date(contract.data_inicio),
+    "Término": date(contract.data_termino),
+    "Prazo meses": number(contract.prazo_meses),
+    "Aluguel Mínimo": number(contract.aluguel_minimo),
+    "Índice Reajuste": select(toNotionContractIndex(contract.indice_reajuste)),
+    Garantia: richText(contract.garantia ?? ""),
+    Seguro: richText(contract.seguro ?? ""),
+    Status: select(toNotionContractStatus(contract.status)),
+    Contrato: files(contract.contrato_url, "Contrato")
+  };
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -461,6 +591,10 @@ function email(value?: string | null) {
 
 function date(value?: string | null) {
   return value ? { date: { start: value } } : { date: null };
+}
+
+function files(url?: string | null, name = "Arquivo") {
+  return { files: url ? [{ name, external: { url } }] : [] };
 }
 
 function toNotionEnterpriseStatus(status: string) {
@@ -521,6 +655,38 @@ function toNotionTenantStatus(status: string) {
   };
 
   return map[status] ?? "Ativo";
+}
+
+function buildContractIdentifier(contract: ContractRow, storeCode?: string, tenantName?: string) {
+  return [
+    storeCode ?? "Loja",
+    tenantName ?? "Lojista",
+    contract.data_inicio
+  ].join(" | ");
+}
+
+function toNotionContractStatus(status: string) {
+  const map: Record<string, string> = {
+    ativo: "Vigente",
+    vencendo: "Vencendo",
+    renovacao: "Renovado",
+    encerrado: "Encerrado",
+    minuta: "Em elaboração",
+    vencido: "Vencido",
+    distrato: "Distrato"
+  };
+
+  return map[status] ?? "Vigente";
+}
+
+function toNotionContractIndex(index?: string | null) {
+  const normalized = (index ?? "").toLowerCase().replace("-", "");
+  const map: Record<string, string> = {
+    igpm: "IGPM",
+    ipca: "IPCA"
+  };
+
+  return map[normalized] ?? "Outro";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {
