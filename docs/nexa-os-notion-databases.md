@@ -510,3 +510,15 @@ O processador tambem suporta `receitas`, criando registros na base `05 Receitas`
 ```
 
 Para esse fluxo, a base `05 Receitas` precisa estar compartilhada com a integracao `Integracao`.
+
+O processador tambem suporta `despesas`, criando registros na base `06 Despesas` e relacionando cada lancamento ao empreendimento correspondente:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["despesas"],
+  "retryErrors": true
+}
+```
+
+Para esse fluxo, a base `06 Despesas` precisa estar compartilhada com a integracao `Integracao`.

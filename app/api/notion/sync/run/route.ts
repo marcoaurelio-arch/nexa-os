@@ -10,6 +10,7 @@ type StoreRow = Database["public"]["Tables"]["lojas"]["Row"];
 type TenantRow = Database["public"]["Tables"]["lojistas"]["Row"];
 type ContractRow = Database["public"]["Tables"]["contratos"]["Row"];
 type ReceivableRow = Database["public"]["Tables"]["receitas"]["Row"];
+type PayableRow = Database["public"]["Tables"]["despesas"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -80,7 +81,9 @@ export async function POST(request: Request) {
               ? await syncContracts(client, token, job)
               : job.entidade === "receitas"
                 ? await syncReceivables(client, token, job)
-                : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                : job.entidade === "despesas"
+                  ? await syncPayables(client, token, job)
+                  : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -618,6 +621,91 @@ async function syncReceivables(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncPayables(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const enterprisesRegistryResult = await client
+    .from("notion_databases")
+    .select("notion_data_source_id")
+    .eq("slug", "empreendimentos")
+    .single();
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  const [payablesResult, enterprisesResult] = await Promise.all([
+    client
+      .from("despesas")
+      .select("id,empreendimento_id,fornecedor,categoria,competencia,valor,vencimento,pagamento,centro_custo,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("vencimento", { ascending: true }),
+    client
+      .from("empreendimentos")
+      .select("id,nome")
+      .is("deleted_at", null)
+  ]);
+
+  if (payablesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: payablesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  const payables = (payablesResult.data ?? []) as PayableRow[];
+  const enterpriseNamesById = new Map<string, string>(
+    (enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome])
+  );
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const existingLaunches = await getExistingTitleValues(token, dataSourceId, "Lançamento");
+  let created = 0;
+  let skipped = 0;
+
+  for (const payable of payables) {
+    const enterpriseName = enterpriseNamesById.get(payable.empreendimento_id);
+    const launch = buildPayableLaunch(payable, enterpriseName);
+
+    if (existingLaunches.has(launch)) {
+      skipped += 1;
+      continue;
+    }
+
+    const enterprisePageId = enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null;
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildPayableProperties(payable, launch, enterprisePageId)
+      })
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        created,
+        skipped,
+        message: response.message ?? `Falha ao criar despesa ${launch}.`
+      };
+    }
+
+    created += 1;
+    existingLaunches.add(launch);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Despesas sincronizadas: ${created} criadas, ${skipped} ignoradas.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -735,6 +823,21 @@ function buildReceivableProperties(
   };
 }
 
+function buildPayableProperties(payable: PayableRow, launch: string, enterprisePageId?: string | null) {
+  return {
+    "Lançamento": title(launch),
+    Empreendimento: relation(enterprisePageId),
+    Fornecedor: richText(payable.fornecedor),
+    Categoria: select(toNotionExpenseCategory(payable.categoria)),
+    "Competência": date(toCompetenceDate(payable.competencia)),
+    Valor: number(payable.valor),
+    Vencimento: date(payable.vencimento),
+    Pagamento: date(payable.pagamento),
+    "Centro de Custo": select(toNotionCostCenter(payable.centro_custo)),
+    Status: select(toNotionPayableStatus(payable.status))
+  };
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -848,6 +951,16 @@ function buildReceivableLaunch(receivable: ReceivableRow, storeCode?: string) {
   ].join(" | ");
 }
 
+function buildPayableLaunch(payable: PayableRow, enterpriseName?: string) {
+  return [
+    enterpriseName ?? "Empreendimento",
+    toNotionExpenseCategory(payable.categoria),
+    payable.fornecedor,
+    payable.competencia,
+    payable.vencimento
+  ].join(" | ");
+}
+
 function toCompetenceDate(competence: string) {
   return competence.length === 7 ? `${competence}-01` : competence;
 }
@@ -899,6 +1012,58 @@ function toNotionFinancialStatus(status: string) {
   };
 
   return map[status] ?? "Aberto";
+}
+
+function toNotionPayableStatus(status: string) {
+  const map: Record<string, string> = {
+    aberto: "Aberto",
+    vencido: "Vencido",
+    pago: "Pago",
+    cancelado: "Cancelado",
+    previsto: "Previsto"
+  };
+
+  return map[status] ?? "Aberto";
+}
+
+function toNotionExpenseCategory(category: string) {
+  const normalized = category.toLowerCase();
+  const map: Record<string, string> = {
+    limpeza: "Limpeza",
+    seguranca: "Segurança",
+    segurança: "Segurança",
+    energia: "Energia",
+    agua: "Água",
+    água: "Água",
+    jardinagem: "Jardinagem",
+    administracao: "Administração",
+    administração: "Administração",
+    juridico: "Jurídico",
+    jurídico: "Jurídico",
+    seguro: "Seguro",
+    seguros: "Seguro",
+    manutencao: "Manutenção",
+    manutenção: "Manutenção"
+  };
+
+  return map[normalized] ?? "Outro";
+}
+
+function toNotionCostCenter(costCenter: string) {
+  const normalized = costCenter.toLowerCase();
+  const map: Record<string, string> = {
+    condominio: "Condomínio",
+    condomínio: "Condomínio",
+    "fundo promocao": "Fundo Promoção",
+    "fundo promoção": "Fundo Promoção",
+    operacoes: "Operação",
+    operações: "Operação",
+    operacao: "Operação",
+    operação: "Operação",
+    administrativo: "Administrativo"
+  };
+
+  return map[normalized] ?? "Administrativo";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {
