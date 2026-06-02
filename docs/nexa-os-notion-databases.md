@@ -435,3 +435,30 @@ POST /api/notion/sync
 O `GET` lista o inventario registrado em `notion_databases`, confere quantas bases possuem `notion_data_source_id` e resume a fila `notion_sync_jobs`.
 
 O `POST` prepara a sincronizacao inicial criando um job `pendente` por base Notion vinculada. Nesta etapa o job ainda nao envia dados para o Notion; ele cria a fila operacional para o worker/processador que fara o push Nexa OS -> Notion quando `NOTION_API_KEY` estiver configurado.
+
+## 7. Execucao do sync
+
+O processador inicial esta disponivel em:
+
+```txt
+POST /api/notion/sync/run
+```
+
+Payload recomendado para validar a primeira base:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["empreendimentos"]
+}
+```
+
+Se o Notion retornar erro de acesso, compartilhe a pagina `NEXA OS` e a base `01 Empreendimentos` com a integracao oficial `Integracao`. Depois execute novamente com:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["empreendimentos"],
+  "retryErrors": true
+}
+```
