@@ -498,3 +498,15 @@ O processador tambem suporta `contratos`, criando registros na base `04 Contrato
 ```
 
 Para esse fluxo, a base `04 Contratos` precisa estar compartilhada com a integracao `Integracao`.
+
+O processador tambem suporta `receitas`, criando registros na base `05 Receitas` e relacionando cada lancamento ao empreendimento, loja e contrato quando essas relacoes existirem:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["receitas"],
+  "retryErrors": true
+}
+```
+
+Para esse fluxo, a base `05 Receitas` precisa estar compartilhada com a integracao `Integracao`.

@@ -9,6 +9,7 @@ type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
 type StoreRow = Database["public"]["Tables"]["lojas"]["Row"];
 type TenantRow = Database["public"]["Tables"]["lojistas"]["Row"];
 type ContractRow = Database["public"]["Tables"]["contratos"]["Row"];
+type ReceivableRow = Database["public"]["Tables"]["receitas"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -77,7 +78,9 @@ export async function POST(request: Request) {
             ? await syncTenants(client, token, job)
             : job.entidade === "contratos"
               ? await syncContracts(client, token, job)
-              : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+              : job.entidade === "receitas"
+                ? await syncReceivables(client, token, job)
+                : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -465,6 +468,156 @@ async function syncContracts(client: any, token: string, job: SyncJob) {
   };
 }
 
+async function syncReceivables(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, enterprisesRegistryResult, contractsRegistryResult] = await Promise.all([
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "lojas")
+      .single(),
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "empreendimentos")
+      .single(),
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "contratos")
+      .single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (enterprisesRegistryResult.error || !enterprisesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesRegistryResult.error?.message ?? "Data source de Empreendimentos nao encontrado." };
+  }
+
+  if (contractsRegistryResult.error || !contractsRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: contractsRegistryResult.error?.message ?? "Data source de Contratos nao encontrado." };
+  }
+
+  const [receivablesResult, storesResult, enterprisesResult, contractsResult, tenantsResult] = await Promise.all([
+    client
+      .from("receitas")
+      .select("id,loja_id,empreendimento_id,competencia,receita,valor,vencimento,recebimento,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("vencimento", { ascending: true }),
+    client
+      .from("lojas")
+      .select("id,codigo")
+      .is("deleted_at", null),
+    client
+      .from("empreendimentos")
+      .select("id,nome")
+      .is("deleted_at", null),
+    client
+      .from("contratos")
+      .select("id,loja_id,lojista_id,data_inicio")
+      .is("deleted_at", null),
+    client
+      .from("lojistas")
+      .select("id,nome_fantasia")
+      .is("deleted_at", null)
+  ]);
+
+  if (receivablesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: receivablesResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (enterprisesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: enterprisesResult.error.message };
+  }
+
+  if (contractsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: contractsResult.error.message };
+  }
+
+  if (tenantsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: tenantsResult.error.message };
+  }
+
+  const receivables = (receivablesResult.data ?? []) as ReceivableRow[];
+  const storeCodesById = new Map<string, string>(
+    (storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo])
+  );
+  const enterpriseNamesById = new Map<string, string>(
+    (enterprisesResult.data ?? []).map((enterprise: { id: string; nome: string }) => [enterprise.id, enterprise.nome])
+  );
+  const tenantNamesById = new Map<string, string>(
+    (tenantsResult.data ?? []).map((tenant: { id: string; nome_fantasia: string }) => [tenant.id, tenant.nome_fantasia])
+  );
+  const contractByStoreId = new Map<string, { identifier: string }>();
+
+  for (const contract of (contractsResult.data ?? []) as Array<Pick<ContractRow, "loja_id" | "lojista_id" | "data_inicio">>) {
+    const storeCode = storeCodesById.get(contract.loja_id);
+    const tenantName = tenantNamesById.get(contract.lojista_id);
+    const identifier = [storeCode ?? "Loja", tenantName ?? "Lojista", contract.data_inicio].join(" | ");
+    contractByStoreId.set(contract.loja_id, { identifier });
+  }
+
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const enterprisePageIdsByName = await getTitlePageMap(token, enterprisesRegistryResult.data.notion_data_source_id, "Nome");
+  const contractPageIdsByIdentifier = await getTitlePageMap(token, contractsRegistryResult.data.notion_data_source_id, "Identificador");
+  const existingLaunches = await getExistingTitleValues(token, dataSourceId, "Lançamento");
+  let created = 0;
+  let skipped = 0;
+
+  for (const receivable of receivables) {
+    const storeCode = storeCodesById.get(receivable.loja_id);
+    const enterpriseName = enterpriseNamesById.get(receivable.empreendimento_id);
+    const contract = contractByStoreId.get(receivable.loja_id);
+    const launch = buildReceivableLaunch(receivable, storeCode);
+
+    if (existingLaunches.has(launch)) {
+      skipped += 1;
+      continue;
+    }
+
+    const storePageId = storeCode ? storePageIdsByCode.get(storeCode) : null;
+    const enterprisePageId = enterpriseName ? enterprisePageIdsByName.get(enterpriseName) : null;
+    const contractPageId = contract ? contractPageIdsByIdentifier.get(contract.identifier) : null;
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildReceivableProperties(receivable, launch, storePageId, enterprisePageId, contractPageId)
+      })
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        created,
+        skipped,
+        message: response.message ?? `Falha ao criar receita ${launch}.`
+      };
+    }
+
+    created += 1;
+    existingLaunches.add(launch);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `Receitas sincronizadas: ${created} criadas, ${skipped} ignoradas.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -558,6 +711,27 @@ function buildContractProperties(contract: ContractRow, identifier: string, stor
     Seguro: richText(contract.seguro ?? ""),
     Status: select(toNotionContractStatus(contract.status)),
     Contrato: files(contract.contrato_url, "Contrato")
+  };
+}
+
+function buildReceivableProperties(
+  receivable: ReceivableRow,
+  launch: string,
+  storePageId?: string | null,
+  enterprisePageId?: string | null,
+  contractPageId?: string | null
+) {
+  return {
+    "Lançamento": title(launch),
+    Empreendimento: relation(enterprisePageId),
+    Loja: relation(storePageId),
+    Contrato: relation(contractPageId),
+    "Competência": date(toCompetenceDate(receivable.competencia)),
+    Tipo: select(toNotionRevenueType(receivable.receita)),
+    Valor: number(receivable.valor),
+    Vencimento: date(receivable.vencimento),
+    Recebimento: date(receivable.recebimento),
+    Status: select(toNotionFinancialStatus(receivable.status))
   };
 }
 
@@ -665,6 +839,19 @@ function buildContractIdentifier(contract: ContractRow, storeCode?: string, tena
   ].join(" | ");
 }
 
+function buildReceivableLaunch(receivable: ReceivableRow, storeCode?: string) {
+  return [
+    storeCode ?? "Loja",
+    toNotionRevenueType(receivable.receita),
+    receivable.competencia,
+    receivable.vencimento
+  ].join(" | ");
+}
+
+function toCompetenceDate(competence: string) {
+  return competence.length === 7 ? `${competence}-01` : competence;
+}
+
 function toNotionContractStatus(status: string) {
   const map: Record<string, string> = {
     ativo: "Vigente",
@@ -687,6 +874,31 @@ function toNotionContractIndex(index?: string | null) {
   };
 
   return map[normalized] ?? "Outro";
+}
+
+function toNotionRevenueType(type: string) {
+  const map: Record<string, string> = {
+    aluguel: "Aluguel",
+    condominio: "Condomínio",
+    fundo_promocao: "Fundo Promoção",
+    fpp: "FPP",
+    multa: "Multa",
+    juros: "Juros"
+  };
+
+  return map[type] ?? "Outros";
+}
+
+function toNotionFinancialStatus(status: string) {
+  const map: Record<string, string> = {
+    aberto: "Aberto",
+    vencido: "Vencido",
+    pago: "Recebido",
+    cancelado: "Cancelado",
+    previsto: "Previsto"
+  };
+
+  return map[status] ?? "Aberto";
 }
 
 async function notionFetch(token: string, path: string, init: RequestInit) {
