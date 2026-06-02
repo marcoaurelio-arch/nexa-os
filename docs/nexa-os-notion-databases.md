@@ -556,3 +556,15 @@ O processador tambem suporta `fundo-promocao`, consolidando receitas de fundo de
 ```
 
 Para esses fluxos, as bases `08 Condomínio` e `09 Fundo de Promoção` precisam estar compartilhadas com a integracao `Integracao`.
+
+O processador tambem suporta `fpp`, criando apuracoes na base `10 FPP` com relacao a loja e contrato. Os campos `Valor Percentual`, `Complementar` e `A Cobrar` sao calculados por formulas do proprio Notion:
+
+```json
+{
+  "limit": 1,
+  "slugs": ["fpp"],
+  "retryErrors": true
+}
+```
+
+Para esse fluxo, a base `10 FPP` precisa estar compartilhada com a integracao `Integracao`.

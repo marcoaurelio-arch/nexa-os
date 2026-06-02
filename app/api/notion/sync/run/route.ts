@@ -12,6 +12,7 @@ type ContractRow = Database["public"]["Tables"]["contratos"]["Row"];
 type ReceivableRow = Database["public"]["Tables"]["receitas"]["Row"];
 type PayableRow = Database["public"]["Tables"]["despesas"]["Row"];
 type DelinquencyRow = Database["public"]["Tables"]["inadimplencias"]["Row"];
+type FppRow = Database["public"]["Tables"]["fpp"]["Row"];
 
 type SyncJob = {
   id: string;
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
   const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
-  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao"];
+  const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
@@ -90,7 +91,9 @@ export async function POST(request: Request) {
                       ? await syncLedger(client, token, job, "condominio")
                       : job.entidade === "fundo-promocao"
                         ? await syncLedger(client, token, job, "fundo-promocao")
-                        : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
+                        : job.entidade === "fpp"
+                          ? await syncFpp(client, token, job)
+                          : { ok: false, created: 0, skipped: 0, message: `Sync ainda nao implementado para ${job.entidade}.` };
 
       await markJob(client, job.id, result.ok ? "concluido" : "erro", {
         ...job.payload,
@@ -967,6 +970,135 @@ async function syncLedger(client: any, token: string, job: SyncJob, ledger: "con
   };
 }
 
+async function syncFpp(client: any, token: string, job: SyncJob) {
+  const dataSourceId = job.payload.notion_data_source_id;
+
+  if (!dataSourceId) {
+    return { ok: false, created: 0, skipped: 0, message: "Job sem notion_data_source_id." };
+  }
+
+  const [storesRegistryResult, contractsRegistryResult] = await Promise.all([
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "lojas")
+      .single(),
+    client
+      .from("notion_databases")
+      .select("notion_data_source_id")
+      .eq("slug", "contratos")
+      .single()
+  ]);
+
+  if (storesRegistryResult.error || !storesRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: storesRegistryResult.error?.message ?? "Data source de Lojas nao encontrado." };
+  }
+
+  if (contractsRegistryResult.error || !contractsRegistryResult.data?.notion_data_source_id) {
+    return { ok: false, created: 0, skipped: 0, message: contractsRegistryResult.error?.message ?? "Data source de Contratos nao encontrado." };
+  }
+
+  const [fppResult, storesResult, contractsResult, tenantsResult] = await Promise.all([
+    client
+      .from("fpp")
+      .select("id,loja_id,contrato_id,empreendimento_id,competencia,percentual,aluguel_minimo,faturamento_informado,faturamento_auditado,status,created_at,updated_at,deleted_at")
+      .is("deleted_at", null)
+      .order("competencia", { ascending: false }),
+    client
+      .from("lojas")
+      .select("id,codigo")
+      .is("deleted_at", null),
+    client
+      .from("contratos")
+      .select("id,loja_id,lojista_id,data_inicio")
+      .is("deleted_at", null),
+    client
+      .from("lojistas")
+      .select("id,nome_fantasia")
+      .is("deleted_at", null)
+  ]);
+
+  if (fppResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: fppResult.error.message };
+  }
+
+  if (storesResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: storesResult.error.message };
+  }
+
+  if (contractsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: contractsResult.error.message };
+  }
+
+  if (tenantsResult.error) {
+    return { ok: false, created: 0, skipped: 0, message: tenantsResult.error.message };
+  }
+
+  const fppRecords = (fppResult.data ?? []) as FppRow[];
+  const storeCodesById = new Map<string, string>(
+    (storesResult.data ?? []).map((store: { id: string; codigo: string }) => [store.id, store.codigo])
+  );
+  const tenantNamesById = new Map<string, string>(
+    (tenantsResult.data ?? []).map((tenant: { id: string; nome_fantasia: string }) => [tenant.id, tenant.nome_fantasia])
+  );
+  const contractIdentifiersById = new Map<string, string>();
+
+  for (const contract of (contractsResult.data ?? []) as Array<Pick<ContractRow, "id" | "loja_id" | "lojista_id" | "data_inicio">>) {
+    const storeCode = storeCodesById.get(contract.loja_id);
+    const tenantName = tenantNamesById.get(contract.lojista_id);
+    contractIdentifiersById.set(contract.id, [storeCode ?? "Loja", tenantName ?? "Lojista", contract.data_inicio].join(" | "));
+  }
+
+  const storePageIdsByCode = await getTitlePageMap(token, storesRegistryResult.data.notion_data_source_id, "Código");
+  const contractPageIdsByIdentifier = await getTitlePageMap(token, contractsRegistryResult.data.notion_data_source_id, "Identificador");
+  const existingNames = await getExistingTitleValues(token, dataSourceId, "Apuração");
+  let created = 0;
+  let skipped = 0;
+
+  for (const record of fppRecords) {
+    const storeCode = storeCodesById.get(record.loja_id);
+    const identifier = record.contrato_id ? contractIdentifiersById.get(record.contrato_id) : null;
+    const name = buildFppName(record, storeCode);
+
+    if (existingNames.has(name)) {
+      skipped += 1;
+      continue;
+    }
+
+    const response = await notionFetch(token, "/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { data_source_id: dataSourceId },
+        properties: buildFppProperties(
+          record,
+          name,
+          storeCode ? storePageIdsByCode.get(storeCode) : null,
+          identifier ? contractPageIdsByIdentifier.get(identifier) : null
+        )
+      })
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        created,
+        skipped,
+        message: response.message ?? `Falha ao criar FPP ${name}.`
+      };
+    }
+
+    created += 1;
+    existingNames.add(name);
+  }
+
+  return {
+    ok: true,
+    created,
+    skipped,
+    message: `FPP sincronizado: ${created} apuracoes criadas, ${skipped} ignoradas.`
+  };
+}
+
 async function getExistingTitleValues(token: string, dataSourceId: string, titleProperty: string) {
   const pageMap = await getTitlePageMap(token, dataSourceId, titleProperty);
   return new Set(pageMap.keys());
@@ -1140,6 +1272,19 @@ function buildLedgerPayableProperties(payable: PayableRow, ledger: "condominio" 
   };
 }
 
+function buildFppProperties(record: FppRow, name: string, storePageId?: string | null, contractPageId?: string | null) {
+  return {
+    "Apuração": title(name),
+    Loja: relation(storePageId),
+    Contrato: relation(contractPageId),
+    "Competência": date(toCompetenceDate(record.competencia)),
+    Percentual: number(record.percentual / 100),
+    "Aluguel Mínimo": number(record.aluguel_minimo),
+    "Faturamento Informado": number(record.faturamento_informado),
+    "Faturamento Auditado": number(record.faturamento_auditado)
+  };
+}
+
 function title(content: string) {
   return { title: [{ text: { content } }] };
 }
@@ -1300,6 +1445,15 @@ function buildLedgerPayableLaunch(payable: PayableRow, ledger: "condominio" | "f
     payable.fornecedor,
     payable.competencia,
     payable.vencimento
+  ].join(" | ");
+}
+
+function buildFppName(record: FppRow, storeCode?: string) {
+  return [
+    storeCode ?? "Loja",
+    "FPP",
+    record.competencia,
+    record.id.slice(0, 8)
   ].join(" | ");
 }
 
