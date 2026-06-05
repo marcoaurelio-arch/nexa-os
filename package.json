@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "env:check": "node scripts/check-production-env.mjs",
+    "env:check:strict": "node scripts/check-production-env.mjs --strict",
     "supabase:check": "node scripts/check-supabase-setup.mjs",
     "supabase:apply": "node scripts/apply-supabase-migrations.mjs"
   },

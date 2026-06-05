@@ -56,6 +56,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 NOTION_API_KEY=
 NOTION_PARENT_PAGE_ID=
 CRON_SECRET=
+NEXT_PUBLIC_APP_URL=
 ```
 
 As migrations estao em `supabase/migrations/`:
@@ -78,10 +79,21 @@ Authorization: Bearer $CRON_SECRET
 
 O `vercel.json` agenda esse endpoint diariamente as 09:00 UTC. Localmente, se `CRON_SECRET` nao estiver definido, a rota pode ser chamada para teste.
 
+## Deploy na Vercel
+
+Use o guia `docs/vercel-deploy.md` para conectar o repositorio GitHub, cadastrar variaveis de ambiente e validar a publicacao em producao.
+
+Antes do deploy, confira a configuracao local sem expor segredos:
+
+```bash
+npm run env:check
+```
+
 ## Documentacao
 
 - `docs/arquitetura.md`
 - `docs/nexa-os-entrega-inicial.md`
 - `docs/nexa-os-notion-databases.md`
 - `docs/supabase-setup.md`
+- `docs/vercel-deploy.md`
 - `docs/nexa-os-schema-inicial.sql`
