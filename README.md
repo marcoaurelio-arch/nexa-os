@@ -55,6 +55,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 NOTION_API_KEY=
 NOTION_PARENT_PAGE_ID=
+CRON_SECRET=
 ```
 
 As migrations estao em `supabase/migrations/`:
@@ -66,6 +67,16 @@ As migrations estao em `supabase/migrations/`:
 
 O manifesto TypeScript das 23 bases Notion esta em `lib/notion/schema.ts`.
 O passo a passo de implantacao do banco esta em `docs/supabase-setup.md`.
+
+## Automacao Notion
+
+O endpoint `GET /api/notion/sync/cron` enfileira e processa a sincronizacao das bases Notion em lotes. Em producao, a chamada exige:
+
+```txt
+Authorization: Bearer $CRON_SECRET
+```
+
+O `vercel.json` agenda esse endpoint diariamente as 09:00 UTC. Localmente, se `CRON_SECRET` nao estiver definido, a rota pode ser chamada para teste.
 
 ## Documentacao
 

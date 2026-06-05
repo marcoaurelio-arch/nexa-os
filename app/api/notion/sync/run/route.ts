@@ -33,6 +33,14 @@ type SyncJob = {
   };
 };
 
+type SyncRunOptions = {
+  limit?: number;
+  slugs?: string[];
+  retryErrors?: boolean;
+};
+
+type JsonResponsePayload = Record<string, unknown>;
+
 type UtilityPropertyNames = {
   title: string;
   enterprise?: string;
@@ -129,19 +137,25 @@ function createAdminClient() {
 }
 
 export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({})) as SyncRunOptions;
+  const result = await runNotionSync(body);
+
+  return NextResponse.json(result.body, { status: result.status });
+}
+
+export async function runNotionSync(body: SyncRunOptions = {}) {
   const client = createAdminClient();
   const token = process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN;
-  const body = await request.json().catch(() => ({})) as { limit?: number; slugs?: string[]; retryErrors?: boolean };
   const limit = Math.max(1, Math.min(body.limit ?? 1, 5));
   const supportedSlugs = body.slugs?.length ? body.slugs : ["empreendimentos", "lojas", "lojistas", "contratos", "receitas", "despesas", "inadimplencia", "condominio", "fundo-promocao", "fpp", "auditoria-faturamento", "leads", "propostas", "vacancia", "ocupacao", "energia", "agua", "os", "documentos", "juridico", "marketing", "relatorios", "indicadores"];
   const statuses = body.retryErrors ? ["pendente", "erro"] : ["pendente"];
 
   if (!client) {
-    return NextResponse.json({ error: "Supabase server env not configured." }, { status: 503 });
+    return jsonResult({ error: "Supabase server env not configured." }, 503);
   }
 
   if (!token) {
-    return NextResponse.json({ error: "Configure NOTION_API_KEY ou NOTION_TOKEN para executar o sync." }, { status: 400 });
+    return jsonResult({ error: "Configure NOTION_API_KEY ou NOTION_TOKEN para executar o sync." }, 400);
   }
 
   const jobsResult = await client
@@ -153,7 +167,7 @@ export async function POST(request: Request) {
     .limit(limit);
 
   if (jobsResult.error) {
-    return NextResponse.json({ error: jobsResult.error.message }, { status: 500 });
+    return jsonResult({ error: jobsResult.error.message }, 500);
   }
 
   const jobs = (jobsResult.data ?? []) as SyncJob[];
@@ -216,6 +230,7 @@ export async function POST(request: Request) {
         processed_at: new Date().toISOString(),
         result
       }, result.ok ? null : result.message);
+      await markDatabaseSync(client, job, result.ok);
 
       results.push({ jobId: job.id, entidade: job.entidade, ...result });
     } catch (error) {
@@ -225,15 +240,20 @@ export async function POST(request: Request) {
         ...job.payload,
         processed_at: new Date().toISOString()
       }, message);
+      await markDatabaseSync(client, job, false, message);
 
       results.push({ jobId: job.id, entidade: job.entidade, ok: false, created: 0, skipped: 0, message });
     }
   }
 
-  return NextResponse.json({
+  return jsonResult({
     processed: results.length,
     results
   });
+}
+
+function jsonResult(body: JsonResponsePayload, status = 200) {
+  return { body, status };
 }
 
 async function syncEnterprises(client: any, token: string, job: SyncJob) {
@@ -3817,4 +3837,17 @@ async function markJob(client: any, id: string, status: string, payload?: Record
     .from("notion_sync_jobs")
     .update(patch)
     .eq("id", id);
+}
+
+async function markDatabaseSync(client: any, job: SyncJob, ok: boolean, error?: string) {
+  if (!job.database_id) return;
+
+  await client
+    .from("notion_databases")
+    .update({
+      status: ok ? "sincronizado" : "erro",
+      ultima_sincronizacao: new Date().toISOString(),
+      erro: ok ? null : error ?? "Falha no sync Notion."
+    })
+    .eq("id", job.database_id);
 }

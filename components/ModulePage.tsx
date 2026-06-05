@@ -1254,6 +1254,7 @@ function SettingsPage({
   const [checkingNotionHealth, setCheckingNotionHealth] = useState(false);
   const [checkingNotionSync, setCheckingNotionSync] = useState(false);
   const [queueingNotionSync, setQueueingNotionSync] = useState(false);
+  const [runningNotionCron, setRunningNotionCron] = useState(false);
   const setupSteps = [
     { label: "Projeto Supabase criado", status: "manual" },
     { label: "Migrations 001 a 010 aplicadas", status: "manual" },
@@ -1264,6 +1265,7 @@ function SettingsPage({
   ];
   const healthStatus = health?.status ?? "nao verificado";
   const notionHealthStatus = notionHealth?.status ?? "nao verificado";
+  const canRunLocalNotionCron = process.env.NODE_ENV !== "production";
 
   async function checkSupabaseHealth() {
     setCheckingHealth(true);
@@ -1346,6 +1348,20 @@ function SettingsPage({
     }
   }
 
+  async function runNotionCron() {
+    setRunningNotionCron(true);
+
+    try {
+      await fetch("/api/notion/sync/cron", {
+        method: "GET",
+        cache: "no-store"
+      });
+      await checkNotionSync();
+    } finally {
+      setRunningNotionCron(false);
+    }
+  }
+
   useEffect(() => {
     void checkSupabaseHealth();
     void checkNotionHealth();
@@ -1414,12 +1430,19 @@ function SettingsPage({
             <button className="control inline-flex items-center justify-center" onClick={() => void queueNotionSync()} disabled={queueingNotionSync || (notionSync?.dataSources ?? 0) === 0}>
               {queueingNotionSync ? "Enfileirando" : "Preparar sync inicial"}
             </button>
+            {canRunLocalNotionCron ? (
+              <button className="control inline-flex items-center justify-center" onClick={() => void runNotionCron()} disabled={runningNotionCron || (notionSync?.dataSources ?? 0) === 0}>
+                {runningNotionCron ? "Executando" : "Executar rotina"}
+              </button>
+            ) : null}
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div className="mt-4 grid gap-3 md:grid-cols-6">
           <Mini label="Bases registradas" value={`${numberPt(notionSync?.registeredDatabases ?? 0)}/${numberPt(notionSync?.totalDatabases ?? 23)}`} />
           <Mini label="Data sources" value={numberPt(notionSync?.dataSources ?? 0)} />
           <Mini label="Jobs pendentes" value={numberPt(notionSync?.pendingJobs ?? 0)} />
+          <Mini label="Processando" value={numberPt(notionSync?.processingJobs ?? 0)} />
+          <Mini label="Concluidos" value={numberPt(notionSync?.completedJobs ?? 0)} />
           <Mini label="Jobs com erro" value={numberPt(notionSync?.failedJobs ?? 0)} />
         </div>
         {notionSync?.error ? <p className="mt-3 text-sm text-red-600">{notionSync.error}</p> : null}

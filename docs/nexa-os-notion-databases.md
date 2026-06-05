@@ -710,3 +710,30 @@ O processador tambem suporta `indicadores`, criando registros na base `23 Indica
 ```
 
 Para esses fluxos, as bases `21 Marketing`, `22 Relatórios` e `23 Indicadores` precisam estar compartilhadas com a integracao `Integracao`.
+
+## 8. Automacao recorrente
+
+O Nexa OS possui uma rota de automacao para manter o espelhamento operacional com o Notion:
+
+```txt
+GET /api/notion/sync/cron
+```
+
+Em producao, a rota exige o cabecalho:
+
+```txt
+Authorization: Bearer $CRON_SECRET
+```
+
+O arquivo `vercel.json` agenda a execucao diaria as 09:00 UTC. A rotina:
+
+- enfileira jobs `scheduled_sync` para bases com `notion_data_source_id`;
+- ignora bases que ja possuem job `pendente` ou `processando`;
+- executa ate cinco lotes de cinco jobs por chamada;
+- atualiza `notion_databases.status`, `ultima_sincronizacao` e `erro` conforme o resultado.
+
+Para teste local sem segredo configurado:
+
+```txt
+GET http://127.0.0.1:3001/api/notion/sync/cron
+```
