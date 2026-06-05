@@ -1084,6 +1084,55 @@ function MonthlyReportPage({
   const energyValue = selectedUtilities.filter((reading) => reading.tipo === "energia").reduce((sum, reading) => sum + reading.valor, 0);
   const waterValue = selectedUtilities.filter((reading) => reading.tipo === "agua").reduce((sum, reading) => sum + reading.valor, 0);
   const utilityCriticalAlerts = selectedUtilities.filter((reading) => reading.status !== "normal").length;
+  const occupancyRate = selectedStores.length ? occupiedStores.length / selectedStores.length : 0;
+  const delinquencyRate = realEstateRevenue > 0 ? overdueReceivables / realEstateRevenue : 0;
+  const operatingMargin = realEstateRevenue > 0 ? (receivedRevenue - paidPayables) / realEstateRevenue : 0;
+  const managementScore = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        (occupancyRate * 42) +
+        ((1 - Math.min(delinquencyRate, 1)) * 24) +
+        ((1 - Math.min(averageAuditDivergence, 1)) * 14) +
+        ((criticalOrders.length === 0 ? 1 : 0) * 10) +
+        ((highRiskLegal.length === 0 ? 1 : 0) * 10)
+      )
+    )
+  );
+  const managementStatus = managementScore >= 85 ? "Saudavel" : managementScore >= 70 ? "Atencao" : "Critico";
+  const executiveSignals = [
+    { label: "Score executivo", value: `${numberPt(managementScore)}/100`, tone: managementScore >= 85 ? "success" : managementScore >= 70 ? "default" : "danger" },
+    { label: "Margem operacional", value: percent(operatingMargin), tone: operatingMargin >= 0 ? "success" : "danger" },
+    { label: "Inadimplencia / receita", value: percent(delinquencyRate), tone: delinquencyRate <= 0.05 ? "success" : "danger" },
+    { label: "Status gerencial", value: managementStatus, tone: managementScore >= 85 ? "success" : managementScore >= 70 ? "default" : "danger" }
+  ] as const;
+  const priorityRows = [
+    {
+      title: "Receita e cobranca",
+      value: brl(overdueReceivables),
+      description: overdueReceivables > 0 ? "Contas vencidas devem entrar na regua da competencia." : "Sem vencidos relevantes na competencia.",
+      weight: overdueReceivables
+    },
+    {
+      title: "Vacancia comercial",
+      value: brl(lostRevenue),
+      description: lostRevenue > 0 ? "Receita potencial perdida por lojas vagas ou em negociacao." : "Vacancia sem impacto financeiro relevante.",
+      weight: lostRevenue
+    },
+    {
+      title: "Operacoes criticas",
+      value: `${numberPt(criticalOrders.length)} OS`,
+      description: criticalOrders.length > 0 ? "Ordens criticas pendentes antes do fechamento." : "Sem OS critica aberta no periodo.",
+      weight: criticalOrders.length * 100000
+    },
+    {
+      title: "Juridico alto risco",
+      value: numberPt(highRiskLegal.length),
+      description: highRiskLegal.length > 0 ? "Casos para acompanhamento de diretoria ou comite." : "Sem alto risco juridico ativo.",
+      weight: highRiskLegal.length * 100000
+    }
+  ].sort((a, b) => b.weight - a.weight);
 
   const recommendations = [
     overdueReceivables > 0 ? `Acionar regua de inadimplencia para ${brl(overdueReceivables)} vencidos na competencia.` : "",
@@ -1161,6 +1210,11 @@ function MonthlyReportPage({
   const reportText = [
     reportTitle,
     `Empreendimentos: ${selectedEnterpriseNames.join(", ") || "Todos"}`,
+    `Score executivo: ${numberPt(managementScore)}/100 - ${managementStatus}`,
+    `Margem operacional: ${percent(operatingMargin)}`,
+    `Inadimplencia sobre receita: ${percent(delinquencyRate)}`,
+    "Prioridades executivas:",
+    ...priorityRows.map((row, index) => `${index + 1}. ${row.title}: ${row.value} - ${row.description}`),
     ...reportSections.flatMap((section) => [section.title, section.summary, ...section.items])
   ].join("\n");
 
@@ -1195,8 +1249,31 @@ function MonthlyReportPage({
       <div className="grid gap-3 md:grid-cols-4">
         <Kpi label="Receita imobiliaria" value={brl(realEstateRevenue)} tone="success" />
         <Kpi label="Inadimplencia" value={brl(overdueReceivables)} tone={overdueReceivables ? "danger" : "success"} />
-        <Kpi label="Ocupacao" value={percent(selectedStores.length ? occupiedStores.length / selectedStores.length : 0)} />
+        <Kpi label="Ocupacao" value={percent(occupancyRate)} />
         <Kpi label="Saldo operacional" value={brl(receivedRevenue - paidPayables)} tone={receivedRevenue >= paidPayables ? "success" : "danger"} />
+      </div>
+      <div className="panel p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="font-bold uppercase">Sumario executivo</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Leitura sintetica do fechamento para diretoria, combinando ocupacao, inadimplencia, auditoria, operacoes e juridico.
+            </p>
+          </div>
+          <Badge>{managementStatus}</Badge>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          {executiveSignals.map((signal) => (
+            <div key={signal.label} className="rounded-lg bg-muted px-3 py-3">
+              <div className="metric-label">{signal.label}</div>
+              <div className={`mt-1 text-lg font-bold ${
+                signal.tone === "success" ? "text-success" : signal.tone === "danger" ? "text-danger" : "text-foreground"
+              }`}>
+                {signal.value}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
         <div className="panel overflow-hidden">
@@ -1230,6 +1307,20 @@ function MonthlyReportPage({
           </div>
         </div>
         <div className="space-y-3">
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Prioridades executivas</h2>
+            <div className="mt-4 space-y-2">
+              {priorityRows.map((row, index) => (
+                <div key={row.title} className="rounded-lg border border-border px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-bold text-primary">{index + 1}. {row.title}</span>
+                    <span className="font-bold">{row.value}</span>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">{row.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="panel p-5">
             <h2 className="font-bold uppercase">Checklist de emissao</h2>
             <div className="mt-4 grid gap-3">
