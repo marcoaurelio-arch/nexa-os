@@ -73,6 +73,7 @@ Depois do primeiro deploy em producao, conferir:
 ```txt
 /api/health/supabase
 /api/health/notion
+/api/health/deployment
 /api/notion/sync
 /api/notion/sync/cron
 ```

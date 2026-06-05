@@ -523,6 +523,24 @@ type NotionSyncStatus = {
   error?: string;
 };
 
+type DeploymentHealth = {
+  status: "ready" | "warning" | "not_ready";
+  checkedAt: string;
+  environment: string;
+  vercelDetected: boolean;
+  requiredChecks: number;
+  okChecks: number;
+  warningChecks: number;
+  missingChecks: number;
+  checks: Array<{
+    key: string;
+    label: string;
+    status: "ok" | "warning" | "missing";
+    required: boolean;
+    message: string;
+  }>;
+};
+
 export function ModulePage({
   module,
   enterprises,
@@ -1250,9 +1268,11 @@ function SettingsPage({
   const [health, setHealth] = useState<SupabaseHealth | null>(null);
   const [notionHealth, setNotionHealth] = useState<NotionHealth | null>(null);
   const [notionSync, setNotionSync] = useState<NotionSyncStatus | null>(null);
+  const [deploymentHealth, setDeploymentHealth] = useState<DeploymentHealth | null>(null);
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [checkingNotionHealth, setCheckingNotionHealth] = useState(false);
   const [checkingNotionSync, setCheckingNotionSync] = useState(false);
+  const [checkingDeploymentHealth, setCheckingDeploymentHealth] = useState(false);
   const [queueingNotionSync, setQueueingNotionSync] = useState(false);
   const [runningNotionCron, setRunningNotionCron] = useState(false);
   const setupSteps = [
@@ -1265,6 +1285,7 @@ function SettingsPage({
   ];
   const healthStatus = health?.status ?? "nao verificado";
   const notionHealthStatus = notionHealth?.status ?? "nao verificado";
+  const deploymentStatus = deploymentHealth?.status ?? "nao verificado";
   const canRunLocalNotionCron = process.env.NODE_ENV !== "production";
 
   async function checkSupabaseHealth() {
@@ -1333,6 +1354,36 @@ function SettingsPage({
     }
   }
 
+  async function checkDeploymentHealth() {
+    setCheckingDeploymentHealth(true);
+
+    try {
+      const response = await fetch("/api/health/deployment", { cache: "no-store" });
+      const payload = await response.json() as DeploymentHealth;
+      setDeploymentHealth(payload);
+    } catch {
+      setDeploymentHealth({
+        status: "not_ready",
+        checkedAt: new Date().toISOString(),
+        environment: "local",
+        vercelDetected: false,
+        requiredChecks: 0,
+        okChecks: 0,
+        warningChecks: 0,
+        missingChecks: 1,
+        checks: [{
+          key: "deployment_health",
+          label: "Prontidao Vercel",
+          status: "missing",
+          required: true,
+          message: "Falha ao consultar a rota de prontidao de producao."
+        }]
+      });
+    } finally {
+      setCheckingDeploymentHealth(false);
+    }
+  }
+
   async function queueNotionSync() {
     setQueueingNotionSync(true);
 
@@ -1366,6 +1417,7 @@ function SettingsPage({
     void checkSupabaseHealth();
     void checkNotionHealth();
     void checkNotionSync();
+    void checkDeploymentHealth();
   }, []);
 
   return (
@@ -1454,6 +1506,39 @@ function SettingsPage({
                 database.notion_data_source_id ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
               }`}>
                 {database.notion_data_source_id ? "vinculada" : "pendente"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="panel p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="font-bold uppercase">Prontidao Vercel</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Checklist server-side para deploy, variaveis de ambiente, cron e URL publica.</p>
+          </div>
+          <button className="control inline-flex items-center justify-center" onClick={() => void checkDeploymentHealth()} disabled={checkingDeploymentHealth}>
+            {checkingDeploymentHealth ? "Verificando" : "Verificar deploy"}
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-5">
+          <Mini label="Status" value={deploymentStatus} />
+          <Mini label="Ambiente" value={deploymentHealth?.environment ?? "-"} />
+          <Mini label="Vercel" value={deploymentHealth?.vercelDetected ? "Detectada" : "Local"} />
+          <Mini label="OK" value={`${numberPt(deploymentHealth?.okChecks ?? 0)}/${numberPt(deploymentHealth?.requiredChecks ?? 7)}`} />
+          <Mini label="Pendencias" value={numberPt((deploymentHealth?.missingChecks ?? 0) + (deploymentHealth?.warningChecks ?? 0))} />
+        </div>
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {(deploymentHealth?.checks ?? []).map((check) => (
+            <div key={check.key} className="flex items-start justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+              <div>
+                <div className="font-semibold text-primary">{check.label}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{check.message}</div>
+              </div>
+              <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
+                check.status === "ok" ? "bg-emerald-100 text-emerald-700" : check.status === "warning" ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+              }`}>
+                {check.status === "ok" ? "ok" : check.status === "warning" ? "atencao" : "pendente"}
               </span>
             </div>
           ))}
