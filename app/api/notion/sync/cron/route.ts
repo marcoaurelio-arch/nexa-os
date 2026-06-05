@@ -83,7 +83,8 @@ export async function GET(request: Request) {
 function isAuthorizedCronRequest(request: Request) {
   const secret = process.env.CRON_SECRET;
 
-  if (!secret) return process.env.NODE_ENV !== "production";
+  if (process.env.NODE_ENV !== "production") return true;
+  if (!secret) return false;
 
   return request.headers.get("authorization") === `Bearer ${secret}`;
 }
