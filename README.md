@@ -57,6 +57,7 @@ NOTION_API_KEY=
 NOTION_PARENT_PAGE_ID=
 CRON_SECRET=
 NEXT_PUBLIC_APP_URL=
+NEXT_PUBLIC_AUTH_REQUIRED=
 ```
 
 As migrations estao em `supabase/migrations/`:
@@ -96,4 +97,5 @@ npm run env:check
 - `docs/nexa-os-notion-databases.md`
 - `docs/supabase-setup.md`
 - `docs/vercel-deploy.md`
+- `docs/auth-access.md`
 - `docs/nexa-os-schema-inicial.sql`

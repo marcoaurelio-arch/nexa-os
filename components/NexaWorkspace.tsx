@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell, navItems } from "@/components/AppShell";
+import { AuthGate } from "@/components/AuthGate";
 import { Dashboard } from "@/components/Dashboard";
 import { ModulePage } from "@/components/ModulePage";
 import {
@@ -149,58 +150,67 @@ export function NexaWorkspace() {
   }, [commercialLeadRows, contractRows, dataSource, delinquencyRows, documentRows, enterpriseRows, fppRows, legalRows, payableRows, receivableRows, revenueAuditRows, serviceOrderRows, storageReady, storeRows, tenantRows, utilityRows, vacancyRows]);
 
   return (
-    <AppShell activeModule={activeModule} onModuleChange={setActiveModule}>
-      {activeModule === "Dashboard" ? (
-        <Dashboard
-          enterpriseRows={enterpriseRows}
-          storeRows={storeRows}
-          tenantRows={tenantRows}
-          contractRows={contractRows}
-          receivableRows={receivableRows}
-          payableRows={payableRows}
-          serviceOrderRows={serviceOrderRows}
-        />
-      ) : (
-        <ModulePage
-          module={activeModule}
-          enterprises={enterpriseRows}
-          stores={storeRows}
-          tenants={tenantRows}
-          contracts={contractRows}
-          receivables={receivableRows}
-          payables={payableRows}
-          delinquencyRecords={delinquencyRows}
-          fppRecords={fppRows}
-          revenueAuditRecords={revenueAuditRows}
-          commercialLeads={commercialLeadRows}
-          vacancyRecords={vacancyRows}
-          utilityReadings={utilityRows}
-          serviceOrders={serviceOrderRows}
-          documentRecords={documentRows}
-          legalCases={legalRows}
-          dataSource={dataSource}
-          syncError={syncError}
-          onResetLocalData={() => {
-            resetLocalAssetData();
-            setEnterpriseRows(seedEnterprises);
-            setStoreRows(seedStores);
-            setTenantRows(seedTenants);
-            setContractRows(seedContracts);
-            setReceivableRows(seedReceivables);
-            setPayableRows(seedPayables);
-            setDelinquencyRows(seedDelinquencyRecords);
-            setFppRows(seedFppRecords);
-            setRevenueAuditRows(seedRevenueAuditRecords);
-            setCommercialLeadRows(seedCommercialLeads);
-            setVacancyRows(seedVacancyRecords);
-            setUtilityRows(seedUtilityReadings);
-            setServiceOrderRows(seedServiceOrders);
-            setDocumentRows(seedDocumentRecords);
-            setLegalRows(seedLegalCases);
-            setDataSource("mock");
-            setSyncError(null);
-          }}
-          onSaveEnterprise={async (enterprise) => {
+    <AuthGate>
+      {(user, signOut) => (
+        <AppShell
+          activeModule={activeModule}
+          onModuleChange={setActiveModule}
+          userProfileId={user.authenticated ? user.perfil : undefined}
+          userName={user.nome}
+          userEmail={user.email}
+          onSignOut={signOut ?? undefined}
+        >
+          {activeModule === "Dashboard" ? (
+            <Dashboard
+              enterpriseRows={enterpriseRows}
+              storeRows={storeRows}
+              tenantRows={tenantRows}
+              contractRows={contractRows}
+              receivableRows={receivableRows}
+              payableRows={payableRows}
+              serviceOrderRows={serviceOrderRows}
+            />
+          ) : (
+            <ModulePage
+              module={activeModule}
+              enterprises={enterpriseRows}
+              stores={storeRows}
+              tenants={tenantRows}
+              contracts={contractRows}
+              receivables={receivableRows}
+              payables={payableRows}
+              delinquencyRecords={delinquencyRows}
+              fppRecords={fppRows}
+              revenueAuditRecords={revenueAuditRows}
+              commercialLeads={commercialLeadRows}
+              vacancyRecords={vacancyRows}
+              utilityReadings={utilityRows}
+              serviceOrders={serviceOrderRows}
+              documentRecords={documentRows}
+              legalCases={legalRows}
+              dataSource={dataSource}
+              syncError={syncError}
+              onResetLocalData={() => {
+                resetLocalAssetData();
+                setEnterpriseRows(seedEnterprises);
+                setStoreRows(seedStores);
+                setTenantRows(seedTenants);
+                setContractRows(seedContracts);
+                setReceivableRows(seedReceivables);
+                setPayableRows(seedPayables);
+                setDelinquencyRows(seedDelinquencyRecords);
+                setFppRows(seedFppRecords);
+                setRevenueAuditRows(seedRevenueAuditRecords);
+                setCommercialLeadRows(seedCommercialLeads);
+                setVacancyRows(seedVacancyRecords);
+                setUtilityRows(seedUtilityReadings);
+                setServiceOrderRows(seedServiceOrders);
+                setDocumentRows(seedDocumentRecords);
+                setLegalRows(seedLegalCases);
+                setDataSource("mock");
+                setSyncError(null);
+              }}
+              onSaveEnterprise={async (enterprise) => {
             const saved = await saveEnterprise(enterprise).catch((error: unknown) => {
               setSyncError(error instanceof Error ? error.message : "Falha ao salvar empreendimento");
               return enterprise;
@@ -368,6 +378,8 @@ export function NexaWorkspace() {
         />
       )}
     </AppShell>
+      )}
+    </AuthGate>
   );
 }
 

@@ -94,7 +94,8 @@ export function resetLocalAssetData() {
 
 export async function fetchAssetData(): Promise<AssetData | null> {
   if (typeof window !== "undefined") {
-    const response = await fetch("/api/assets", { cache: "no-store" });
+    const headers = await getAuthHeaders();
+    const response = await fetch("/api/assets", { cache: "no-store", headers });
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null) as { error?: string } | null;
@@ -223,6 +224,18 @@ export async function fetchAssetData(): Promise<AssetData | null> {
     documentRecords: documentResult.data.map(mapDocumentRow),
     legalCases: legalResult.data.map(mapLegalCaseRow)
   };
+}
+
+async function getAuthHeaders() {
+  if (process.env.NEXT_PUBLIC_AUTH_REQUIRED !== "true") {
+    return undefined;
+  }
+
+  const supabase = createBrowserSupabaseClient();
+  const { data } = await supabase?.auth.getSession() ?? { data: { session: null } };
+  const token = data.session?.access_token;
+
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
 export async function saveEnterprise(enterprise: Enterprise) {
