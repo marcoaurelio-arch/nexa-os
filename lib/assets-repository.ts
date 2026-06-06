@@ -92,9 +92,9 @@ export function resetLocalAssetData() {
   window.localStorage.removeItem(LOCAL_ASSET_DATA_KEY);
 }
 
-export async function fetchAssetData(): Promise<AssetData | null> {
+export async function fetchAssetData(accessToken?: string): Promise<AssetData | null> {
   if (typeof window !== "undefined") {
-    const headers = await getAuthHeaders();
+    const headers = await getAuthHeaders(accessToken);
     const response = await fetch("/api/assets", { cache: "no-store", headers });
 
     if (!response.ok) {
@@ -226,9 +226,13 @@ export async function fetchAssetData(): Promise<AssetData | null> {
   };
 }
 
-async function getAuthHeaders() {
+async function getAuthHeaders(accessToken?: string) {
   if (process.env.NEXT_PUBLIC_AUTH_REQUIRED !== "true") {
     return undefined;
+  }
+
+  if (accessToken) {
+    return { Authorization: `Bearer ${accessToken}` };
   }
 
   const supabase = createBrowserSupabaseClient();

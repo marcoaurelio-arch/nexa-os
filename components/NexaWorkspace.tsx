@@ -46,6 +46,7 @@ import {
 import type { CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 
 export function NexaWorkspace() {
+  const authRequired = process.env.NEXT_PUBLIC_AUTH_REQUIRED === "true";
   const [activeModule, setActiveModule] = useState("Dashboard");
   const [enterpriseRows, setEnterpriseRows] = useState<Enterprise[]>(seedEnterprises);
   const [storeRows, setStoreRows] = useState<Store[]>(seedStores);
@@ -98,9 +99,37 @@ export function NexaWorkspace() {
     }
     setStorageReady(true);
 
-    fetchAssetData()
+    if (!authRequired) {
+      loadRemoteAssetData(undefined, () => mounted);
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [authRequired]);
+
+  useEffect(() => {
+    if (!authRequired) return;
+
+    let mounted = true;
+
+    function handleAuthReady(event: Event) {
+      const accessToken = (event as CustomEvent<{ accessToken?: string }>).detail?.accessToken;
+      void loadRemoteAssetData(accessToken, () => mounted);
+    }
+
+    window.addEventListener("nexa-os:auth-ready", handleAuthReady);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("nexa-os:auth-ready", handleAuthReady);
+    };
+  }, [authRequired]);
+
+  function loadRemoteAssetData(accessToken: string | undefined, isMounted: () => boolean) {
+    return fetchAssetData(accessToken)
       .then((data) => {
-        if (!mounted || !data) return;
+        if (!isMounted() || !data) return;
         setEnterpriseRows(data.enterprises);
         setStoreRows(data.stores);
         setTenantRows(data.tenants);
@@ -117,15 +146,13 @@ export function NexaWorkspace() {
         setDocumentRows(data.documentRecords);
         setLegalRows(data.legalCases);
         setDataSource("supabase");
+        setSyncError(null);
       })
       .catch((error: unknown) => {
+        if (!isMounted()) return;
         setSyncError(error instanceof Error ? error.message : "Falha ao carregar Supabase");
       });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  }
 
   useEffect(() => {
     if (storageReady && dataSource === "mock") {

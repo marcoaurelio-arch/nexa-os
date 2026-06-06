@@ -116,6 +116,11 @@ export function AuthGate({ children }: AuthGateProps) {
         perfil: payload.profile.perfil,
         authenticated: true
       });
+      window.dispatchEvent(new CustomEvent("nexa-os:auth-ready", {
+        detail: {
+          accessToken
+        }
+      }));
       setStatus("ready");
     } catch (error) {
       setUser(null);
