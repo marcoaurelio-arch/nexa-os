@@ -1,15 +1,16 @@
 "use client";
 
 import { AlertTriangle, Building2, Copy, Droplets, FileText, Gavel, Mail, Phone, Plus, Printer, Search, Users, Wrench, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { navItems } from "@/components/AppShell";
 import { accessProfiles } from "@/lib/access-control";
+import type { AccessProfileId } from "@/lib/access-control";
 import { buildContractAlerts } from "@/lib/contracts";
 import { brl, numberPt, percent } from "@/lib/metrics";
-import { hasSupabaseEnv } from "@/lib/supabase/client";
+import { createBrowserSupabaseClient, hasSupabaseEnv } from "@/lib/supabase/client";
 import type {
   CommercialLead,
   CommercialStage,
@@ -541,6 +542,32 @@ type DeploymentHealth = {
   }>;
 };
 
+type AccessUser = {
+  id: string;
+  auth_uid: string | null;
+  nome: string;
+  email: string;
+  perfil: AccessProfileId;
+  ativo: boolean;
+  created_at: string;
+  enterpriseIds: string[];
+};
+
+type AccessUsersResponse = {
+  users: AccessUser[];
+  enterprises: Array<{
+    id: string;
+    nome: string;
+  }>;
+  error?: string;
+};
+
+type CreateAccessUserResponse = {
+  ok?: boolean;
+  temporaryPassword?: string;
+  error?: string;
+};
+
 export function ModulePage({
   module,
   enterprises,
@@ -774,7 +801,7 @@ export function ModulePage({
     );
   }
   if (module === "Configuracoes") {
-    return <SettingsPage dataSource={dataSource} syncError={syncError} onResetLocalData={onResetLocalData} />;
+    return <SettingsPage enterprises={enterprises} dataSource={dataSource} syncError={syncError} onResetLocalData={onResetLocalData} />;
   }
 
   return (
@@ -1344,11 +1371,257 @@ function MonthlyReportPage({
   );
 }
 
+function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
+  const defaultEnterpriseIds = enterprises.map((enterprise) => enterprise.id);
+  const [users, setUsers] = useState<AccessUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [userError, setUserError] = useState<string | null>(null);
+  const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    nome: "",
+    email: "",
+    perfil: "comercial" as AccessProfileId,
+    enterpriseIds: defaultEnterpriseIds
+  });
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      enterpriseIds: current.enterpriseIds.length > 0 ? current.enterpriseIds : defaultEnterpriseIds
+    }));
+  }, [defaultEnterpriseIds.join("|")]);
+
+  async function authHeaders(): Promise<Record<string, string>> {
+    const supabase = createBrowserSupabaseClient();
+    const { data } = await supabase?.auth.getSession() ?? { data: { session: null } };
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  async function loadUsers() {
+    setLoadingUsers(true);
+    setUserError(null);
+
+    try {
+      const headers = await authHeaders();
+      const response = await fetch("/api/auth/users", {
+        cache: "no-store",
+        headers
+      });
+      const payload = await response.json() as AccessUsersResponse;
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Falha ao carregar usuarios.");
+      }
+
+      setUsers(payload.users ?? []);
+    } catch (error) {
+      setUserError(error instanceof Error ? error.message : "Falha ao carregar usuarios.");
+    } finally {
+      setLoadingUsers(false);
+    }
+  }
+
+  async function createUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreatingUser(true);
+    setTemporaryPassword(null);
+    setUserError(null);
+
+    try {
+      const headers = await authHeaders();
+      const response = await fetch("/api/auth/users", {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(form)
+      });
+      const payload = await response.json() as CreateAccessUserResponse;
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Falha ao criar usuario.");
+      }
+
+      setTemporaryPassword(payload.temporaryPassword ?? null);
+      setForm({
+        nome: "",
+        email: "",
+        perfil: "comercial",
+        enterpriseIds: defaultEnterpriseIds
+      });
+      await loadUsers();
+    } catch (error) {
+      setUserError(error instanceof Error ? error.message : "Falha ao criar usuario.");
+    } finally {
+      setCreatingUser(false);
+    }
+  }
+
+  function toggleEnterprise(enterpriseId: string) {
+    setForm((current) => {
+      const hasEnterprise = current.enterpriseIds.includes(enterpriseId);
+      return {
+        ...current,
+        enterpriseIds: hasEnterprise
+          ? current.enterpriseIds.filter((id) => id !== enterpriseId)
+          : [...current.enterpriseIds, enterpriseId]
+      };
+    });
+  }
+
+  function selectAllEnterprises() {
+    setForm((current) => ({
+      ...current,
+      enterpriseIds: defaultEnterpriseIds
+    }));
+  }
+
+  useEffect(() => {
+    void loadUsers();
+  }, []);
+
+  return (
+    <div className="panel p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="font-bold uppercase">Usuarios e senhas</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Cadastre usuarios autorizados, gere senha temporaria e vincule acesso aos empreendimentos.</p>
+        </div>
+        <button className="control inline-flex items-center justify-center" onClick={() => void loadUsers()} disabled={loadingUsers}>
+          {loadingUsers ? "Atualizando" : "Atualizar usuarios"}
+        </button>
+      </div>
+
+      <form className="mt-5 grid gap-4 xl:grid-cols-[1fr_280px]" onSubmit={(event) => void createUser(event)}>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="block text-sm font-semibold text-primary">
+            Nome
+            <input
+              className="control mt-2 w-full"
+              value={form.nome}
+              onChange={(event) => setForm((current) => ({ ...current, nome: event.target.value }))}
+              required
+            />
+          </label>
+          <label className="block text-sm font-semibold text-primary">
+            E-mail
+            <input
+              className="control mt-2 w-full"
+              type="email"
+              value={form.email}
+              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+              required
+            />
+          </label>
+          <label className="block text-sm font-semibold text-primary">
+            Perfil
+            <select
+              className="control mt-2 w-full"
+              value={form.perfil}
+              onChange={(event) => setForm((current) => ({ ...current, perfil: event.target.value as AccessProfileId }))}
+            >
+              {accessProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>{profile.label}</option>
+              ))}
+            </select>
+          </label>
+          <div className="rounded-lg border border-border p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-primary">Empreendimentos</p>
+              <button className="text-xs font-bold uppercase text-primary" type="button" onClick={selectAllEnterprises}>
+                Todos
+              </button>
+            </div>
+            <div className="mt-2 grid max-h-28 gap-2 overflow-y-auto">
+              {enterprises.map((enterprise) => (
+                <label key={enterprise.id} className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={form.enterpriseIds.includes(enterprise.id)}
+                    onChange={() => toggleEnterprise(enterprise.id)}
+                  />
+                  {enterprise.nome}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-muted p-3">
+          <p className="text-xs font-bold uppercase text-muted-foreground">Senha temporaria</p>
+          {temporaryPassword ? (
+            <>
+              <code className="mt-2 block break-all rounded-md bg-background p-2 text-sm font-bold text-primary">{temporaryPassword}</code>
+              <button
+                className="control mt-2 inline-flex w-full items-center justify-center gap-2"
+                type="button"
+                onClick={() => void navigator.clipboard.writeText(temporaryPassword)}
+              >
+                <Copy className="h-4 w-4" />
+                Copiar senha
+              </button>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">A senha sera exibida uma unica vez apos criar ou atualizar o usuario.</p>
+          )}
+          <button className="control mt-3 inline-flex w-full items-center justify-center gap-2 bg-primary text-primary-foreground" type="submit" disabled={creatingUser}>
+            <Plus className="h-4 w-4" />
+            {creatingUser ? "Criando" : "Cadastrar usuario"}
+          </button>
+        </div>
+      </form>
+
+      {userError ? <p className="mt-3 text-sm text-danger">{userError}</p> : null}
+
+      <div className="mt-5 overflow-x-auto">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase text-muted-foreground">
+              <th className="border-b border-border py-3 pr-3">Usuario</th>
+              <th className="border-b border-border px-2 py-3">Perfil</th>
+              <th className="border-b border-border px-2 py-3">Empreendimentos</th>
+              <th className="border-b border-border px-2 py-3">Auth</th>
+              <th className="border-b border-border px-2 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((user) => (
+              <tr key={user.id}>
+                <td className="border-b border-border py-3 pr-3">
+                  <div className="font-semibold text-primary">{user.nome}</div>
+                  <div className="text-xs text-muted-foreground">{user.email}</div>
+                </td>
+                <td className="border-b border-border px-2 py-3">{accessProfiles.find((profile) => profile.id === user.perfil)?.label ?? user.perfil}</td>
+                <td className="border-b border-border px-2 py-3">{numberPt(user.enterpriseIds.length)}</td>
+                <td className="border-b border-border px-2 py-3">{user.auth_uid ? "Vinculado" : "Pendente"}</td>
+                <td className="border-b border-border px-2 py-3">
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${user.ativo ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
+                    {user.ativo ? "ativo" : "inativo"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 ? (
+              <tr>
+                <td className="py-5 text-sm text-muted-foreground" colSpan={5}>Nenhum usuario carregado.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function SettingsPage({
+  enterprises,
   dataSource,
   syncError,
   onResetLocalData
 }: {
+  enterprises: Enterprise[];
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -1523,6 +1796,7 @@ function SettingsPage({
         <Kpi label="Permissoes ativas" value={numberPt(totalGrants)} tone="success" />
         <Kpi label="Supabase" value={dataSource === "supabase" ? "Conectado" : "Pendente"} tone={dataSource === "supabase" ? "success" : "danger"} />
       </div>
+      <UserAccessPanel enterprises={enterprises} />
       <div className="panel p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
