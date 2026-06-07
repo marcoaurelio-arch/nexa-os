@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     scope(client.from("contratos").select("*").is("deleted_at", null)).order("data_termino", { ascending: true }),
     scope(client.from("receitas").select("*").is("deleted_at", null)).order("vencimento", { ascending: true }),
     scope(client.from("despesas").select("*").is("deleted_at", null)).order("vencimento", { ascending: true }),
-    scope(client.from("inadimplencias").select("*").is("deleted_at", null)).order("dias_atraso", { ascending: false }),
+    client.from("inadimplencias").select("*").is("deleted_at", null).order("dias_atraso", { ascending: false }),
     scope(client.from("fpp").select("*").is("deleted_at", null)).order("competencia", { ascending: false }),
     scope(client.from("auditoria_faturamento").select("*").is("deleted_at", null)).order("competencia", { ascending: false }),
     scope(client.from("comercial_leads").select("*").is("deleted_at", null)).order("data_proxima_acao", { ascending: true }),
@@ -90,6 +90,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: failed.error.message }, { status: 500 });
   }
 
+  const scopedStoreIds = new Set((storeResult.data ?? []).map((store: { id: string }) => store.id));
+  const delinquencyRows = enterpriseIds
+    ? (delinquencyResult.data ?? []).filter((row: { loja_id: string }) => scopedStoreIds.has(row.loja_id))
+    : delinquencyResult.data;
+
   return NextResponse.json({
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
     stores: storeResult.data.map(mapStoreRow),
@@ -97,7 +102,7 @@ export async function GET(request: Request) {
     contracts: contractResult.data.map(mapContractRow),
     receivables: receivableResult.data.map(mapReceivableRow),
     payables: payableResult.data.map(mapPayableRow),
-    delinquencyRecords: delinquencyResult.data.map(mapDelinquencyRow),
+    delinquencyRecords: delinquencyRows.map(mapDelinquencyRow),
     fppRecords: fppResult.data.map(mapFppRow),
     revenueAuditRecords: auditResult.data.map(mapRevenueAuditRow),
     commercialLeads: commercialResult.data.map(mapCommercialLeadRow),
