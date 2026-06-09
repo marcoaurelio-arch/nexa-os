@@ -1680,6 +1680,10 @@ function SettingsPage({
   const canonicalViewsReady = health?.canonicalViews ? health.canonicalViews.ok === health.canonicalViews.total : analyticsReady;
   const supabaseProjectReady = health?.status === "ok" || dataSource === "supabase";
   const coreMigrationsReady = canonicalViewsReady || analyticsReady || dataSource === "supabase";
+  const notionDeployReady = ["NOTION_API_KEY", "NOTION_PARENT_PAGE_ID"].every((key) => (
+    deploymentHealth?.checks.some((check) => check.key === key && check.status === "ok")
+  ));
+  const notionReady = (notionSync?.dataSources ?? 0) >= 23 || notionHealth?.status === "ok" || notionDeployReady;
   const setupSteps = [
     { label: "Projeto Supabase criado", status: supabaseProjectReady ? "ok" : "pendente" },
     { label: "Migrations 001 a 010 aplicadas", status: coreMigrationsReady ? "ok" : "pendente" },
@@ -1688,7 +1692,7 @@ function SettingsPage({
     { label: "NEXT_PUBLIC_SUPABASE_ANON_KEY configurada", status: supabaseEnvReady ? "ok" : "pendente" },
     { label: "CRUD conectado ao banco real", status: dataSource === "supabase" ? "ok" : "pendente" },
     { label: "Views canonicas conectadas aos KPIs", status: analyticsReady ? "ok" : "pendente" },
-    { label: "Notion preparado para sync", status: (notionSync?.dataSources ?? 0) >= 23 ? "ok" : "manual" }
+    { label: "Notion preparado para sync", status: notionReady ? "ok" : "pendente" }
   ];
   const healthStatus = health?.status ?? "nao verificado";
   const notionHealthStatus = notionHealth?.status ?? "nao verificado";
