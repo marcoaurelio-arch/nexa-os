@@ -2,6 +2,7 @@
 
 import { Lock, Mail, ShieldCheck } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import type { Provider } from "@supabase/supabase-js";
 import type { AccessProfileId } from "@/lib/access-control";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -28,6 +29,25 @@ type ProfileResponse = {
   error?: string;
 };
 
+const oauthProviderLabels: Partial<Record<Provider, string>> = {
+  azure: "Microsoft",
+  bitbucket: "Bitbucket",
+  discord: "Discord",
+  facebook: "Facebook",
+  figma: "Figma",
+  github: "GitHub",
+  gitlab: "GitLab",
+  google: "Google",
+  keycloak: "Keycloak",
+  linkedin_oidc: "LinkedIn",
+  notion: "Notion",
+  slack: "Slack",
+  spotify: "Spotify",
+  twitch: "Twitch",
+  twitter: "X",
+  workos: "WorkOS"
+};
+
 const openAccessUser: AuthenticatedUser = {
   id: "open-access",
   nome: "Diretoria Nexa",
@@ -47,6 +67,8 @@ export function AuthGate({ children }: AuthGateProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [user, setUser] = useState<AuthenticatedUser | null>(authRequired ? null : openAccessUser);
   const [submitting, setSubmitting] = useState(false);
+  const [submittingProvider, setSubmittingProvider] = useState<Provider | null>(null);
+  const oauthProviders = useMemo(() => parseOAuthProviders(process.env.NEXT_PUBLIC_AUTH_OAUTH_PROVIDERS), []);
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   useEffect(() => {
@@ -159,6 +181,12 @@ export function AuthGate({ children }: AuthGateProps) {
     setSubmitting(true);
     setMessage(null);
 
+    if (!password) {
+      setSubmitting(false);
+      setMessage("Informe a senha para entrar.");
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password
@@ -194,6 +222,28 @@ export function AuthGate({ children }: AuthGateProps) {
     setMessage(error ? error.message : "Link de acesso enviado para o e-mail informado.");
   }
 
+  async function handleOAuthLogin(provider: Provider) {
+    if (!supabase) {
+      setMessage("Supabase nao esta configurado.");
+      return;
+    }
+
+    setSubmittingProvider(provider);
+    setMessage(null);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: getAuthRedirectUrl()
+      }
+    });
+
+    if (error) {
+      setSubmittingProvider(null);
+      setMessage(error.message);
+    }
+  }
+
   async function handlePasswordReset() {
     if (!supabase) {
       setMessage("Supabase nao esta configurado.");
@@ -209,7 +259,7 @@ export function AuthGate({ children }: AuthGateProps) {
     setMessage(null);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin
+      redirectTo: getAuthRedirectUrl()
     });
 
     setSubmitting(false);
@@ -394,6 +444,7 @@ export function AuthGate({ children }: AuthGateProps) {
                 autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
+                required
               />
             </label>
             {message ? (
@@ -404,6 +455,22 @@ export function AuthGate({ children }: AuthGateProps) {
             <button className="control w-full bg-primary text-primary-foreground" type="submit" disabled={submitting}>
               {submitting ? "Entrando" : "Entrar"}
             </button>
+            {oauthProviders.length ? (
+              <div className="space-y-2 border-t border-border pt-3">
+                {oauthProviders.map((provider) => (
+                  <button
+                    key={provider}
+                    className="control inline-flex w-full items-center justify-center gap-2"
+                    type="button"
+                    onClick={() => void handleOAuthLogin(provider)}
+                    disabled={Boolean(submittingProvider)}
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    {submittingProvider === provider ? "Redirecionando" : `Entrar com ${oauthProviderLabels[provider] ?? provider}`}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <button className="control inline-flex w-full items-center justify-center gap-2" type="button" onClick={() => void handleMagicLink()} disabled={submitting || !email}>
               <Mail className="h-4 w-4" />
               Enviar link magico
@@ -420,4 +487,21 @@ export function AuthGate({ children }: AuthGateProps) {
       </section>
     </div>
   );
+}
+
+function getAuthRedirectUrl() {
+  if (typeof window === "undefined") {
+    return process.env.NEXT_PUBLIC_APP_URL ?? "https://app.nexamalls.com.br";
+  }
+
+  return window.location.origin;
+}
+
+function parseOAuthProviders(value?: string): Provider[] {
+  if (!value) return [];
+
+  return value
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean) as Provider[];
 }

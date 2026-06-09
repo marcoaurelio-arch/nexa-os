@@ -13,5 +13,13 @@ export function createBrowserSupabaseClient() {
     return null;
   }
 
-  return createClient<Database>(url, anonKey);
+  return createClient<Database>(url, anonKey, {
+    auth: {
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: "pkce",
+      persistSession: true,
+      storageKey: "nexa-os.auth"
+    }
+  });
 }

@@ -38,6 +38,16 @@ function checkEnv(key: string, label: string, message: string): DeploymentCheck 
   };
 }
 
+function checkOptionalEnv(key: string, label: string, message: string): DeploymentCheck {
+  return {
+    key,
+    label,
+    status: hasValue(key) ? "ok" : "warning",
+    required: false,
+    message
+  };
+}
+
 export async function GET() {
   const checkedAt = new Date().toISOString();
   const notionAuthConfigured = hasValue("NOTION_API_KEY") || hasValue("NOTION_TOKEN");
@@ -68,7 +78,8 @@ export async function GET() {
       status: !hasValue("NEXT_PUBLIC_APP_URL") ? "missing" : validUrl("NEXT_PUBLIC_APP_URL") ? "ok" : "warning",
       required: true,
       message: "Usada para referencias publicas, links e validacoes pos-deploy."
-    }
+    },
+    checkOptionalEnv("NEXT_PUBLIC_AUTH_OAUTH_PROVIDERS", "OAuth providers", "Lista opcional de provedores OAuth exibidos no login, como google ou azure.")
   ];
 
   const missingRequired = checks.filter((check) => check.required && check.status === "missing").length;

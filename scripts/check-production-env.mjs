@@ -63,7 +63,7 @@ const requiredKeys = [
   "CRON_SECRET",
 ];
 
-const optionalKeys = ["NEXT_PUBLIC_APP_URL", "NEXT_PUBLIC_AUTH_REQUIRED"];
+const optionalKeys = ["NEXT_PUBLIC_APP_URL", "NEXT_PUBLIC_AUTH_REQUIRED", "NEXT_PUBLIC_AUTH_OAUTH_PROVIDERS"];
 const failures = [];
 const warnings = [];
 
