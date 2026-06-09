@@ -1669,6 +1669,7 @@ function SettingsPage({
   const [checkingDeploymentHealth, setCheckingDeploymentHealth] = useState(false);
   const [queueingNotionSync, setQueueingNotionSync] = useState(false);
   const [runningNotionCron, setRunningNotionCron] = useState(false);
+  const isProduction = process.env.NODE_ENV === "production";
   const analyticsReady = Boolean(
     analytics?.occupancy &&
     analytics.financialKpis &&
@@ -1677,10 +1678,12 @@ function SettingsPage({
     !analytics.error
   );
   const canonicalViewsReady = health?.canonicalViews ? health.canonicalViews.ok === health.canonicalViews.total : analyticsReady;
+  const supabaseProjectReady = health?.status === "ok" || dataSource === "supabase";
+  const coreMigrationsReady = canonicalViewsReady || analyticsReady || dataSource === "supabase";
   const setupSteps = [
-    { label: "Projeto Supabase criado", status: "manual" },
-    { label: "Migrations 001 a 010 aplicadas", status: "manual" },
-    { label: "Migrations de seguranca e views aplicadas", status: canonicalViewsReady ? "ok" : "manual" },
+    { label: "Projeto Supabase criado", status: supabaseProjectReady ? "ok" : "pendente" },
+    { label: "Migrations 001 a 010 aplicadas", status: coreMigrationsReady ? "ok" : "pendente" },
+    { label: "Migrations de seguranca e views aplicadas", status: canonicalViewsReady ? "ok" : "pendente" },
     { label: "NEXT_PUBLIC_SUPABASE_URL configurada", status: supabaseEnvReady ? "ok" : "pendente" },
     { label: "NEXT_PUBLIC_SUPABASE_ANON_KEY configurada", status: supabaseEnvReady ? "ok" : "pendente" },
     { label: "CRUD conectado ao banco real", status: dataSource === "supabase" ? "ok" : "pendente" },
@@ -1690,7 +1693,7 @@ function SettingsPage({
   const healthStatus = health?.status ?? "nao verificado";
   const notionHealthStatus = notionHealth?.status ?? "nao verificado";
   const deploymentStatus = deploymentHealth?.status ?? "nao verificado";
-  const canRunLocalNotionCron = process.env.NODE_ENV !== "production";
+  const canRunLocalNotionCron = !isProduction;
 
   async function checkSupabaseHealth() {
     setCheckingHealth(true);
@@ -1966,18 +1969,31 @@ function SettingsPage({
           </div>
         </div>
         <div className="panel p-5">
-          <h2 className="font-bold uppercase">Comandos de preparacao</h2>
-          <div className="mt-4 space-y-3 text-sm">
-            <div className="rounded-lg bg-muted p-3">
-              <p className="text-xs font-bold uppercase text-muted-foreground">Verificar estrutura local</p>
-              <code className="mt-2 block break-all text-primary">npm run supabase:check</code>
+          <h2 className="font-bold uppercase">{isProduction ? "Status de operacao" : "Comandos de preparacao"}</h2>
+          {isProduction ? (
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="rounded-lg bg-emerald-50 p-3">
+                <p className="text-xs font-bold uppercase text-emerald-700">Banco real ativo</p>
+                <p className="mt-2 text-muted-foreground">O ambiente publicado usa Supabase/PostgreSQL como fonte oficial quando o usuario esta autenticado.</p>
+              </div>
+              <div className="rounded-lg bg-muted p-3">
+                <p className="text-xs font-bold uppercase text-muted-foreground">Verificacao sob demanda</p>
+                <p className="mt-2 text-muted-foreground">Use os botoes de saude do banco, Notion e deploy apenas quando quiser atualizar os indicadores desta tela.</p>
+              </div>
             </div>
-            <div className="rounded-lg bg-muted p-3">
-              <p className="text-xs font-bold uppercase text-muted-foreground">Configurar ambiente</p>
-              <code className="mt-2 block break-all text-primary">cp .env.example .env.local</code>
+          ) : (
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="rounded-lg bg-muted p-3">
+                <p className="text-xs font-bold uppercase text-muted-foreground">Verificar estrutura local</p>
+                <code className="mt-2 block break-all text-primary">npm run supabase:check</code>
+              </div>
+              <div className="rounded-lg bg-muted p-3">
+                <p className="text-xs font-bold uppercase text-muted-foreground">Configurar ambiente</p>
+                <code className="mt-2 block break-all text-primary">cp .env.example .env.local</code>
+              </div>
+              <p className="text-muted-foreground">Depois de preencher `.env.local`, reinicie o servidor para carregar as credenciais publicas do Supabase.</p>
             </div>
-            <p className="text-muted-foreground">Depois de preencher `.env.local`, reinicie o servidor para carregar as credenciais públicas do Supabase.</p>
-          </div>
+          )}
         </div>
       </div>
       <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
