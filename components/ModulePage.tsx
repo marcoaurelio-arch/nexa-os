@@ -1410,6 +1410,7 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
   const [creatingUser, setCreatingUser] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
+  const [pendingUserConfirmation, setPendingUserConfirmation] = useState(false);
   const [form, setForm] = useState({
     nome: "",
     email: "",
@@ -1423,6 +1424,11 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
       enterpriseIds: current.enterpriseIds.length > 0 ? current.enterpriseIds : defaultEnterpriseIds
     }));
   }, [defaultEnterpriseIds.join("|")]);
+
+  const selectedProfile = accessProfiles.find((profile) => profile.id === form.perfil);
+  const selectedEnterpriseNames = enterprises
+    .filter((enterprise) => form.enterpriseIds.includes(enterprise.id))
+    .map((enterprise) => enterprise.nome);
 
   async function authHeaders(): Promise<Record<string, string>> {
     const supabase = createBrowserSupabaseClient();
@@ -1455,8 +1461,21 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
     }
   }
 
-  async function createUser(event: FormEvent<HTMLFormElement>) {
+  function requestUserConfirmation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setTemporaryPassword(null);
+    setUserError(null);
+
+    if (form.enterpriseIds.length === 0) {
+      setUserError("Selecione ao menos um empreendimento para liberar o acesso.");
+      setPendingUserConfirmation(false);
+      return;
+    }
+
+    setPendingUserConfirmation(true);
+  }
+
+  async function createUser() {
     setCreatingUser(true);
     setTemporaryPassword(null);
     setUserError(null);
@@ -1478,6 +1497,7 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
       }
 
       setTemporaryPassword(payload.temporaryPassword ?? null);
+      setPendingUserConfirmation(false);
       setForm({
         nome: "",
         email: "",
@@ -1493,6 +1513,7 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
   }
 
   function toggleEnterprise(enterpriseId: string) {
+    setPendingUserConfirmation(false);
     setForm((current) => {
       const hasEnterprise = current.enterpriseIds.includes(enterpriseId);
       return {
@@ -1505,6 +1526,7 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
   }
 
   function selectAllEnterprises() {
+    setPendingUserConfirmation(false);
     setForm((current) => ({
       ...current,
       enterpriseIds: defaultEnterpriseIds
@@ -1523,14 +1545,17 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
         </button>
       </div>
 
-      <form className="mt-5 grid gap-4 xl:grid-cols-[1fr_280px]" onSubmit={(event) => void createUser(event)}>
+      <form className="mt-5 grid gap-4 xl:grid-cols-[1fr_320px]" onSubmit={requestUserConfirmation}>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="block text-sm font-semibold text-primary">
             Nome
             <input
               className="control mt-2 w-full"
               value={form.nome}
-              onChange={(event) => setForm((current) => ({ ...current, nome: event.target.value }))}
+              onChange={(event) => {
+                setPendingUserConfirmation(false);
+                setForm((current) => ({ ...current, nome: event.target.value }));
+              }}
               required
             />
           </label>
@@ -1540,7 +1565,10 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
               className="control mt-2 w-full"
               type="email"
               value={form.email}
-              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+              onChange={(event) => {
+                setPendingUserConfirmation(false);
+                setForm((current) => ({ ...current, email: event.target.value }));
+              }}
               required
             />
           </label>
@@ -1549,7 +1577,10 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
             <select
               className="control mt-2 w-full"
               value={form.perfil}
-              onChange={(event) => setForm((current) => ({ ...current, perfil: event.target.value as AccessProfileId }))}
+              onChange={(event) => {
+                setPendingUserConfirmation(false);
+                setForm((current) => ({ ...current, perfil: event.target.value as AccessProfileId }));
+              }}
             >
               {accessProfiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>{profile.label}</option>
@@ -1577,27 +1608,56 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
             </div>
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-muted p-3">
-          <p className="text-xs font-bold uppercase text-muted-foreground">Senha temporaria</p>
-          {temporaryPassword ? (
-            <>
-              <code className="mt-2 block break-all rounded-md bg-background p-2 text-sm font-bold text-primary">{temporaryPassword}</code>
-              <button
-                className="control mt-2 inline-flex w-full items-center justify-center gap-2"
-                type="button"
-                onClick={() => void navigator.clipboard.writeText(temporaryPassword)}
-              >
-                <Copy className="h-4 w-4" />
-                Copiar senha
-              </button>
-            </>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">A senha sera exibida uma unica vez apos criar ou atualizar o usuario.</p>
-          )}
-          <button className="control mt-3 inline-flex w-full items-center justify-center gap-2 bg-primary text-primary-foreground" type="submit" disabled={creatingUser}>
-            <Plus className="h-4 w-4" />
-            {creatingUser ? "Criando" : "Cadastrar usuario"}
-          </button>
+        <div className="space-y-3">
+          {pendingUserConfirmation ? (
+            <div className="rounded-lg border border-primary bg-primary/5 p-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div>
+                  <p className="text-xs font-bold uppercase text-primary">Confirmar criacao</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Revise antes de criar o acesso e gerar a senha temporaria.</p>
+                </div>
+              </div>
+              <div className="mt-3 space-y-2 text-sm">
+                <Mini label="Nome" value={form.nome || "-"} />
+                <Mini label="E-mail" value={form.email || "-"} />
+                <Mini label="Perfil" value={selectedProfile?.label ?? form.perfil} />
+                <Mini label="Empreendimentos" value={selectedEnterpriseNames.length === enterprises.length ? "Todos" : `${numberPt(selectedEnterpriseNames.length)} selecionados`} />
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">Se o e-mail ja existir, a senha atual sera redefinida. A nova senha sera exibida uma unica vez.</p>
+              <div className="mt-3 grid gap-2">
+                <button className="control inline-flex w-full items-center justify-center gap-2 bg-primary text-primary-foreground" type="button" onClick={() => void createUser()} disabled={creatingUser}>
+                  <Plus className="h-4 w-4" />
+                  {creatingUser ? "Criando" : "Confirmar e gerar senha"}
+                </button>
+                <button className="control inline-flex w-full items-center justify-center" type="button" onClick={() => setPendingUserConfirmation(false)} disabled={creatingUser}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <div className="rounded-lg border border-border bg-muted p-3">
+            <p className="text-xs font-bold uppercase text-muted-foreground">Senha temporaria</p>
+            {temporaryPassword ? (
+              <>
+                <code className="mt-2 block break-all rounded-md bg-background p-2 text-sm font-bold text-primary">{temporaryPassword}</code>
+                <button
+                  className="control mt-2 inline-flex w-full items-center justify-center gap-2"
+                  type="button"
+                  onClick={() => void navigator.clipboard.writeText(temporaryPassword)}
+                >
+                  <Copy className="h-4 w-4" />
+                  Copiar senha
+                </button>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">A senha sera exibida uma unica vez apos confirmar a criacao ou atualizacao do usuario.</p>
+            )}
+            <button className="control mt-3 inline-flex w-full items-center justify-center gap-2 bg-primary text-primary-foreground" type="submit" disabled={creatingUser || pendingUserConfirmation}>
+              <Plus className="h-4 w-4" />
+              {pendingUserConfirmation ? "Aguardando confirmacao" : "Cadastrar usuario"}
+            </button>
+          </div>
         </div>
       </form>
 
