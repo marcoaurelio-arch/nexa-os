@@ -2487,6 +2487,14 @@ function DelinquencyPage({
   const inNegotiation = cases.filter((item) => item.record.status === "negociacao").length;
   const activeCases = analytics?.delinquencyAging?.casos ?? cases.length;
   const maxDelay = analytics?.delinquencyAging?.maiorAtrasoDias ?? Math.max(0, ...cases.map((item) => item.record.diasAtraso));
+  const overdueReceivablesTotal = receivables
+    .filter((item) => item.status === "vencido")
+    .reduce((sum, item) => sum + item.valor, 0);
+  const delinquencyRecordsTotal = records
+    .filter((item) => item.status !== "regularizado")
+    .reduce((sum, item) => sum + item.valor, 0);
+  const reconciliationDelta = delinquencyRecordsTotal - overdueReceivablesTotal;
+  const isReconciled = Math.abs(reconciliationDelta) < 1;
   const lanes: Array<5 | 15 | 30 | 60 | 90> = [5, 15, 30, 60, 90];
 
   return (
@@ -2496,6 +2504,28 @@ function DelinquencyPage({
         <Kpi label="Casos ativos" value={numberPt(activeCases)} />
         <Kpi label="Em negociacao" value={numberPt(inNegotiation)} tone="success" />
         <Kpi label="Maior atraso" value={`${numberPt(maxDelay)} dias`} />
+      </div>
+      <div className="panel p-5">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="font-bold uppercase">Conciliacao de origem</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              A regua operacional deve nascer dos recebiveis vencidos; registros avulsos de inadimplencia entram como historico e negociacao.
+            </p>
+          </div>
+          <Badge>{isReconciled ? "ok" : "revisar origem"}</Badge>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <Mini label="Receitas vencidas" value={brl(overdueReceivablesTotal)} />
+          <Mini label="Tabela inadimplencias" value={brl(delinquencyRecordsTotal)} />
+          <Mini label="Diferenca" value={brl(reconciliationDelta)} />
+          <Mini label="Fonte da regua" value="Receitas vencidas" />
+        </div>
+        {!isReconciled ? (
+          <p className="mt-3 text-sm text-amber-700">
+            Existem valores em `inadimplencias` que nao batem com `receitas` vencidas. A cobranca visual permanece derivada dos recebiveis para evitar duplicidade.
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-3 xl:grid-cols-5">
         {lanes.map((lane) => {
