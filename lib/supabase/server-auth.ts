@@ -12,7 +12,7 @@ export type AppUserProfile = {
 };
 
 type AuthResult =
-  | { ok: true; required: boolean; profile: AppUserProfile | null }
+  | { ok: true; required: boolean; profile: AppUserProfile | null; accessToken?: string }
   | { ok: false; status: number; error: string };
 
 export function isAuthRequired() {
@@ -81,6 +81,7 @@ export async function validateAppUser(request: Request): Promise<AuthResult> {
   return {
     ok: true,
     required,
+    accessToken: token,
     profile: {
       id: profile.id,
       authUid,

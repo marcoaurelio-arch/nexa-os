@@ -16,7 +16,7 @@ import {
   mapUtilityReadingRow,
   mapVacancyRow
 } from "@/lib/supabase/mappers";
-import type { CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { AssetAnalytics, CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
@@ -34,6 +34,7 @@ export type AssetData = {
   serviceOrders: ServiceOrder[];
   documentRecords: DocumentRecord[];
   legalCases: LegalCase[];
+  analytics: AssetAnalytics | null;
 };
 
 const LOCAL_ASSET_DATA_KEY = "nexa-os.asset-data.v1";
@@ -69,7 +70,8 @@ export function loadLocalAssetData(): AssetData | null {
       utilityReadings: Array.isArray(parsed.utilityReadings) ? parsed.utilityReadings : [],
       serviceOrders: Array.isArray(parsed.serviceOrders) ? parsed.serviceOrders : [],
       documentRecords: Array.isArray(parsed.documentRecords) ? parsed.documentRecords : [],
-      legalCases: Array.isArray(parsed.legalCases) ? parsed.legalCases : []
+      legalCases: Array.isArray(parsed.legalCases) ? parsed.legalCases : [],
+      analytics: parsed.analytics ?? null
     };
   } catch {
     return null;
@@ -222,7 +224,8 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
     utilityReadings: utilityResult.data.map(mapUtilityReadingRow),
     serviceOrders: serviceOrderResult.data.map(mapServiceOrderRow),
     documentRecords: documentResult.data.map(mapDocumentRow),
-    legalCases: legalResult.data.map(mapLegalCaseRow)
+    legalCases: legalResult.data.map(mapLegalCaseRow),
+    analytics: null
   };
 }
 

@@ -1,5 +1,5 @@
 import { enterprises, revenues, stores } from "./data";
-import type { Enterprise, Payable, Receivable, Store } from "./types";
+import type { AssetAnalytics, Enterprise, Payable, Receivable, Store } from "./types";
 
 export function brl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -32,7 +32,8 @@ export function getDashboardMetrics(
   enterpriseRows: Enterprise[] = enterprises,
   storeRows: Store[] = stores,
   receivableRows?: Receivable[],
-  payableRows?: Payable[]
+  payableRows?: Payable[],
+  analytics?: AssetAnalytics | null
 ) {
   const selectedEnterprises =
     enterpriseId === "all"
@@ -76,30 +77,59 @@ export function getDashboardMetrics(
         }),
         { aluguel: 0, condominio: 0, fundo: 0, fpp: 0, vencidas: 0, receber: 0, pagar: 0 }
       );
+  const canonicalOccupancy =
+    enterpriseId === "all"
+      ? analytics?.occupancy
+      : analytics?.occupancyByEnterprise.find((item) => item.empreendimentoId === enterpriseId) ?? null;
+  const canonicalFinance = enterpriseId === "all" ? analytics?.financialKpis : null;
+  const canonicalTotalAbl = canonicalOccupancy?.ablTotalM2 ?? totalAbl;
+  const canonicalOccupiedAbl = canonicalOccupancy?.ablOcupadaM2 ?? occupiedAbl;
+  const canonicalAvailableAbl = Math.max(canonicalTotalAbl - canonicalOccupiedAbl, 0);
+  const canonicalOccupancyPct: number = canonicalOccupancy && "ocupacaoAblPct" in canonicalOccupancy
+    ? Number(canonicalOccupancy.ocupacaoAblPct)
+    : canonicalOccupancy?.ocupacaoPct ?? 0;
+  const canonicalOccupancyRate = canonicalOccupancy
+    ? pctToRatio(canonicalOccupancyPct)
+    : canonicalTotalAbl > 0
+      ? canonicalOccupiedAbl / canonicalTotalAbl
+      : 0;
+  const aluguel = canonicalFinance?.totalAluguel ?? revenue.aluguel;
+  const condominio = canonicalFinance?.totalCondominio ?? revenue.condominio;
+  const fundo = canonicalFinance?.totalFundoPromocao ?? revenue.fundo;
+  const fpp = revenue.fpp;
+  const receber = canonicalFinance?.contasAReceber ?? revenue.receber;
+  const vencidas = canonicalFinance?.contasVencidas ?? revenue.vencidas;
 
   return {
     totalEmpreendimentos: selectedEnterprises.length,
-    totalLojas: selectedStores.length,
-    totalAbl,
-    occupiedAbl,
-    availableAbl,
-    occupancyRate: totalAbl > 0 ? occupiedAbl / totalAbl : 0,
-    physicalVacancyRate: totalAbl > 0 ? availableAbl / totalAbl : 0,
+    totalLojas: canonicalOccupancy?.totalLojas ?? selectedStores.length,
+    totalAbl: canonicalTotalAbl,
+    occupiedAbl: canonicalOccupiedAbl,
+    availableAbl: canonicalAvailableAbl,
+    occupancyRate: canonicalOccupancyRate,
+    physicalVacancyRate: canonicalTotalAbl > 0 ? canonicalAvailableAbl / canonicalTotalAbl : 0,
     financialVacancyRate: potentialRevenue > 0 ? lostRevenue / potentialRevenue : 0,
     lojasDisponiveis: selectedStores.filter((store) => store.status === "disponivel").length,
     lojasNegociacao: selectedStores.filter((store) => store.status === "negociacao").length,
     propostasEnviadas: 14,
     contratosElaboracao: 5,
-    receitaTotal: revenue.aluguel + revenue.condominio + revenue.fundo + revenue.fpp,
-    saldoOperacional: revenue.aluguel + revenue.condominio + revenue.fundo + revenue.fpp - revenue.pagar,
-    ...revenue
+    receitaTotal: aluguel + condominio + fundo + fpp,
+    saldoOperacional: aluguel + condominio + fundo + fpp - revenue.pagar,
+    ...revenue,
+    aluguel,
+    condominio,
+    fundo,
+    fpp,
+    receber,
+    vencidas
   };
 }
 
-export function chartRows(enterpriseRows: Enterprise[] = enterprises, storeRows: Store[] = stores, receivableRows?: Receivable[]) {
+export function chartRows(enterpriseRows: Enterprise[] = enterprises, storeRows: Store[] = stores, receivableRows?: Receivable[], analytics?: AssetAnalytics | null) {
   return enterpriseRows.map((enterprise) => {
     const enterpriseRevenue = revenues.find((item) => item.empreendimentoId === enterprise.id);
     const enterpriseReceivables = receivableRows?.filter((item) => item.empreendimentoId === enterprise.id && item.status !== "cancelado");
+    const canonicalOccupancy = analytics?.occupancyByEnterprise.find((item) => item.empreendimentoId === enterprise.id);
     const enterpriseStores = storeRows.filter((store) => store.empreendimentoId === enterprise.id);
     const occupiedArea = enterpriseStores
       .filter((store) => store.status === "ocupada")
@@ -112,8 +142,12 @@ export function chartRows(enterpriseRows: Enterprise[] = enterprises, storeRows:
         : enterpriseRevenue
         ? enterpriseRevenue.aluguel + enterpriseRevenue.condominio + enterpriseRevenue.fundo + enterpriseRevenue.fpp
         : 0,
-      ocupacao: enterprise.abl > 0 ? Math.round((occupiedArea / enterprise.abl) * 100) : 0,
-      vacancia: enterprise.abl > 0 ? Math.round(((enterprise.abl - occupiedArea) / enterprise.abl) * 100) : 0
+      ocupacao: canonicalOccupancy ? Math.round(pctToRatio(canonicalOccupancy.ocupacaoAblPct) * 100) : enterprise.abl > 0 ? Math.round((occupiedArea / enterprise.abl) * 100) : 0,
+      vacancia: canonicalOccupancy ? Math.round((1 - pctToRatio(canonicalOccupancy.ocupacaoAblPct)) * 100) : enterprise.abl > 0 ? Math.round(((enterprise.abl - occupiedArea) / enterprise.abl) * 100) : 0
     };
   });
+}
+
+export function pctToRatio(value: number) {
+  return value > 1 ? value / 100 : value;
 }

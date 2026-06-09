@@ -43,7 +43,7 @@ import {
   saveUtilityReading,
   saveVacancyRecord
 } from "@/lib/assets-repository";
-import type { CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { AssetAnalytics, CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 
 export function NexaWorkspace() {
   const authRequired = process.env.NEXT_PUBLIC_AUTH_REQUIRED === "true";
@@ -63,6 +63,7 @@ export function NexaWorkspace() {
   const [serviceOrderRows, setServiceOrderRows] = useState<ServiceOrder[]>(seedServiceOrders);
   const [documentRows, setDocumentRows] = useState<DocumentRecord[]>(seedDocumentRecords);
   const [legalRows, setLegalRows] = useState<LegalCase[]>(seedLegalCases);
+  const [analytics, setAnalytics] = useState<AssetAnalytics | null>(null);
   const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
   const [syncError, setSyncError] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
@@ -96,6 +97,7 @@ export function NexaWorkspace() {
       setServiceOrderRows(mergeSeedRows(seedServiceOrders, localData.serviceOrders));
       setDocumentRows(mergeSeedRows(seedDocumentRecords, localData.documentRecords));
       setLegalRows(mergeSeedRows(seedLegalCases, localData.legalCases));
+      setAnalytics(localData.analytics);
     }
     setStorageReady(true);
 
@@ -145,8 +147,9 @@ export function NexaWorkspace() {
         setServiceOrderRows(data.serviceOrders);
         setDocumentRows(data.documentRecords);
         setLegalRows(data.legalCases);
+        setAnalytics(data.analytics);
         setDataSource("supabase");
-        setSyncError(null);
+        setSyncError(data.analytics?.error ?? null);
       })
       .catch((error: unknown) => {
         if (!isMounted()) return;
@@ -171,10 +174,11 @@ export function NexaWorkspace() {
         utilityReadings: utilityRows,
         serviceOrders: serviceOrderRows,
         documentRecords: documentRows,
-        legalCases: legalRows
+        legalCases: legalRows,
+        analytics
       });
     }
-  }, [commercialLeadRows, contractRows, dataSource, delinquencyRows, documentRows, enterpriseRows, fppRows, legalRows, payableRows, receivableRows, revenueAuditRows, serviceOrderRows, storageReady, storeRows, tenantRows, utilityRows, vacancyRows]);
+  }, [analytics, commercialLeadRows, contractRows, dataSource, delinquencyRows, documentRows, enterpriseRows, fppRows, legalRows, payableRows, receivableRows, revenueAuditRows, serviceOrderRows, storageReady, storeRows, tenantRows, utilityRows, vacancyRows]);
 
   return (
     <AuthGate>
@@ -196,6 +200,7 @@ export function NexaWorkspace() {
               receivableRows={receivableRows}
               payableRows={payableRows}
               serviceOrderRows={serviceOrderRows}
+              analytics={analytics}
             />
           ) : (
             <ModulePage
@@ -215,6 +220,7 @@ export function NexaWorkspace() {
               serviceOrders={serviceOrderRows}
               documentRecords={documentRows}
               legalCases={legalRows}
+              analytics={analytics}
               dataSource={dataSource}
               syncError={syncError}
               onResetLocalData={() => {
@@ -234,6 +240,7 @@ export function NexaWorkspace() {
                 setServiceOrderRows(seedServiceOrders);
                 setDocumentRows(seedDocumentRecords);
                 setLegalRows(seedLegalCases);
+                setAnalytics(null);
                 setDataSource("mock");
                 setSyncError(null);
               }}

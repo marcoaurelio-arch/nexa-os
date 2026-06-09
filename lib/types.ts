@@ -293,3 +293,81 @@ export type ContractAlert = {
   vencimento: string;
   risco: "baixo" | "medio" | "alto";
 };
+
+export type OccupancyConsolidatedView = {
+  totalLojas: number;
+  lojasOcupadas: number;
+  lojasVagas: number;
+  ocupacaoPct: number;
+  ablTotalM2: number;
+  ablOcupadaM2: number;
+};
+
+export type OccupancyEnterpriseView = OccupancyConsolidatedView & {
+  empreendimentoId: string;
+  nome: string;
+  ocupacaoLojasPct: number;
+  ocupacaoAblPct: number;
+};
+
+export type FinancialKpisView = {
+  contasAReceber: number;
+  contasVencidas: number;
+  recebido: number;
+  totalAluguel: number;
+  totalCondominio: number;
+  totalFundoPromocao: number;
+};
+
+export type DelinquencyAgingView = {
+  casos: number;
+  total: number;
+  faixa0A5: number;
+  faixa6A15: number;
+  faixa16A30: number;
+  faixa31A60: number;
+  faixa61A90: number;
+  faixa90Mais: number;
+  maiorAtrasoDias: number;
+};
+
+export type ContractExpiringView = {
+  id: string;
+  status: string;
+  dataTermino: string;
+  lojaCodigo: string;
+  lojista: string;
+  empreendimento: string;
+  aluguelMinimo: number;
+  diasParaVencer: number;
+  receitaAnualEmRisco: number;
+};
+
+export type CommercialPipelineView = {
+  etapa: string;
+  oportunidades: number;
+  valorTotal: number;
+};
+
+export type CentralAlertView = {
+  tipo: string;
+  empreendimento: string;
+  referencia: string;
+  detalhe: string;
+  prazoData: string;
+  dias: number;
+  valor: number;
+  risco: string;
+  severidade: string;
+};
+
+export type AssetAnalytics = {
+  occupancy: OccupancyConsolidatedView | null;
+  occupancyByEnterprise: OccupancyEnterpriseView[];
+  financialKpis: FinancialKpisView | null;
+  delinquencyAging: DelinquencyAgingView | null;
+  expiringContracts: ContractExpiringView[];
+  commercialPipeline: CommercialPipelineView[];
+  centralAlerts: CentralAlertView[];
+  error?: string;
+};

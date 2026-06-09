@@ -27,7 +27,7 @@ import {
 import { buildContractAlerts } from "@/lib/contracts";
 import { contracts, enterprises, serviceOrders, tenants } from "@/lib/data";
 import { brl, chartRows, filterByEnterprise, getDashboardMetrics, numberPt, percent } from "@/lib/metrics";
-import type { Contract, Enterprise, Payable, Receivable, ServiceOrder, Store, Tenant } from "@/lib/types";
+import type { AssetAnalytics, CentralAlertView, Contract, Enterprise, Payable, Receivable, ServiceOrder, Store, Tenant } from "@/lib/types";
 
 type MetricCardProps = {
   label: string;
@@ -71,7 +71,8 @@ export function Dashboard({
   contractRows = contracts,
   receivableRows,
   payableRows,
-  serviceOrderRows = serviceOrders
+  serviceOrderRows = serviceOrders,
+  analytics
 }: {
   enterpriseRows?: Enterprise[];
   storeRows: Store[];
@@ -80,12 +81,17 @@ export function Dashboard({
   receivableRows?: Receivable[];
   payableRows?: Payable[];
   serviceOrderRows?: ServiceOrder[];
+  analytics?: AssetAnalytics | null;
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
-  const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows, receivableRows, payableRows), [enterpriseId, enterpriseRows, payableRows, receivableRows, storeRows]);
+  const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows, receivableRows, payableRows, analytics), [analytics, enterpriseId, enterpriseRows, payableRows, receivableRows, storeRows]);
   const filteredOrders = filterByEnterprise(serviceOrderRows, enterpriseId);
   const filteredAlerts = filterByEnterprise(buildContractAlerts(contractRows, storeRows, tenantRows), enterpriseId);
-  const charts = chartRows(enterpriseRows, storeRows, receivableRows);
+  const selectedEnterpriseNames = new Set(
+    (enterpriseId === "all" ? enterpriseRows : enterpriseRows.filter((enterprise) => enterprise.id === enterpriseId)).map((enterprise) => enterprise.nome)
+  );
+  const centralAlerts = (analytics?.centralAlerts ?? []).filter((alert) => enterpriseId === "all" || selectedEnterpriseNames.has(alert.empreendimento));
+  const charts = chartRows(enterpriseRows, storeRows, receivableRows, analytics);
 
   return (
     <AppViewport>
@@ -232,7 +238,7 @@ export function Dashboard({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAlerts.map((alert) => (
+                  {centralAlerts.length ? centralAlerts.slice(0, 8).map((alert) => <CentralAlertRow key={`${alert.tipo}-${alert.referencia}-${alert.prazoData}`} alert={alert} />) : filteredAlerts.map((alert) => (
                     <tr key={alert.id} className="border-t border-border">
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-2 font-medium">
@@ -288,6 +294,32 @@ function RiskBadge({ risk }: { risk: "baixo" | "medio" | "alto" }) {
       {config.label}
     </span>
   );
+}
+
+function CentralAlertRow({ alert }: { alert: CentralAlertView }) {
+  return (
+    <tr className="border-t border-border">
+      <td className="px-4 py-3">
+        <span className="inline-flex items-center gap-2 font-medium">
+          <AlertTriangle className={alert.severidade === "critica" ? "h-4 w-4 text-danger" : "h-4 w-4 text-warning"} />
+          {alert.tipo || "Alerta"}
+        </span>
+      </td>
+      <td className="px-4 py-3">{alert.empreendimento}</td>
+      <td className="px-4 py-3">{alert.referencia || alert.detalhe}</td>
+      <td className="px-4 py-3">{alert.dias ? `${numberPt(alert.dias)} dias` : alert.prazoData}</td>
+      <td className="px-4 py-3">
+        <RiskBadge risk={normalizeRisk(alert.risco || alert.severidade)} />
+      </td>
+    </tr>
+  );
+}
+
+function normalizeRisk(value: string): "baixo" | "medio" | "alto" {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("alto") || normalized.includes("crit")) return "alto";
+  if (normalized.includes("medio") || normalized.includes("médio") || normalized.includes("aten")) return "medio";
+  return "baixo";
 }
 
 function PriorityBadge({ priority }: { priority: "baixa" | "media" | "alta" | "critica" }) {

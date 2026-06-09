@@ -9,11 +9,12 @@ import { navItems } from "@/components/AppShell";
 import { accessProfiles } from "@/lib/access-control";
 import type { AccessProfileId } from "@/lib/access-control";
 import { buildContractAlerts } from "@/lib/contracts";
-import { brl, numberPt, percent } from "@/lib/metrics";
+import { brl, numberPt, pctToRatio, percent } from "@/lib/metrics";
 import { createBrowserSupabaseClient, hasSupabaseEnv } from "@/lib/supabase/client";
 import type {
   CommercialLead,
   CommercialStage,
+  AssetAnalytics,
   Contract,
   ContractStatus,
   DelinquencyRecord,
@@ -63,6 +64,7 @@ type ModulePageProps = {
   serviceOrders: ServiceOrder[];
   documentRecords: DocumentRecord[];
   legalCases: LegalCase[];
+  analytics: AssetAnalytics | null;
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -585,6 +587,7 @@ export function ModulePage({
   serviceOrders,
   documentRecords,
   legalCases,
+  analytics,
   dataSource,
   syncError,
   onResetLocalData,
@@ -629,6 +632,7 @@ export function ModulePage({
         vacancyRecords={vacancyRecords}
         serviceOrders={serviceOrders}
         legalCases={legalCases}
+        analytics={analytics}
       />
     );
   }
@@ -655,6 +659,7 @@ export function ModulePage({
         tenants={tenants}
         receivables={receivables}
         records={delinquencyRecords}
+        analytics={analytics}
         onSaveDelinquencyRecord={onSaveDelinquencyRecord}
       />
     );
@@ -723,6 +728,7 @@ export function ModulePage({
         stores={stores}
         receivables={receivables}
         payables={payables}
+        analytics={analytics}
         onSaveReceivable={onSaveReceivable}
         onSavePayable={onSavePayable}
       />
@@ -734,6 +740,7 @@ export function ModulePage({
         enterprises={enterprises}
         stores={stores}
         leads={commercialLeads}
+        analytics={analytics}
         onSaveLead={onSaveCommercialLead}
       />
     );
@@ -744,6 +751,7 @@ export function ModulePage({
         enterprises={enterprises}
         stores={stores}
         records={vacancyRecords}
+        analytics={analytics}
         onSaveRecord={onSaveVacancyRecord}
       />
     );
@@ -797,6 +805,7 @@ export function ModulePage({
         serviceOrders={serviceOrders}
         documentRecords={documentRecords}
         legalCases={legalCases}
+        analytics={analytics}
       />
     );
   }
@@ -861,7 +870,8 @@ function BusinessIntelligencePage({
   commercialLeads,
   vacancyRecords,
   serviceOrders,
-  legalCases
+  legalCases,
+  analytics
 }: {
   enterprises: Enterprise[];
   stores: StoreType[];
@@ -874,6 +884,7 @@ function BusinessIntelligencePage({
   vacancyRecords: VacancyRecord[];
   serviceOrders: ServiceOrder[];
   legalCases: LegalCase[];
+  analytics: AssetAnalytics | null;
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
   const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
@@ -890,18 +901,22 @@ function BusinessIntelligencePage({
   const selectedLegal = legalCases.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
 
   const activeReceivables = selectedReceivables.filter((item) => item.status !== "cancelado");
-  const realEstateRevenue = activeReceivables
+  const canonicalFinance = enterpriseId === "all" ? analytics?.financialKpis : null;
+  const canonicalOccupancy = enterpriseId === "all" ? analytics?.occupancy : null;
+  const realEstateRevenue = canonicalFinance
+    ? canonicalFinance.totalAluguel + canonicalFinance.totalCondominio + canonicalFinance.totalFundoPromocao
+    : activeReceivables
     .filter((item) => ["aluguel", "condominio", "fundo_promocao", "fpp"].includes(item.receita))
     .reduce((sum, item) => sum + item.valor, 0);
-  const receivedRevenue = activeReceivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
-  const openReceivables = activeReceivables.filter((item) => item.status === "aberto" || item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
-  const overdueReceivables = activeReceivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const receivedRevenue = canonicalFinance?.recebido ?? activeReceivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const openReceivables = canonicalFinance?.contasAReceber ?? activeReceivables.filter((item) => item.status === "aberto" || item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const overdueReceivables = canonicalFinance?.contasVencidas ?? activeReceivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
   const paidPayables = selectedPayables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
   const openPayables = selectedPayables.filter((item) => item.status === "aberto" || item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
   const totalArea = selectedStores.reduce((sum, store) => sum + store.areaTotal, 0);
   const occupiedStores = selectedStores.filter((store) => ["ocupada", "implantacao", "em_obra"].includes(store.status));
   const vacantStores = selectedStores.filter((store) => ["disponivel", "negociacao", "inativa"].includes(store.status));
-  const occupancyRate = selectedStores.length ? occupiedStores.length / selectedStores.length : 0;
+  const occupancyRate = canonicalOccupancy ? pctToRatio(canonicalOccupancy.ocupacaoPct) : selectedStores.length ? occupiedStores.length / selectedStores.length : 0;
   const lostRevenue = selectedVacancies.length
     ? selectedVacancies.reduce((sum, record) => sum + record.receitaPotencial, 0)
     : vacantStores.reduce((sum, store) => sum + store.aluguel, 0);
@@ -918,7 +933,9 @@ function BusinessIntelligencePage({
   const averageAuditDivergence = selectedAudits.length
     ? selectedAudits.reduce((sum, record) => sum + auditDivergence(record), 0) / selectedAudits.length
     : 0;
-  const pipelineValue = selectedLeads.reduce((sum, lead) => sum + lead.valorProposta, 0);
+  const pipelineValue = enterpriseId === "all" && analytics?.commercialPipeline.length
+    ? analytics.commercialPipeline.reduce((sum, stage) => sum + stage.valorTotal, 0)
+    : selectedLeads.reduce((sum, lead) => sum + lead.valorProposta, 0);
   const openOrders = selectedOrders.filter((order) => order.status !== "concluida");
   const criticalOrders = selectedOrders.filter((order) => order.prioridade === "critica" && order.status !== "concluida");
   const activeLegal = selectedLegal.filter((record) => record.status !== "concluido");
@@ -927,7 +944,7 @@ function BusinessIntelligencePage({
   const contractAlerts = buildContractAlerts(selectedContracts, selectedStores, []);
 
   const dashboards = [
-    { title: "Executivo", items: [["Receita imobiliaria", brl(realEstateRevenue)], ["Ocupacao", percent(occupancyRate)], ["ABL monitorada", `${numberPt(totalArea)} m2`]] },
+    { title: "Executivo", items: [["Receita imobiliaria", brl(realEstateRevenue)], ["Ocupacao", percent(occupancyRate)], ["ABL monitorada", `${numberPt(canonicalOccupancy?.ablTotalM2 ?? totalArea)} m2`]] },
     { title: "Comercial", items: [["Pipeline", brl(pipelineValue)], ["Propostas", numberPt(selectedLeads.filter((lead) => lead.etapa === "proposta").length)], ["Contratos", numberPt(selectedLeads.filter((lead) => lead.etapa === "contrato").length)]] },
     { title: "Financeiro", items: [["A receber", brl(openReceivables)], ["Vencidas", brl(overdueReceivables)], ["A pagar", brl(openPayables)]] },
     { title: "Operacoes", items: [["OS abertas", numberPt(openOrders.length)], ["Criticas", numberPt(criticalOrders.length)], ["Custo realizado", brl(selectedOrders.reduce((sum, order) => sum + order.custoRealizado, 0))]] },
@@ -1022,7 +1039,8 @@ function MonthlyReportPage({
   utilityReadings,
   serviceOrders,
   documentRecords,
-  legalCases
+  legalCases,
+  analytics
 }: {
   enterprises: Enterprise[];
   stores: StoreType[];
@@ -1038,6 +1056,7 @@ function MonthlyReportPage({
   serviceOrders: ServiceOrder[];
   documentRecords: DocumentRecord[];
   legalCases: LegalCase[];
+  analytics: AssetAnalytics | null;
 }) {
   const competenceOptions = useMemo(() => {
     const values = new Set<string>();
@@ -1083,9 +1102,13 @@ function MonthlyReportPage({
     fundo: selectedReceivables.filter((item) => item.receita === "fundo_promocao").reduce((sum, item) => sum + item.valor, 0),
     fpp: selectedReceivables.filter((item) => item.receita === "fpp").reduce((sum, item) => sum + item.valor, 0)
   };
-  const realEstateRevenue = revenueByType.aluguel + revenueByType.condominio + revenueByType.fundo + revenueByType.fpp;
-  const receivedRevenue = selectedReceivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
-  const overdueReceivables = selectedReceivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const canonicalFinance = enterpriseId === "all" ? analytics?.financialKpis : null;
+  const canonicalOccupancy = enterpriseId === "all" ? analytics?.occupancy : null;
+  const realEstateRevenue = canonicalFinance
+    ? canonicalFinance.totalAluguel + canonicalFinance.totalCondominio + canonicalFinance.totalFundoPromocao + revenueByType.fpp
+    : revenueByType.aluguel + revenueByType.condominio + revenueByType.fundo + revenueByType.fpp;
+  const receivedRevenue = canonicalFinance?.recebido ?? selectedReceivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const overdueReceivables = canonicalFinance?.contasVencidas ?? selectedReceivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
   const paidPayables = selectedPayables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
   const openPayables = selectedPayables.filter((item) => item.status === "aberto" || item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
   const condominiumExpenses = selectedPayables.filter((item) => item.centroCusto.toLowerCase().includes("condominio")).reduce((sum, item) => sum + item.valor, 0);
@@ -1111,7 +1134,7 @@ function MonthlyReportPage({
   const energyValue = selectedUtilities.filter((reading) => reading.tipo === "energia").reduce((sum, reading) => sum + reading.valor, 0);
   const waterValue = selectedUtilities.filter((reading) => reading.tipo === "agua").reduce((sum, reading) => sum + reading.valor, 0);
   const utilityCriticalAlerts = selectedUtilities.filter((reading) => reading.status !== "normal").length;
-  const occupancyRate = selectedStores.length ? occupiedStores.length / selectedStores.length : 0;
+  const occupancyRate = canonicalOccupancy ? pctToRatio(canonicalOccupancy.ocupacaoPct) : selectedStores.length ? occupiedStores.length / selectedStores.length : 0;
   const delinquencyRate = realEstateRevenue > 0 ? overdueReceivables / realEstateRevenue : 0;
   const operatingMargin = realEstateRevenue > 0 ? (receivedRevenue - paidPayables) / realEstateRevenue : 0;
   const managementScore = Math.max(
@@ -2291,6 +2314,7 @@ function FinancePage({
   stores,
   receivables,
   payables,
+  analytics,
   onSaveReceivable,
   onSavePayable
 }: {
@@ -2298,17 +2322,19 @@ function FinancePage({
   stores: StoreType[];
   receivables: Receivable[];
   payables: Payable[];
+  analytics: AssetAnalytics | null;
   onSaveReceivable: (receivable: Receivable) => void | Promise<void>;
   onSavePayable: (payable: Payable) => void | Promise<void>;
 }) {
   const [editingReceivable, setEditingReceivable] = useState<Receivable | null>(null);
   const [editingPayable, setEditingPayable] = useState<Payable | null>(null);
+  const canonicalFinance = analytics?.financialKpis;
   const receivableTotal = receivables.filter((item) => item.status !== "cancelado").reduce((sum, item) => sum + item.valor, 0);
-  const receivedTotal = receivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
-  const openReceivables = receivables
+  const receivedTotal = canonicalFinance?.recebido ?? receivables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
+  const openReceivables = canonicalFinance?.contasAReceber ?? receivables
     .filter((item) => item.status === "aberto" || item.status === "vencido")
     .reduce((sum, item) => sum + item.valor, 0);
-  const overdueReceivables = receivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
+  const overdueReceivables = canonicalFinance?.contasVencidas ?? receivables.filter((item) => item.status === "vencido").reduce((sum, item) => sum + item.valor, 0);
   const paidPayables = payables.filter((item) => item.status === "pago").reduce((sum, item) => sum + item.valor, 0);
   const openPayables = payables
     .filter((item) => item.status === "aberto" || item.status === "vencido")
@@ -2423,27 +2449,31 @@ function DelinquencyPage({
   tenants,
   receivables,
   records,
+  analytics,
   onSaveDelinquencyRecord
 }: {
   stores: StoreType[];
   tenants: Tenant[];
   receivables: Receivable[];
   records: DelinquencyRecord[];
+  analytics: AssetAnalytics | null;
   onSaveDelinquencyRecord: (record: DelinquencyRecord) => void | Promise<void>;
 }) {
   const [editing, setEditing] = useState<DelinquencyRecord | null>(null);
   const cases = buildDelinquencyCases(receivables, records);
-  const totalValue = cases.reduce((sum, item) => sum + item.record.valor, 0);
+  const totalValue = analytics?.delinquencyAging?.total ?? cases.reduce((sum, item) => sum + item.record.valor, 0);
   const inNegotiation = cases.filter((item) => item.record.status === "negociacao").length;
+  const activeCases = analytics?.delinquencyAging?.casos ?? cases.length;
+  const maxDelay = analytics?.delinquencyAging?.maiorAtrasoDias ?? Math.max(0, ...cases.map((item) => item.record.diasAtraso));
   const lanes: Array<5 | 15 | 30 | 60 | 90> = [5, 15, 30, 60, 90];
 
   return (
     <Shell title="Inadimplencia" description="Regua automatica e kanban de cobranca.">
       <div className="grid gap-3 md:grid-cols-4">
         <Kpi label="Valor inadimplente" value={brl(totalValue)} tone="danger" />
-        <Kpi label="Casos ativos" value={numberPt(cases.length)} />
+        <Kpi label="Casos ativos" value={numberPt(activeCases)} />
         <Kpi label="Em negociacao" value={numberPt(inNegotiation)} tone="success" />
-        <Kpi label="Maior atraso" value={`${numberPt(Math.max(0, ...cases.map((item) => item.record.diasAtraso)))} dias`} />
+        <Kpi label="Maior atraso" value={`${numberPt(maxDelay)} dias`} />
       </div>
       <div className="grid gap-3 xl:grid-cols-5">
         {lanes.map((lane) => {
@@ -3182,11 +3212,13 @@ function CommercialPage({
   enterprises,
   stores,
   leads,
+  analytics,
   onSaveLead
 }: {
   enterprises: Enterprise[];
   stores: StoreType[];
   leads: CommercialLead[];
+  analytics: AssetAnalytics | null;
   onSaveLead: (lead: CommercialLead) => void | Promise<void>;
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
@@ -3196,9 +3228,10 @@ function CommercialPage({
   const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
   const selectedLeads = leads.filter((lead) => selectedEnterpriseIds.has(lead.empreendimentoId));
   const availableStores = selectedStores.filter((store) => store.status === "disponivel");
-  const proposalCount = selectedLeads.filter((lead) => lead.etapa === "proposta").length;
-  const contractCount = selectedLeads.filter((lead) => lead.etapa === "contrato").length;
-  const pipelineValue = selectedLeads.reduce((sum, lead) => sum + lead.valorProposta, 0);
+  const canonicalPipeline = enterpriseId === "all" ? analytics?.commercialPipeline ?? [] : [];
+  const proposalCount = canonicalPipeline.find((stage) => stage.etapa === "proposta")?.oportunidades ?? selectedLeads.filter((lead) => lead.etapa === "proposta").length;
+  const contractCount = canonicalPipeline.find((stage) => stage.etapa === "contrato")?.oportunidades ?? selectedLeads.filter((lead) => lead.etapa === "contrato").length;
+  const pipelineValue = canonicalPipeline.length ? canonicalPipeline.reduce((sum, stage) => sum + stage.valorTotal, 0) : selectedLeads.reduce((sum, lead) => sum + lead.valorProposta, 0);
   const firstStore = selectedStores[0] ?? stores[0];
 
   return (
@@ -3303,11 +3336,13 @@ function VacancyPage({
   enterprises,
   stores,
   records,
+  analytics,
   onSaveRecord
 }: {
   enterprises: Enterprise[];
   stores: StoreType[];
   records: VacancyRecord[];
+  analytics: AssetAnalytics | null;
   onSaveRecord: (record: VacancyRecord) => void | Promise<void>;
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
@@ -3315,10 +3350,14 @@ function VacancyPage({
   const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
   const selectedStores = stores.filter((store) => selectedEnterpriseIds.has(store.empreendimentoId));
   const selectedRecords = records.filter((record) => selectedEnterpriseIds.has(record.empreendimentoId));
+  const canonicalOccupancy =
+    enterpriseId === "all"
+      ? analytics?.occupancy
+      : analytics?.occupancyByEnterprise.find((item) => item.empreendimentoId === enterpriseId) ?? null;
   const occupiedStores = selectedStores.filter((store) => ["ocupada", "implantacao", "em_obra"].includes(store.status));
   const vacantStores = selectedStores.filter((store) => ["disponivel", "negociacao", "inativa"].includes(store.status));
-  const totalArea = selectedStores.reduce((sum, store) => sum + store.areaTotal, 0);
-  const vacantArea = vacantStores.reduce((sum, store) => sum + store.areaTotal, 0);
+  const totalArea = canonicalOccupancy?.ablTotalM2 ?? selectedStores.reduce((sum, store) => sum + store.areaTotal, 0);
+  const vacantArea = canonicalOccupancy ? Math.max(canonicalOccupancy.ablTotalM2 - canonicalOccupancy.ablOcupadaM2, 0) : vacantStores.reduce((sum, store) => sum + store.areaTotal, 0);
   const potentialRent = selectedStores.reduce((sum, store) => sum + store.aluguel, 0);
   const lostRevenue = selectedRecords.length
     ? selectedRecords.reduce((sum, record) => sum + record.receitaPotencial, 0)
@@ -3349,10 +3388,10 @@ function VacancyPage({
       }
     >
       <div className="grid gap-3 md:grid-cols-4">
-        <Kpi label="Total lojas" value={numberPt(selectedStores.length)} />
-        <Kpi label="Lojas ocupadas" value={numberPt(occupiedStores.length)} tone="success" />
-        <Kpi label="Lojas vagas" value={numberPt(vacantStores.length)} tone={vacantStores.length ? "danger" : "success"} />
-        <Kpi label="Taxa ocupacao" value={percent(selectedStores.length ? occupiedStores.length / selectedStores.length : 0)} />
+        <Kpi label="Total lojas" value={numberPt(canonicalOccupancy?.totalLojas ?? selectedStores.length)} />
+        <Kpi label="Lojas ocupadas" value={numberPt(canonicalOccupancy?.lojasOcupadas ?? occupiedStores.length)} tone="success" />
+        <Kpi label="Lojas vagas" value={numberPt(canonicalOccupancy?.lojasVagas ?? vacantStores.length)} tone={(canonicalOccupancy?.lojasVagas ?? vacantStores.length) ? "danger" : "success"} />
+        <Kpi label="Taxa ocupacao" value={percent(canonicalOccupancy ? pctToRatio(canonicalOccupancy.ocupacaoPct) : selectedStores.length ? occupiedStores.length / selectedStores.length : 0)} />
       </div>
       <div className="grid gap-3 md:grid-cols-4">
         <Kpi label="Vacancia fisica" value={percent(totalArea > 0 ? vacantArea / totalArea : 0)} />
