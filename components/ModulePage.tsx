@@ -1511,10 +1511,6 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
     }));
   }
 
-  useEffect(() => {
-    void loadUsers();
-  }, []);
-
   return (
     <div className="panel p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1820,13 +1816,6 @@ function SettingsPage({
       setRunningNotionCron(false);
     }
   }
-
-  useEffect(() => {
-    void checkSupabaseHealth();
-    void checkNotionHealth();
-    void checkNotionSync();
-    void checkDeploymentHealth();
-  }, []);
 
   return (
     <Shell
