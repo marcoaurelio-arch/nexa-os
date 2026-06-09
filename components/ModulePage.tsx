@@ -479,6 +479,15 @@ type SupabaseHealth = {
   configured: boolean;
   checkedAt: string;
   enterpriseCount?: number;
+  canonicalViews?: {
+    ok: number;
+    total: number;
+    checks: Array<{
+      view: string;
+      ok: boolean;
+      message: string | null;
+    }>;
+  };
   message?: string;
 };
 
@@ -810,7 +819,7 @@ export function ModulePage({
     );
   }
   if (module === "Configuracoes") {
-    return <SettingsPage enterprises={enterprises} dataSource={dataSource} syncError={syncError} onResetLocalData={onResetLocalData} />;
+    return <SettingsPage enterprises={enterprises} analytics={analytics} dataSource={dataSource} syncError={syncError} onResetLocalData={onResetLocalData} />;
   }
 
   return (
@@ -1640,11 +1649,13 @@ function UserAccessPanel({ enterprises }: { enterprises: Enterprise[] }) {
 
 function SettingsPage({
   enterprises,
+  analytics,
   dataSource,
   syncError,
   onResetLocalData
 }: {
   enterprises: Enterprise[];
+  analytics: AssetAnalytics | null;
   dataSource: "mock" | "supabase";
   syncError: string | null;
   onResetLocalData: () => void;
@@ -1662,12 +1673,22 @@ function SettingsPage({
   const [checkingDeploymentHealth, setCheckingDeploymentHealth] = useState(false);
   const [queueingNotionSync, setQueueingNotionSync] = useState(false);
   const [runningNotionCron, setRunningNotionCron] = useState(false);
+  const analyticsReady = Boolean(
+    analytics?.occupancy &&
+    analytics.financialKpis &&
+    analytics.delinquencyAging &&
+    analytics.occupancyByEnterprise.length > 0 &&
+    !analytics.error
+  );
+  const canonicalViewsReady = health?.canonicalViews ? health.canonicalViews.ok === health.canonicalViews.total : analyticsReady;
   const setupSteps = [
     { label: "Projeto Supabase criado", status: "manual" },
     { label: "Migrations 001 a 010 aplicadas", status: "manual" },
+    { label: "Migrations de seguranca e views aplicadas", status: canonicalViewsReady ? "ok" : "manual" },
     { label: "NEXT_PUBLIC_SUPABASE_URL configurada", status: supabaseEnvReady ? "ok" : "pendente" },
     { label: "NEXT_PUBLIC_SUPABASE_ANON_KEY configurada", status: supabaseEnvReady ? "ok" : "pendente" },
     { label: "CRUD conectado ao banco real", status: dataSource === "supabase" ? "ok" : "pendente" },
+    { label: "Views canonicas conectadas aos KPIs", status: analyticsReady ? "ok" : "pendente" },
     { label: "Notion preparado para sync", status: (notionSync?.dataSources ?? 0) >= 23 ? "ok" : "manual" }
   ];
   const healthStatus = health?.status ?? "nao verificado";
@@ -1824,16 +1845,17 @@ function SettingsPage({
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="font-bold uppercase">Saude do banco</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Verificacao server-side das variaveis e da tabela `empreendimentos`.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Verificacao server-side das variaveis, tabelas e views canonicas de indicadores.</p>
           </div>
           <button className="control inline-flex items-center justify-center" onClick={() => void checkSupabaseHealth()} disabled={checkingHealth}>
             {checkingHealth ? "Verificando" : "Verificar agora"}
           </button>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div className="mt-4 grid gap-3 md:grid-cols-5">
           <Mini label="Status" value={healthStatus} />
           <Mini label="Variaveis" value={health?.configured ? "Configuradas" : "Pendentes"} />
           <Mini label="Empreendimentos" value={health?.enterpriseCount === undefined ? "-" : numberPt(health.enterpriseCount)} />
+          <Mini label="Views canonicas" value={health?.canonicalViews ? `${numberPt(health.canonicalViews.ok)}/${numberPt(health.canonicalViews.total)}` : analyticsReady ? "7/7" : "-"} />
           <Mini label="Ultima checagem" value={health?.checkedAt ? new Date(health.checkedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "-"} />
         </div>
         {health?.message ? <p className="mt-3 text-sm text-muted-foreground">{health.message}</p> : null}

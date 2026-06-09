@@ -2,6 +2,16 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import type { Database } from "@/lib/supabase/types";
 
+const canonicalViews = [
+  "vw_ocupacao_consolidada",
+  "vw_ocupacao_empreendimento",
+  "vw_kpis_financeiro",
+  "vw_aging_inadimplencia",
+  "vw_contratos_vencendo",
+  "vw_pipeline_comercial",
+  "vw_central_alertas"
+];
+
 export async function GET() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -29,6 +39,17 @@ export async function GET() {
       .from("empreendimentos")
       .select("id", { count: "exact", head: true })
       .is("deleted_at", null);
+    const viewChecks = await Promise.all(
+      canonicalViews.map(async (view) => {
+        const result = await (supabase as any).from(view).select("*", { count: "exact", head: true });
+        return {
+          view,
+          ok: !result.error,
+          message: result.error?.message ?? null
+        };
+      })
+    );
+    const okViews = viewChecks.filter((check) => check.ok).length;
 
     if (error) {
       return NextResponse.json({
@@ -44,6 +65,11 @@ export async function GET() {
       configured: true,
       checkedAt,
       enterpriseCount: count ?? 0,
+      canonicalViews: {
+        ok: okViews,
+        total: canonicalViews.length,
+        checks: viewChecks
+      },
       message: "Supabase respondeu com sucesso."
     });
   } catch (error) {
