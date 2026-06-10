@@ -20,7 +20,7 @@
 - [ ] Templates criados.
 - [ ] Politica de aprovacao publicada.
 - [ ] Nenhuma credencial ou segredo salvo em texto aberto.
-- [ ] Conector Google Drive com escrita validada.
+- [x] Conector Google Drive com escrita validada.
 - [ ] Links da pasta raiz e templates registrados no sistema.
 
 ## n8n

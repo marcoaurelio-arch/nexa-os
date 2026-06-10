@@ -13,6 +13,7 @@ Resultado:
 - A criacao de Google Doc falhou por falta de escopo/permissao OAuth.
 - A ferramenta atualmente exposta nao trouxe acao direta para criar pastas.
 - Apos reautenticacao informada por Marco, nova tentativa retornou `Unknown tool` para a acao de pesquisa/criacao do conector nesta sessao.
+- Apos nova chamada explicita ao plugin Google Drive, a escrita foi validada com sucesso criando um Google Doc.
 
 ## 2. Diagnostico
 
@@ -48,9 +49,9 @@ Antes de automatizar Drive:
 
 | Acao | Responsavel | Prazo | Indicador |
 |-------|------------|--------|------------|
-| Reautenticar Google Drive com permissao de escrita | Marco Aurelio | D+1 | Criacao de arquivo funcionando |
 | Criar pasta raiz no Drive | Lara | D+2 | Pasta criada |
 | Criar subpastas oficiais | Lara | D+3 | Arvore completa |
+| Mover documento-mestre para a pasta correta | Lara / Marco | D+3 | Documento arquivado |
 | Publicar templates | Lara / Marco | D+5 | Templates disponiveis |
 | Validar permissoes | Marco / Lara | D+5 | Acessos aprovados |
 
@@ -62,9 +63,18 @@ Antes de automatizar Drive:
 | Criar Google Doc `NEXA OS - Plano de Execucao Semanal Fase 1` | Falhou por permissao OAuth ausente |
 | Repetir busca apos reautenticacao | Falhou com `Unknown tool` |
 | Repetir criacao apos reautenticacao | Falhou com `Unknown tool` |
+| Buscar pasta apos nova chamada explicita ao plugin | Pasta raiz nao encontrada |
+| Criar Google Doc `NEXA OS - Plano de Execucao Semanal Fase 1` | Sucesso |
+| Preencher Google Doc criado | Sucesso |
 
 ## Status atualizado apos reautenticacao
 
-O Google Drive foi reautenticado pelo usuario, mas as ferramentas de Drive nesta sessao nao ficaram executaveis. A proxima tentativa deve ser feita em nova sessao ou apos o conector ser recarregado pelo ambiente.
+O Google Drive foi reautenticado pelo usuario. A escrita foi validada com sucesso para criacao e edicao de Google Docs.
 
-Enquanto isso, a estrutura, templates e checklist permanecem prontos para criacao manual ou automacao assim que o conector voltar a aceitar chamadas.
+A ferramenta disponivel ainda nao expoe criacao direta de pastas. Portanto, a estrutura de pastas deve ser criada manualmente ou por outro conector/script autorizado.
+
+## Documento criado
+
+| Documento | Link |
+|---|---|
+| NEXA OS - Plano de Execucao Semanal Fase 1 | https://docs.google.com/document/d/1NP5DgUkLp5HNnOnOIANjkAJfMmAx-Ms4FppjzaE577U |
