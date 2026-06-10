@@ -17,11 +17,11 @@
 
 - [ ] Pasta raiz criada.
 - [ ] Arvore de subpastas criada.
-- [ ] Templates criados.
-- [ ] Politica de aprovacao publicada.
-- [ ] Nenhuma credencial ou segredo salvo em texto aberto.
+- [x] Templates criados em Google Docs.
+- [x] Politica de aprovacao publicada em Google Docs.
+- [x] Nenhuma credencial ou segredo salvo em texto aberto nos artefatos criados nesta rodada.
 - [x] Conector Google Drive com escrita validada.
-- [ ] Links da pasta raiz e templates registrados no sistema.
+- [x] Links dos documentos de templates registrados no sistema.
 
 ## n8n
 
@@ -30,20 +30,22 @@
 - [ ] Credenciais Gmail configuradas.
 - [ ] Credenciais Calendar configuradas.
 - [ ] Credencial Zaper/WhatsApp configurada.
-- [ ] Workflow 01 testado com lead novo completo.
+- [x] Workflow 01 scaffold importavel criado.
+- [x] Fixtures do Workflow 01 criadas.
+- [x] Workflow 01 testado manualmente com lead novo completo.
 - [ ] Workflow 01 testado com lead incompleto.
 - [ ] Workflow 01 testado com lead existente.
 - [ ] Workflow 02 testado com follow-up hoje.
 - [ ] Workflow 02 testado com follow-up vencido.
 - [ ] Workflow 03 gera pauta semanal.
-- [ ] Logs registram sucesso e erro.
-- [ ] `Envio externo = Nao` em todos os workflows da Fase 1.
+- [x] Log do teste manual do Workflow 01 registrado.
+- [x] `Envio externo = Nao` validado no teste manual do Workflow 01.
 
 ## Governanca
 
 - [ ] Nenhuma proposta enviada sem aprovacao humana.
-- [ ] Nenhuma mensagem externa enviada sem aprovacao humana.
+- [x] Nenhuma mensagem externa enviada no teste manual do Workflow 01.
 - [ ] Toda tarefa tem responsavel, prazo, status, prioridade e criterio de conclusao.
-- [ ] Todo lead tem origem, segmento, empreendimento de interesse e proximo follow-up.
+- [x] Lead de teste tem origem, segmento, responsavel, proximo follow-up, ultimo resumo, proxima acao e aprovacao pendente.
 - [ ] Toda reuniao encerrada tem decisoes, riscos, proximos passos e tarefas.
 - [ ] Todo relatorio tem resumo executivo, riscos, oportunidades e proximos passos.

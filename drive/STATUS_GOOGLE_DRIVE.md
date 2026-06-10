@@ -78,3 +78,20 @@ A ferramenta disponivel ainda nao expoe criacao direta de pastas. Portanto, a es
 | Documento | Link |
 |---|---|
 | NEXA OS - Plano de Execucao Semanal Fase 1 | https://docs.google.com/document/d/1NP5DgUkLp5HNnOnOIANjkAJfMmAx-Ms4FppjzaE577U |
+
+## Templates criados
+
+| Documento | Link |
+|---|---|
+| TEMPLATE_Ata_Reuniao_Nexa_Malls | https://docs.google.com/document/d/19NMb8I4MXxmb2o8zp7eTP_1tWgdqO7qaeA9P422kLuA |
+| TEMPLATE_Relatorio_Executivo_Diario | https://docs.google.com/document/d/1UlnZjhc86lDUBcbbpcDaZI69J2ueEYyA7H-PS_fAFlY |
+| TEMPLATE_Proposta_Comercial_Nexa_Malls | https://docs.google.com/document/d/1MO6iID6dFemMc50PXv7wKd_p1DlHm8UzIKHUIEIZ2-o |
+| TEMPLATE_Relatorio_Mensal_Ativos | https://docs.google.com/document/d/15I7zEjlD9mGXuBElZguPRRYh-D0mSMe5VZdVcx_Hh5Y |
+| Politica_Aprovacao_Mensagens | https://docs.google.com/document/d/1OveRb-wG7fiOozUfkxf8DGjWNld8As258F4KibJb9xM |
+
+## Planilhas criadas
+
+| Planilha | Link |
+|---|---|
+| Mapa_Credenciais_n8n | https://docs.google.com/spreadsheets/d/1_lH6ePlV6U6E02fY8t-sw63R1eP3XY54lqnig5MVfyM |
+| LOG_Execucoes_Criticas | https://docs.google.com/spreadsheets/d/1S4NJWdUa5wHR6HjYcBYtiUdrd426TI5UYzXLNxbRyf8 |
