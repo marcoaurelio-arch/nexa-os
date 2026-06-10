@@ -70,6 +70,7 @@ O conector do Drive apresentou falhas iniciais de escopo/ferramenta, mas a escri
 Documento validado:
 
 - `NEXA OS - Plano de Execucao Semanal Fase 1`: https://docs.google.com/document/d/1NP5DgUkLp5HNnOnOIANjkAJfMmAx-Ms4FppjzaE577U
+- `NEXA OS - Templates Operacionais Fase 1`: https://docs.google.com/document/d/11ZblAyvpmbi1vhKPsYbstMEx-6RlGLuuXNukKwO8Bsw
 
 Limite atual: nesta sessao, nao ha ferramenta direta exposta para criar pastas no Drive. Por isso, a estrutura de pastas ainda deve ser criada manualmente ou por outro conector/script autorizado.
 
@@ -83,3 +84,36 @@ A estrutura Drive segue implementada como pacote local pronto:
 - `drive/templates/Politica_Aprovacao_Mensagens.md`
 
 Proxima acao: criar manualmente a pasta raiz `Nexa Malls - Sistema Operacional`, mover o documento criado para a pasta correta e publicar os templates oficiais.
+
+## n8n - prosseguimento 2026-06-10
+
+Artefatos criados para o primeiro workflow:
+
+- `n8n/workflows/01_WHATSAPP_LEAD_TO_CRM.workflow.json`
+- `n8n/fixtures/lead_novo_completo.json`
+- `n8n/fixtures/lead_novo_incompleto.json`
+- `n8n/fixtures/lead_existente.json`
+- `n8n/tests/TESTE_WORKFLOW_01.md`
+- `n8n/logs/TESTE_WORKFLOW_01_2026-06-10.md`
+
+Validacao local:
+
+- JSON do workflow e fixtures validado com `node -e`.
+- Workflow permanece `active = false`.
+- Credenciais ficam como placeholder.
+- Todos os caminhos mantem `Envio externo = Nao`.
+
+## Teste controlado Notion - prosseguimento 2026-06-10
+
+Registros ficticios criados para validar o fluxo assistido:
+
+- Lead CRM: https://app.notion.com/p/37beb8b5c008817d8421c803fe9a61e2
+- Tarefa de follow-up: https://app.notion.com/p/37beb8b5c00881a3ac08fa3d7fe7fa7f
+- Evidencia em Relatorios Executivos: https://app.notion.com/p/37beb8b5c0088178a504f72f11c859bd
+
+Resultado:
+
+- Lead criado com `Aprovacao para envio = Pendente`.
+- Follow-up criado para 2026-06-11.
+- Tarefa vinculada ao lead.
+- Nenhum envio externo realizado.

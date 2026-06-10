@@ -1,0 +1,546 @@
+{
+  "name": "01_WHATSAPP_LEAD_TO_CRM",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nexa/whatsapp/lead-to-crm",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-whatsapp-lead",
+      "name": "Webhook WhatsApp/Zaper",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1060,
+        0
+      ],
+      "notes": "Entrada esperada: telefone, mensagem, nome, origem, empreendimento_interesse, opt_in."
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.body || $json;\nconst phone = String(raw.telefone || raw.phone || raw.whatsapp || '').replace(/\\D/g, '');\nconst message = String(raw.mensagem || raw.message || raw.text || '').trim();\nconst now = new Date().toISOString();\nconst hasConsent = raw.opt_in === true || raw.opt_in === 'true' || raw.consentimento === true;\n\nreturn [{\n  json: {\n    workflow: '01_WHATSAPP_LEAD_TO_CRM',\n    received_at: now,\n    phone,\n    message,\n    lead_name: raw.nome || raw.name || 'Lead sem nome',\n    origin: raw.origem || raw.source || 'WhatsApp/Zaper',\n    interest_project: raw.empreendimento_interesse || raw.project || 'Qualificacao pendente',\n    segment: raw.segmento || 'Qualificacao pendente',\n    responsible: raw.responsavel || 'Marco Aurelio',\n    consent: hasConsent,\n    approval_status: 'Pendente',\n    external_send: 'Nao',\n    input_valid: Boolean(phone && message),\n    validation_error: !phone ? 'Telefone ausente' : (!message ? 'Mensagem ausente' : '')\n  }\n}];"
+      },
+      "id": "normalize-input",
+      "name": "Normalizar entrada e travas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "valid-input",
+              "leftValue": "={{ $json.input_valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-valid-input",
+      "name": "Entrada valida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": "={{ $env.NOTION_CRM_DATA_SOURCE_ID || '0bb61aec-0fb8-414a-87c9-703c07a93e52' }}",
+        "returnAll": false,
+        "limit": 1,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Telefone|phone_number",
+              "condition": "contains",
+              "phoneNumberValue": "={{ $json.phone }}"
+            }
+          ]
+        }
+      },
+      "id": "notion-find-lead",
+      "name": "Buscar lead por telefone",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -340,
+        -120
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "__CONFIGURAR__",
+          "name": "Notion Nexa OS"
+        }
+      },
+      "notes": "Usa CRM de Lojistas. Confirme o nome exato da propriedade Telefone no n8n apos importar."
+    },
+    {
+      "parameters": {
+        "jsCode": "const incoming = $('Normalizar entrada e travas').first().json;\nconst found = $input.all().map(item => item.json);\nconst existing = found.length > 0;\nconst message = incoming.message.toLowerCase();\nconst hotTerms = ['proposta', 'aluguel', 'locacao', 'reuniao', 'visita', 'contrato'];\nconst temperature = hotTerms.some(term => message.includes(term)) ? 'Quente' : 'Morno';\nconst missing = [];\nif (incoming.interest_project === 'Qualificacao pendente') missing.push('empreendimento de interesse');\nif (incoming.segment === 'Qualificacao pendente') missing.push('segmento');\nif (!incoming.consent) missing.push('consentimento/opt-in');\n\nreturn [{\n  json: {\n    ...incoming,\n    existing_lead: existing,\n    existing_page_id: existing ? found[0].id : '',\n    temperature,\n    qualification_status: missing.length ? 'Qualificacao pendente' : 'Qualificado',\n    missing_fields: missing,\n    last_summary: `Lead ${existing ? 'existente' : 'novo'} recebido por WhatsApp/Zaper. Interesse: ${incoming.interest_project}. Segmento: ${incoming.segment}.`,\n    next_action: missing.length ? `Completar dados: ${missing.join(', ')}` : 'Preparar rascunho de resposta e agendar follow-up comercial',\n    next_followup: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)\n  }\n}];"
+      },
+      "id": "classify-lead",
+      "name": "Classificar e resumir lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        -120
+      ],
+      "notes": "Pode ser substituido por LLM depois. Nesta Fase 1, mantem fallback deterministico."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "lead-exists",
+              "leftValue": "={{ $json.existing_lead }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-existing-lead",
+      "name": "Lead ja existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        140,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": "={{ $json.existing_page_id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Ultima interacao|date",
+              "date": "={{ $json.received_at }}"
+            },
+            {
+              "key": "Ultimo resumo|rich_text",
+              "textContent": "={{ $json.last_summary }}"
+            },
+            {
+              "key": "Proxima acao|rich_text",
+              "textContent": "={{ $json.next_action }}"
+            },
+            {
+              "key": "Aprovacao para envio|select",
+              "selectValue": "Pendente"
+            }
+          ]
+        }
+      },
+      "id": "notion-update-lead",
+      "name": "Atualizar lead existente",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        -240
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "__CONFIGURAR__",
+          "name": "Notion Nexa OS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "databaseId": "={{ $env.NOTION_CRM_DATA_SOURCE_ID || '0bb61aec-0fb8-414a-87c9-703c07a93e52' }}",
+        "title": "={{ $json.lead_name }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Origem|select",
+              "selectValue": "={{ $json.origin }}"
+            },
+            {
+              "key": "Segmento|select",
+              "selectValue": "={{ $json.segment }}"
+            },
+            {
+              "key": "Empreendimento de interesse|select",
+              "selectValue": "={{ $json.interest_project }}"
+            },
+            {
+              "key": "Responsavel|rich_text",
+              "textContent": "={{ $json.responsible }}"
+            },
+            {
+              "key": "Proximo follow-up|date",
+              "date": "={{ $json.next_followup }}"
+            },
+            {
+              "key": "Ultimo resumo|rich_text",
+              "textContent": "={{ $json.last_summary }}"
+            },
+            {
+              "key": "Proxima acao|rich_text",
+              "textContent": "={{ $json.next_action }}"
+            },
+            {
+              "key": "Aprovacao para envio|select",
+              "selectValue": "Pendente"
+            }
+          ]
+        }
+      },
+      "id": "notion-create-lead",
+      "name": "Criar lead no CRM",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        20
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "__CONFIGURAR__",
+          "name": "Notion Nexa OS"
+        }
+      },
+      "notes": "Ajuste os nomes de propriedades no painel do n8n apos importar, se a conta traduzir tipos de campos."
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "databaseId": "={{ $env.NOTION_TASKS_DATA_SOURCE_ID || 'f28eeb36-0aa0-476d-a70b-6a0d011b25f8' }}",
+        "title": "={{ 'Follow-up CRM - ' + $json.lead_name }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Responsavel|rich_text",
+              "textContent": "={{ $json.responsible }}"
+            },
+            {
+              "key": "Prazo|date",
+              "date": "={{ $json.next_followup }}"
+            },
+            {
+              "key": "Status operacional|select",
+              "selectValue": "A fazer"
+            },
+            {
+              "key": "Prioridade|select",
+              "selectValue": "Media"
+            },
+            {
+              "key": "Descricao|rich_text",
+              "textContent": "={{ $json.next_action + ' | Envio externo = Nao' }}"
+            }
+          ]
+        }
+      },
+      "id": "notion-create-task",
+      "name": "Criar tarefa de follow-up",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        -120
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "__CONFIGURAR__",
+          "name": "Notion Nexa OS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ '[NEXA OS] Revisar lead WhatsApp - ' + $json.lead_name }}",
+        "message": "={{ 'Lead recebido e classificado.\\n\\nResumo: ' + $json.last_summary + '\\nProxima acao: ' + $json.next_action + '\\nAprovacao para envio: Pendente\\nEnvio externo: Nao' }}",
+        "toList": "={{ $env.GMAIL_INTERNAL_NOTIFY_TO || 'marcoaurelio@planejarimoveis.com.br' }}"
+      },
+      "id": "gmail-create-draft",
+      "name": "Criar rascunho interno Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        900,
+        -120
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "__CONFIGURAR__",
+          "name": "Gmail Nexa OS"
+        }
+      },
+      "notes": "Cria rascunho interno. Nao envia email externo nesta fase."
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    workflow: $json.workflow,\n    registro_afetado: $json.existing_page_id || $json.lead_name,\n    resultado: $json.qualification_status,\n    erro: '',\n    envio_externo: 'Nao',\n    aprovacao_para_envio: 'Pendente',\n    logged_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "build-log",
+      "name": "Montar log de governanca",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Responder sem envio externo",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1380,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const incoming = $('Normalizar entrada e travas').first().json;\nreturn [{\n  json: {\n    workflow: incoming.workflow,\n    registro_afetado: incoming.phone || incoming.lead_name,\n    resultado: 'Entrada invalida',\n    erro: incoming.validation_error,\n    envio_externo: 'Nao',\n    aprovacao_para_envio: 'Pendente',\n    logged_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "invalid-log",
+      "name": "Log de entrada invalida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -340,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-invalid",
+      "name": "Responder erro controlado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -100,
+        180
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp/Zaper": {
+      "main": [
+        [
+          {
+            "node": "Normalizar entrada e travas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar entrada e travas": {
+      "main": [
+        [
+          {
+            "node": "Entrada valida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada valida?": {
+      "main": [
+        [
+          {
+            "node": "Buscar lead por telefone",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log de entrada invalida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar lead por telefone": {
+      "main": [
+        [
+          {
+            "node": "Classificar e resumir lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classificar e resumir lead": {
+      "main": [
+        [
+          {
+            "node": "Lead ja existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead ja existe?": {
+      "main": [
+        [
+          {
+            "node": "Atualizar lead existente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Criar lead no CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualizar lead existente": {
+      "main": [
+        [
+          {
+            "node": "Criar tarefa de follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar lead no CRM": {
+      "main": [
+        [
+          {
+            "node": "Criar tarefa de follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar tarefa de follow-up": {
+      "main": [
+        [
+          {
+            "node": "Criar rascunho interno Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar rascunho interno Gmail": {
+      "main": [
+        [
+          {
+            "node": "Montar log de governanca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar log de governanca": {
+      "main": [
+        [
+          {
+            "node": "Responder sem envio externo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log de entrada invalida": {
+      "main": [
+        [
+          {
+            "node": "Responder erro controlado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "versionId": "fase-1-scaffold",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "nexa-os-local-blueprint"
+  },
+  "tags": [
+    {
+      "name": "NEXA OS"
+    },
+    {
+      "name": "Fase 1"
+    },
+    {
+      "name": "Sem envio externo"
+    }
+  ]
+}
