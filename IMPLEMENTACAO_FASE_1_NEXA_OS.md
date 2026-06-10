@@ -20,7 +20,7 @@ Este pacote operacional implementa a Fase 1 do NEXA OS como secretaria virtual a
 | Google Calendar | Eventos criados | Registro em `calendar/EVENTOS_CRIADOS_GOOGLE_CALENDAR.md` |
 | GitHub | Backlog detalhado | Issues com labels, criterios de aceite e responsaveis |
 | Drive | Estrutura ampliada | Incluida pasta `08_NEXA_OS` |
-| Google Drive real | Escrita validada | Doc criado; pastas ainda requerem criacao manual ou ferramenta especifica |
+| Google Drive real | Parcialmente implantado | Doc mestre, templates, politica e planilhas n8n criados; pastas ainda requerem criacao manual ou ferramenta especifica |
 | GitHub real | Issues criadas | Ver `github/ISSUES_CRIADAS_GITHUB.md` |
 | Execucao | Plano semanal criado | Ver `PLANO_EXECUCAO_SEMANAL_FASE_1.md` |
 
