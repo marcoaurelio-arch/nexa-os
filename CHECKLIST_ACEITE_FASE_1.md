@@ -2,16 +2,18 @@
 
 ## Notion
 
-- [ ] Pagina raiz `Sistema Operacional Nexa Malls` criada.
-- [ ] 7 bases criadas.
+- [x] Pagina raiz `NEXA OS` confirmada.
+- [x] Subpagina `Fase 1 - Secretaria Virtual Assistida` confirmada.
+- [x] 7 bases criadas.
 - [ ] Propriedades obrigatorias configuradas.
 - [ ] Status dos pipelines configurados.
 - [ ] Relations criadas.
 - [ ] Rollups principais criados.
 - [ ] Views operacionais criadas.
-- [ ] Painel executivo criado.
-- [ ] Projetos iniciais cadastrados.
-- [ ] Tarefas iniciais cadastradas.
+- [x] Painel executivo/status executivo atualizado na pagina Fase 1.
+- [x] Projetos iniciais cadastrados.
+- [x] Tarefas iniciais cadastradas.
+- [x] Relatorio PMO de implantacao criado.
 
 ## Google Drive
 
@@ -33,13 +35,17 @@
 - [ ] Credencial Zaper/WhatsApp configurada.
 - [x] Workflow 01 scaffold importavel criado.
 - [x] Fixtures do Workflow 01 criadas.
+- [x] Runbook de importacao e homologacao do Workflow 01 criado.
 - [x] Workflow 01 testado manualmente com lead novo completo.
-- [ ] Workflow 01 testado com lead incompleto.
-- [ ] Workflow 01 testado com lead existente.
+- [x] Workflow 01 testado manualmente com lead incompleto.
+- [x] Workflow 01 testado manualmente com lead existente.
+- [ ] Workflow 01 importado no n8n real com `active = false`.
+- [ ] Workflow 01 homologado no n8n real com as 3 fixtures.
 - [ ] Workflow 02 testado com follow-up hoje.
 - [ ] Workflow 02 testado com follow-up vencido.
 - [ ] Workflow 03 gera pauta semanal.
 - [x] Log do teste manual do Workflow 01 registrado.
+- [x] Log complementar do Workflow 01 registrado.
 - [x] `Envio externo = Nao` validado no teste manual do Workflow 01.
 
 ## Governanca
