@@ -17,7 +17,7 @@
 
 ## Google Drive
 
-- [ ] Pasta raiz criada.
+- [x] Pasta raiz criada.
 - [ ] Arvore de subpastas criada.
 - [x] Templates criados em Google Docs.
 - [x] Politica de aprovacao publicada em Google Docs.
