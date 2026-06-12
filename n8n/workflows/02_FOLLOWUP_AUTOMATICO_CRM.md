@@ -48,3 +48,11 @@ Cron 08:00
 - Lead estrategico incompleto vira qualificacao manual.
 - JSON invalido do LLM gera fallback.
 
+## Artefatos Fase 1
+
+- Workflow importavel: `02_FOLLOWUP_AUTOMATICO_CRM.workflow.json`.
+- Fixtures: `../fixtures/followup_hoje.json`, `../fixtures/followup_vencido.json`.
+- Roteiro de teste: `../tests/TESTE_WORKFLOW_02.md`.
+- Runbook de importacao: `../RUNBOOK_IMPORTACAO_WORKFLOW_02.md`.
+
+Observacao: o workflow fica com `active = false`, credenciais como placeholder e `Envio externo = Nao` em todos os caminhos.

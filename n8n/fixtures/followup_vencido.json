@@ -1,0 +1,18 @@
+{
+  "cenario": "followup_vencido",
+  "lead_nome": "TESTE - Follow-up Vencido - NEXA OS",
+  "telefone": "+55 34 99999-0202",
+  "email": "teste.followup.vencido@nexa.local",
+  "origem": "Gmail",
+  "segmento": "Alimentacao",
+  "empreendimento_interesse": "Villa Viseu",
+  "status_comercial": "Proposta enviada",
+  "temperatura": "Quente",
+  "proximo_followup": "2026-06-11",
+  "responsavel": "Andre",
+  "ultimo_resumo": "Lead recebeu proposta e esta com follow-up vencido desde 2026-06-11.",
+  "proxima_acao": "Aprovar rascunho de follow-up e solicitar retorno sobre proposta.",
+  "consentimento_opt_in": true,
+  "envio_externo": "Nao",
+  "aprovacao_para_envio": "Pendente"
+}
