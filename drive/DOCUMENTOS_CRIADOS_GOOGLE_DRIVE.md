@@ -9,6 +9,8 @@ Foram criados e preenchidos documentos Google Docs para validar a escrita no Goo
 
 A pasta raiz `Nexa Malls - Sistema Operacional` foi criada no Meu Drive por operacao assistida no navegador e confirmada pelo conector Google Drive.
 
+Em nova tentativa assistida, foi criada parte da primeira camada da arvore oficial: `00_Admin`, `01_CRM_Lojistas`, `02_Projetos`, `03_Banco_de_Terrenos` e `04_Propostas_Comerciais`. A criacao de `05_Reunioes`, `06_Relatorios`, `07_Automacoes_n8n` e `08_NEXA_OS` ficou pendente por instabilidade do controle de janela no Google Drive.
+
 ## 2. Diagnostico
 
 O conector do Google Drive permite criar e editar documentos nativos. Nesta sessao, nao foi exposta uma ferramenta direta para criar pastas. A criacao da pasta raiz foi realizada via interface do Google Drive com apoio do Computador local.
@@ -36,7 +38,7 @@ Criar a arvore de subpastas dentro da pasta raiz e mover este documento para `08
 | Acao | Responsavel | Prazo | Indicador |
 |-------|------------|--------|------------|
 | Criar pasta raiz no Drive | Lara | Hoje | Concluido |
-| Criar pasta `08_NEXA_OS` | Lara | Hoje | Pasta criada |
+| Criar pasta `08_NEXA_OS` | Lara | Hoje | Pendente |
 | Mover documento criado | Lara / Marco | D+1 | Documento arquivado |
 | Criar templates oficiais | Lara / Marco | D+2 | Templates publicados |
 
@@ -45,6 +47,23 @@ Criar a arvore de subpastas dentro da pasta raiz e mover este documento para `08
 | Pasta | ID | Link |
 |---|---|---|
 | Nexa Malls - Sistema Operacional | `10DAHpLWpY8hdv9q_Nn3AjA7PqPBYA8yg` | https://drive.google.com/drive/folders/10DAHpLWpY8hdv9q_Nn3AjA7PqPBYA8yg |
+
+## Primeira camada criada parcialmente
+
+| Pasta | ID | Link |
+|---|---|---|
+| 00_Admin | `1lgCcksqI-gOcbxui5Z_1Fm5hqg8mjYyo` | https://drive.google.com/drive/folders/1lgCcksqI-gOcbxui5Z_1Fm5hqg8mjYyo |
+| 01_CRM_Lojistas | `1OvmA4e1mEAvIgkk1rAzOndD_uQu13ngy` | https://drive.google.com/drive/folders/1OvmA4e1mEAvIgkk1rAzOndD_uQu13ngy |
+| 02_Projetos | `1pw3Bz6Gq9dAf1JiubnKUg42SYn7GCvOQ` | https://drive.google.com/drive/folders/1pw3Bz6Gq9dAf1JiubnKUg42SYn7GCvOQ |
+| 03_Banco_de_Terrenos | `1_V_ZN0cNreMiiuJh_n6bpakrquDcEJaW` | https://drive.google.com/drive/folders/1_V_ZN0cNreMiiuJh_n6bpakrquDcEJaW |
+| 04_Propostas_Comerciais | `1ZtDzsyBUginHZJ4qtqVGRL2HREQbKMrM` | https://drive.google.com/drive/folders/1ZtDzsyBUginHZJ4qtqVGRL2HREQbKMrM |
+
+Pendentes na primeira camada:
+
+- `05_Reunioes`
+- `06_Relatorios`
+- `07_Automacoes_n8n`
+- `08_NEXA_OS`
 
 ## Documento mestre
 

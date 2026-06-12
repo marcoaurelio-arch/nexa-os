@@ -71,12 +71,24 @@ Pasta raiz:
 
 - `Nexa Malls - Sistema Operacional`: https://drive.google.com/drive/folders/10DAHpLWpY8hdv9q_Nn3AjA7PqPBYA8yg
 
+Primeira camada criada parcialmente por operacao assistida no navegador e confirmada pelo conector:
+
+| Pasta | URL |
+|---|---|
+| 00_Admin | https://drive.google.com/drive/folders/1lgCcksqI-gOcbxui5Z_1Fm5hqg8mjYyo |
+| 01_CRM_Lojistas | https://drive.google.com/drive/folders/1OvmA4e1mEAvIgkk1rAzOndD_uQu13ngy |
+| 02_Projetos | https://drive.google.com/drive/folders/1pw3Bz6Gq9dAf1JiubnKUg42SYn7GCvOQ |
+| 03_Banco_de_Terrenos | https://drive.google.com/drive/folders/1_V_ZN0cNreMiiuJh_n6bpakrquDcEJaW |
+| 04_Propostas_Comerciais | https://drive.google.com/drive/folders/1ZtDzsyBUginHZJ4qtqVGRL2HREQbKMrM |
+
+Pendentes da primeira camada: `05_Reunioes`, `06_Relatorios`, `07_Automacoes_n8n` e `08_NEXA_OS`.
+
 Documento validado:
 
 - `NEXA OS - Plano de Execucao Semanal Fase 1`: https://docs.google.com/document/d/1NP5DgUkLp5HNnOnOIANjkAJfMmAx-Ms4FppjzaE577U
 - `NEXA OS - Templates Operacionais Fase 1`: https://docs.google.com/document/d/11ZblAyvpmbi1vhKPsYbstMEx-6RlGLuuXNukKwO8Bsw
 
-Limite atual: nesta sessao, nao ha ferramenta direta exposta para criar pastas no Drive pelo conector. A pasta raiz ja existe; a arvore de subpastas ainda deve ser criada manualmente ou por outro conector/script autorizado.
+Limite atual: nesta sessao, nao ha ferramenta direta exposta para criar pastas no Drive pelo conector. A pasta raiz ja existe e parte da primeira camada foi criada por interface; a arvore completa ainda deve ser criada manualmente ou por outro conector/script autorizado.
 
 A estrutura Drive segue implementada como pacote local pronto:
 
@@ -87,7 +99,7 @@ A estrutura Drive segue implementada como pacote local pronto:
 - `drive/templates/TEMPLATE_Relatorio_Mensal_Ativos.md`
 - `drive/templates/Politica_Aprovacao_Mensagens.md`
 
-Proxima acao: criar a arvore de subpastas dentro de `Nexa Malls - Sistema Operacional`, mover os documentos criados para as pastas corretas e publicar os templates oficiais.
+Proxima acao: completar a primeira camada (`05_Reunioes`, `06_Relatorios`, `07_Automacoes_n8n`, `08_NEXA_OS`), criar as subpastas internas, mover os documentos criados para as pastas corretas e publicar os templates oficiais.
 
 ## n8n - prosseguimento 2026-06-10
 
