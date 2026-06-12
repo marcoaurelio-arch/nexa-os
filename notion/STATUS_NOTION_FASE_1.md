@@ -64,5 +64,10 @@ Usar o Notion existente como fonte operacional da Fase 1 e nao criar novo worksp
 - Tarefa `Definir regra formal de aprovacao humana`: marcada como concluida.
 - Tarefa `Configurar credenciais Gmail, Calendar e Drive no n8n`: marcada como em andamento.
 - Tarefa `Configurar credenciais Notion no n8n`: mantida como a fazer.
+- Tarefa `Montar workflow 01_WHATSAPP_LEAD_TO_CRM`: atualizada apos reautenticacao do Notion; status `Em andamento` e `Aguardando terceiro` ate importacao no n8n real.
 - Pagina `Fase 1 - Secretaria Virtual Assistida`: recebeu status executivo de 2026-06-10.
 - Base `Relatorios Executivos`: recebeu relatorio `Status Implantacao NEXA OS Fase 1 - 2026-06-10`.
+
+## Reautenticacao Notion
+
+Em 2026-06-11, Marco informou que o Notion foi reautenticado. A atualizacao que havia falhado por `token_expired` foi executada com sucesso na tarefa `Montar workflow 01_WHATSAPP_LEAD_TO_CRM`.

@@ -65,14 +65,18 @@ Issues criadas em `marcoaurelio-arch/nexa-os` na rodada posterior:
 
 ## Google Drive
 
-O conector do Drive apresentou falhas iniciais de escopo/ferramenta, mas a escrita foi validada posteriormente com a criacao e preenchimento de um Google Doc.
+O conector do Drive apresentou falhas iniciais de escopo/ferramenta para criacao direta de pastas, mas a escrita foi validada posteriormente com a criacao e preenchimento de documentos Google. A pasta raiz foi criada por operacao assistida no navegador e confirmada pelo conector Google Drive.
+
+Pasta raiz:
+
+- `Nexa Malls - Sistema Operacional`: https://drive.google.com/drive/folders/10DAHpLWpY8hdv9q_Nn3AjA7PqPBYA8yg
 
 Documento validado:
 
 - `NEXA OS - Plano de Execucao Semanal Fase 1`: https://docs.google.com/document/d/1NP5DgUkLp5HNnOnOIANjkAJfMmAx-Ms4FppjzaE577U
 - `NEXA OS - Templates Operacionais Fase 1`: https://docs.google.com/document/d/11ZblAyvpmbi1vhKPsYbstMEx-6RlGLuuXNukKwO8Bsw
 
-Limite atual: nesta sessao, nao ha ferramenta direta exposta para criar pastas no Drive. Por isso, a estrutura de pastas ainda deve ser criada manualmente ou por outro conector/script autorizado.
+Limite atual: nesta sessao, nao ha ferramenta direta exposta para criar pastas no Drive pelo conector. A pasta raiz ja existe; a arvore de subpastas ainda deve ser criada manualmente ou por outro conector/script autorizado.
 
 A estrutura Drive segue implementada como pacote local pronto:
 
@@ -83,7 +87,7 @@ A estrutura Drive segue implementada como pacote local pronto:
 - `drive/templates/TEMPLATE_Relatorio_Mensal_Ativos.md`
 - `drive/templates/Politica_Aprovacao_Mensagens.md`
 
-Proxima acao: criar manualmente a pasta raiz `Nexa Malls - Sistema Operacional`, mover o documento criado para a pasta correta e publicar os templates oficiais.
+Proxima acao: criar a arvore de subpastas dentro de `Nexa Malls - Sistema Operacional`, mover os documentos criados para as pastas corretas e publicar os templates oficiais.
 
 ## n8n - prosseguimento 2026-06-10
 
