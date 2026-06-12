@@ -48,5 +48,6 @@ Zaper/Webhook Trigger
 - Workflow importavel: `01_WHATSAPP_LEAD_TO_CRM.workflow.json`.
 - Fixtures: `../fixtures/lead_novo_completo.json`, `../fixtures/lead_novo_incompleto.json`, `../fixtures/lead_existente.json`.
 - Roteiro de teste: `../tests/TESTE_WORKFLOW_01.md`.
+- Runbook de importacao e homologacao: `../RUNBOOK_IMPORTACAO_WORKFLOW_01.md`.
 
 Observacao: o workflow fica com `active = false`, credenciais como placeholder e `Envio externo = Nao` em todos os caminhos.

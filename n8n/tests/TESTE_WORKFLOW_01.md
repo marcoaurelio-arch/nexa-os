@@ -3,6 +3,7 @@
 ## Arquivos
 
 - Workflow importavel: `n8n/workflows/01_WHATSAPP_LEAD_TO_CRM.workflow.json`
+- Runbook de importacao: `n8n/RUNBOOK_IMPORTACAO_WORKFLOW_01.md`
 - Fixture lead novo completo: `n8n/fixtures/lead_novo_completo.json`
 - Fixture lead novo incompleto: `n8n/fixtures/lead_novo_incompleto.json`
 - Fixture lead existente: `n8n/fixtures/lead_existente.json`
@@ -35,3 +36,9 @@
 - Gmail limitado a rascunho interno.
 - Aprovacao sempre inicia como `Pendente`.
 - `Envio externo = Nao` deve aparecer no retorno e nos logs.
+
+## Status atual
+
+- Testes manuais assistidos registrados em `n8n/logs/`.
+- Homologacao no n8n real ainda pendente de credenciais e variaveis de ambiente.
+- Ativacao em producao bloqueada ate aprovacao humana registrada.
