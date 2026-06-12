@@ -9,7 +9,7 @@ Foram criados e preenchidos documentos Google Docs para validar a escrita no Goo
 
 A pasta raiz `Nexa Malls - Sistema Operacional` foi criada no Meu Drive por operacao assistida no navegador e confirmada pelo conector Google Drive.
 
-Em nova tentativa assistida, foi criada parte da primeira camada da arvore oficial: `00_Admin`, `01_CRM_Lojistas`, `02_Projetos`, `03_Banco_de_Terrenos` e `04_Propostas_Comerciais`. A criacao de `05_Reunioes`, `06_Relatorios`, `07_Automacoes_n8n` e `08_NEXA_OS` ficou pendente por instabilidade do controle de janela no Google Drive.
+Em nova tentativa assistida, foi criada a primeira camada completa da arvore oficial: `00_Admin`, `01_CRM_Lojistas`, `02_Projetos`, `03_Banco_de_Terrenos`, `04_Propostas_Comerciais`, `05_Reunioes`, `06_Relatorios`, `07_Automacoes_n8n` e `08_NEXA_OS`.
 
 ## 2. Diagnostico
 
@@ -38,7 +38,7 @@ Criar a arvore de subpastas dentro da pasta raiz e mover este documento para `08
 | Acao | Responsavel | Prazo | Indicador |
 |-------|------------|--------|------------|
 | Criar pasta raiz no Drive | Lara | Hoje | Concluido |
-| Criar pasta `08_NEXA_OS` | Lara | Hoje | Pendente |
+| Criar pasta `08_NEXA_OS` | Lara | Hoje | Concluido |
 | Mover documento criado | Lara / Marco | D+1 | Documento arquivado |
 | Criar templates oficiais | Lara / Marco | D+2 | Templates publicados |
 
@@ -48,7 +48,7 @@ Criar a arvore de subpastas dentro da pasta raiz e mover este documento para `08
 |---|---|---|
 | Nexa Malls - Sistema Operacional | `10DAHpLWpY8hdv9q_Nn3AjA7PqPBYA8yg` | https://drive.google.com/drive/folders/10DAHpLWpY8hdv9q_Nn3AjA7PqPBYA8yg |
 
-## Primeira camada criada parcialmente
+## Primeira camada criada
 
 | Pasta | ID | Link |
 |---|---|---|
@@ -57,13 +57,10 @@ Criar a arvore de subpastas dentro da pasta raiz e mover este documento para `08
 | 02_Projetos | `1pw3Bz6Gq9dAf1JiubnKUg42SYn7GCvOQ` | https://drive.google.com/drive/folders/1pw3Bz6Gq9dAf1JiubnKUg42SYn7GCvOQ |
 | 03_Banco_de_Terrenos | `1_V_ZN0cNreMiiuJh_n6bpakrquDcEJaW` | https://drive.google.com/drive/folders/1_V_ZN0cNreMiiuJh_n6bpakrquDcEJaW |
 | 04_Propostas_Comerciais | `1ZtDzsyBUginHZJ4qtqVGRL2HREQbKMrM` | https://drive.google.com/drive/folders/1ZtDzsyBUginHZJ4qtqVGRL2HREQbKMrM |
-
-Pendentes na primeira camada:
-
-- `05_Reunioes`
-- `06_Relatorios`
-- `07_Automacoes_n8n`
-- `08_NEXA_OS`
+| 05_Reunioes | `1qOCrAis3yWJfck9KTNva8I6e2Lqj_bBh` | https://drive.google.com/drive/folders/1qOCrAis3yWJfck9KTNva8I6e2Lqj_bBh |
+| 06_Relatorios | `1u3R4aNdTNf9a-9oIAAdgqX2jEdNJ_ykf` | https://drive.google.com/drive/folders/1u3R4aNdTNf9a-9oIAAdgqX2jEdNJ_ykf |
+| 07_Automacoes_n8n | `1YRBRtGVBhVyRZWANoV8zbBYtJazBrwQP` | https://drive.google.com/drive/folders/1YRBRtGVBhVyRZWANoV8zbBYtJazBrwQP |
+| 08_NEXA_OS | `1wOZv0XpE6BRlfYKUrpQjUEnGqX9NiYMe` | https://drive.google.com/drive/folders/1wOZv0XpE6BRlfYKUrpQjUEnGqX9NiYMe |
 
 ## Documento mestre
 

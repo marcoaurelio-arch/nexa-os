@@ -18,7 +18,7 @@
 ## Google Drive
 
 - [x] Pasta raiz criada.
-- [x] Primeira camada do Drive parcialmente criada: `00_Admin` a `04_Propostas_Comerciais`.
+- [x] Primeira camada do Drive criada: `00_Admin` a `08_NEXA_OS`.
 - [ ] Arvore de subpastas criada.
 - [x] Templates criados em Google Docs.
 - [x] Politica de aprovacao publicada em Google Docs.
