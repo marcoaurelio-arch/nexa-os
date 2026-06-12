@@ -41,17 +41,25 @@
 - [x] Workflow 01 testado manualmente com lead existente.
 - [ ] Workflow 01 importado no n8n real com `active = false`.
 - [ ] Workflow 01 homologado no n8n real com as 3 fixtures.
-- [ ] Workflow 02 testado com follow-up hoje.
-- [ ] Workflow 02 testado com follow-up vencido.
-- [ ] Workflow 03 gera pauta semanal.
 - [x] Log do teste manual do Workflow 01 registrado.
 - [x] Log complementar do Workflow 01 registrado.
 - [x] `Envio externo = Nao` validado no teste manual do Workflow 01.
+- [x] Workflow 02 scaffold importavel criado.
+- [x] Fixtures do Workflow 02 criadas.
+- [x] Runbook de importacao e homologacao do Workflow 02 criado.
+- [x] Workflow 02 testado manualmente com follow-up hoje.
+- [x] Workflow 02 testado manualmente com follow-up vencido.
+- [ ] Workflow 02 importado no n8n real com `active = false`.
+- [ ] Workflow 02 homologado no n8n real com follow-up hoje/vencido.
+- [ ] Workflow 03 gera pauta semanal.
+- [x] Log do teste manual do Workflow 02 registrado.
+- [ ] Logs registram sucesso e erro no n8n real.
+- [ ] `Envio externo = Nao` em todos os workflows da Fase 1.
 
 ## Governanca
 
 - [ ] Nenhuma proposta enviada sem aprovacao humana.
-- [x] Nenhuma mensagem externa enviada no teste manual do Workflow 01.
+- [x] Nenhuma mensagem externa enviada nos testes manuais dos Workflows 01 e 02.
 - [ ] Toda tarefa tem responsavel, prazo, status, prioridade e criterio de conclusao.
 - [x] Lead de teste tem origem, segmento, responsavel, proximo follow-up, ultimo resumo, proxima acao e aprovacao pendente.
 - [ ] Toda reuniao encerrada tem decisoes, riscos, proximos passos e tarefas.

@@ -1,0 +1,244 @@
+{
+  "name": "02_FOLLOWUP_AUTOMATICO_CRM",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "cron-08h",
+      "name": "Cron diario 08h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-900, 0],
+      "notes": "Rodar em dias uteis as 08:00. Manter workflow desativado ate homologacao."
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date().toISOString().slice(0, 10);\nreturn [{ json: { workflow: '02_FOLLOWUP_AUTOMATICO_CRM', today, envio_externo: 'Nao' } }];"
+      },
+      "id": "setup-context",
+      "name": "Preparar contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-680, 0]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": "={{ $env.NOTION_CRM_DATA_SOURCE_ID || '0bb61aec-0fb8-414a-87c9-703c07a93e52' }}",
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Proximo follow-up|date",
+              "condition": "on_or_before",
+              "date": "={{ $json.today }}"
+            }
+          ]
+        }
+      },
+      "id": "notion-get-due-leads",
+      "name": "Buscar leads com follow-up devido",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [-440, 0],
+      "credentials": {
+        "notionApi": {
+          "id": "__CONFIGURAR__",
+          "name": "Notion Nexa OS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = $('Preparar contexto').first().json.today;\nconst rows = $input.all().map(i => i.json);\nreturn rows.map(row => {\n  const status = row['Status comercial'] || row.status_comercial || '';\n  const temp = row['Temperatura'] || row.temperatura || 'Morno';\n  const leadName = row['Nome do lead'] || row.name || row.title || 'Lead sem nome';\n  const due = row['Proximo follow-up'] || row.proximo_followup || '';\n  const ignored = ['Ganho', 'Perdido'].includes(status);\n  const priority = due < today || temp === 'Quente' || temp === 'Estrategico' ? 'Alta' : 'Media';\n  return { json: { ...row, workflow: '02_FOLLOWUP_AUTOMATICO_CRM', today, lead_name: leadName, status_comercial: status, temperatura: temp, due_date: due, ignored, priority, aprovacao_para_envio: 'Pendente', envio_externo: 'Nao' } };\n});"
+      },
+      "id": "classify-due-leads",
+      "name": "Filtrar e classificar leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-200, 0],
+      "notes": "Ignora Ganho/Perdido e define prioridade."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "not-ignored",
+              "leftValue": "={{ $json.ignored }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-eligible",
+      "name": "Lead elegivel?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [40, 0]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "databaseId": "={{ $env.NOTION_TASKS_DATA_SOURCE_ID || 'f28eeb36-0aa0-476d-a70b-6a0d011b25f8' }}",
+        "title": "={{ 'Aprovar follow-up - ' + $json.lead_name }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Modulo|select",
+              "selectValue": "CRM"
+            },
+            {
+              "key": "Responsavel|rich_text",
+              "textContent": "={{ $json.Responsavel || $json.responsavel || 'Marco Aurelio' }}"
+            },
+            {
+              "key": "Prazo|date",
+              "date": "={{ $json.today }}"
+            },
+            {
+              "key": "Status operacional|select",
+              "selectValue": "Aguardando aprovacao"
+            },
+            {
+              "key": "Prioridade|select",
+              "selectValue": "={{ $json.priority }}"
+            },
+            {
+              "key": "Descricao|rich_text",
+              "textContent": "={{ 'Follow-up devido para ' + $json.lead_name + '. Aprovacao para envio = Pendente. Envio externo = Nao.' }}"
+            },
+            {
+              "key": "Criterio de conclusao|rich_text",
+              "textContent": "Rascunho revisado por humano, contato realizado manualmente ou proximo follow-up definido."
+            }
+          ]
+        }
+      },
+      "id": "create-approval-task",
+      "name": "Criar tarefa de aprovacao",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [300, -120],
+      "credentials": {
+        "notionApi": {
+          "id": "__CONFIGURAR__",
+          "name": "Notion Nexa OS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ '[NEXA OS] Aprovar follow-up - ' + $json.lead_name }}",
+        "message": "={{ 'Follow-up devido.\\nLead: ' + $json.lead_name + '\\nStatus: ' + $json.status_comercial + '\\nTemperatura: ' + $json.temperatura + '\\nAprovacao para envio: Pendente\\nEnvio externo: Nao' }}",
+        "toList": "={{ $env.GMAIL_INTERNAL_NOTIFY_TO || 'marcoaurelio@planejarimoveis.com.br' }}"
+      },
+      "id": "gmail-internal-draft",
+      "name": "Criar rascunho interno",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [540, -120],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "__CONFIGURAR__",
+          "name": "Gmail Nexa OS"
+        }
+      },
+      "notes": "Rascunho interno apenas. Nao envia mensagem externa."
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { workflow: '02_FOLLOWUP_AUTOMATICO_CRM', lead: $json.lead_name, status: 'tarefa_criada', envio_externo: 'Nao', aprovacao_para_envio: 'Pendente', logged_at: new Date().toISOString() } }];"
+      },
+      "id": "build-log",
+      "name": "Montar log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, -120]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { workflow: '02_FOLLOWUP_AUTOMATICO_CRM', lead: $json.lead_name, status: 'ignorado', motivo: $json.status_comercial, envio_externo: 'Nao', logged_at: new Date().toISOString() } }];"
+      },
+      "id": "ignored-log",
+      "name": "Log lead ignorado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 120]
+    }
+  ],
+  "connections": {
+    "Cron diario 08h": {
+      "main": [[{"node": "Preparar contexto", "type": "main", "index": 0}]]
+    },
+    "Preparar contexto": {
+      "main": [[{"node": "Buscar leads com follow-up devido", "type": "main", "index": 0}]]
+    },
+    "Buscar leads com follow-up devido": {
+      "main": [[{"node": "Filtrar e classificar leads", "type": "main", "index": 0}]]
+    },
+    "Filtrar e classificar leads": {
+      "main": [[{"node": "Lead elegivel?", "type": "main", "index": 0}]]
+    },
+    "Lead elegivel?": {
+      "main": [
+        [{"node": "Criar tarefa de aprovacao", "type": "main", "index": 0}],
+        [{"node": "Log lead ignorado", "type": "main", "index": 0}]
+      ]
+    },
+    "Criar tarefa de aprovacao": {
+      "main": [[{"node": "Criar rascunho interno", "type": "main", "index": 0}]]
+    },
+    "Criar rascunho interno": {
+      "main": [[{"node": "Montar log", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "versionId": "fase-1-scaffold",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "nexa-os-local-blueprint"
+  },
+  "tags": [
+    {
+      "name": "NEXA OS"
+    },
+    {
+      "name": "Fase 1"
+    },
+    {
+      "name": "Sem envio externo"
+    }
+  ]
+}

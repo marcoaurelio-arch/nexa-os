@@ -52,6 +52,9 @@ O NEXA OS pode preparar, organizar, classificar, resumir e sugerir. Nenhuma mens
 - `n8n/workflows/*.md`: especificacoes prontas para montagem/importacao no n8n.
 - `n8n/RUNBOOK_IMPORTACAO_WORKFLOW_01.md`: roteiro de importacao, homologacao e ativacao controlada do Workflow 01.
 - `n8n/logs/TESTE_WORKFLOW_01_COMPLEMENTAR_2026-06-10.md`: evidencias dos testes manuais de lead incompleto e lead existente.
+- `n8n/workflows/02_FOLLOWUP_AUTOMATICO_CRM.workflow.json`: scaffold importavel do Workflow 02.
+- `n8n/RUNBOOK_IMPORTACAO_WORKFLOW_02.md`: runbook de importacao e homologacao do Workflow 02.
+- `n8n/logs/TESTE_WORKFLOW_02_2026-06-12.md`: evidencias dos testes manuais de follow-up hoje e vencido.
 - `gmail/RASCUNHOS_NOTIFICACAO.md`: rascunhos internos.
 - `calendar/ROTINA_OPERACIONAL.md`: agenda operacional recomendada.
 - `calendar/EVENTOS_CRIADOS_GOOGLE_CALENDAR.md`: eventos recorrentes ja criados.

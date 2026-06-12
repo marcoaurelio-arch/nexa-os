@@ -1,0 +1,18 @@
+{
+  "cenario": "followup_hoje",
+  "lead_nome": "TESTE - Follow-up Hoje - NEXA OS",
+  "telefone": "+55 34 99999-0201",
+  "email": "teste.followup.hoje@nexa.local",
+  "origem": "WhatsApp",
+  "segmento": "Servicos",
+  "empreendimento_interesse": "Piazza Nicomedes",
+  "status_comercial": "Material enviado",
+  "temperatura": "Quente",
+  "proximo_followup": "2026-06-12",
+  "responsavel": "Marco Aurelio",
+  "ultimo_resumo": "Lead recebeu material comercial e deve receber follow-up hoje.",
+  "proxima_acao": "Aprovar rascunho de follow-up e agendar conversa comercial.",
+  "consentimento_opt_in": true,
+  "envio_externo": "Nao",
+  "aprovacao_para_envio": "Pendente"
+}
