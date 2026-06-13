@@ -144,6 +144,25 @@ Validacao local:
 - Credenciais ficam como placeholder.
 - Todos os caminhos mantem `Envio externo = Nao`.
 
+## n8n - homologacao tecnica local 2026-06-13
+
+Comando executado:
+
+```bash
+node scripts/homologate-n8n-workflows.mjs
+```
+
+Resultado:
+
+- Status: `passed_with_real_n8n_pending`.
+- Checks aprovados: 58.
+- Checks reprovados: 0.
+- Relatorio: `n8n/logs/HOMOLOGACAO_TECNICA_WORKFLOWS_01_02_2026-06-13.md`.
+- `N8N_BASE_URL` e token/API do n8n nao estavam configurados no ambiente local.
+- Nenhum n8n local foi detectado na porta padrao `5678`.
+
+Decisao: Workflows 01 e 02 aprovados para importacao controlada no n8n real, mantendo `active = false`. Producao permanece bloqueada ate execucao das fixtures dentro do n8n real, validacao das credenciais, logs nativos e confirmacao de zero envio externo.
+
 ## Teste controlado Notion - prosseguimento 2026-06-10
 
 Registros ficticios criados para validar o fluxo assistido:

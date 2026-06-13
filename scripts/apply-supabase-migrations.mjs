@@ -4,20 +4,47 @@ import { join } from "node:path";
 const token = process.env.SUPABASE_ACCESS_TOKEN;
 const projectRef = process.env.SUPABASE_PROJECT_REF;
 const migrationsDir = join(process.cwd(), "supabase", "migrations");
+const fromArg = process.argv.find((arg) => arg.startsWith("--from="));
+const fromPrefix = fromArg?.split("=")[1] ?? process.env.SUPABASE_MIGRATION_FROM ?? null;
+const normalizedFromPrefix = fromPrefix ? fromPrefix.padStart(3, "0") : null;
+const dryRun = process.argv.includes("--dry-run");
 
-if (!token) {
+if (!token && !dryRun) {
   console.error("SUPABASE_ACCESS_TOKEN nao configurado.");
   process.exit(1);
 }
 
-if (!projectRef) {
+if (!projectRef && !dryRun) {
   console.error("SUPABASE_PROJECT_REF nao configurado.");
+  process.exit(1);
+}
+
+if (normalizedFromPrefix && !/^\d{3}$/.test(normalizedFromPrefix)) {
+  console.error("Prefixo --from invalido. Use formato numerico, por exemplo: --from=011.");
   process.exit(1);
 }
 
 const migrations = readdirSync(migrationsDir)
   .filter((file) => file.endsWith(".sql"))
+  .filter((file) => !normalizedFromPrefix || file.slice(0, 3) >= normalizedFromPrefix)
   .sort();
+
+if (migrations.length === 0) {
+  console.error("Nenhuma migration encontrada para aplicar.");
+  process.exit(1);
+}
+
+if (fromPrefix) {
+  console.log(`Aplicando migrations a partir de ${normalizedFromPrefix}...`);
+}
+
+if (dryRun) {
+  console.log("Dry run habilitado. Nenhuma migration sera enviada ao Supabase.");
+  for (const file of migrations) {
+    console.log(`DRY ${file}`);
+  }
+  process.exit(0);
+}
 
 for (const file of migrations) {
   const query = readFileSync(join(migrationsDir, file), "utf8");

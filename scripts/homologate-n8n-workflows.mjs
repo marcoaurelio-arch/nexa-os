@@ -2,7 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const today = "2026-06-12";
+const today = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+}).format(new Date());
 
 const workflowSpecs = [
   {
@@ -220,7 +225,7 @@ const reportLines = [
   "",
 ];
 
-const reportPath = path.join(root, "n8n/logs/HOMOLOGACAO_TECNICA_WORKFLOWS_01_02_2026-06-12.md");
+const reportPath = path.join(root, `n8n/logs/HOMOLOGACAO_TECNICA_WORKFLOWS_01_02_${today}.md`);
 fs.writeFileSync(reportPath, `${reportLines.join("\n")}\n`);
 
 console.log(JSON.stringify({

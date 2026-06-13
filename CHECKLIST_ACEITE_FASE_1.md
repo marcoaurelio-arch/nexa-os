@@ -59,6 +59,14 @@
 - [ ] Logs registram sucesso e erro no n8n real.
 - [ ] `Envio externo = Nao` em todos os workflows da Fase 1.
 
+## Supabase
+
+- [x] Migration `011_nexa_land_bank.sql` criada para Banco de Terrenos.
+- [x] Migration `012_land_bank_data_api_grants.sql` criada para grants explicitos da Data API sem liberar `anon`.
+- [ ] Migrations `011` e `012` aplicadas no projeto Supabase real.
+- [ ] Acesso Data API validado para `land_bank_areas`, `land_bank_pipeline`, `land_bank_scores`, `land_bank_proprietarios` e `land_bank_area_proprietarios`.
+- [ ] RLS validado com usuario autenticado vinculado a empreendimento.
+
 ## Governanca
 
 - [ ] Nenhuma proposta enviada sem aprovacao humana.
