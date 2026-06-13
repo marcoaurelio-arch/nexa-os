@@ -13,6 +13,7 @@ import {
   enterprises as seedEnterprises,
   fppRecords as seedFppRecords,
   legalCases as seedLegalCases,
+  landBankAreas as seedLandBankAreas,
   payables as seedPayables,
   receivables as seedReceivables,
   revenueAuditRecords as seedRevenueAuditRecords,
@@ -33,6 +34,7 @@ import {
   saveEnterprise,
   saveFppRecord,
   saveLegalCase,
+  saveLandBankArea,
   saveLocalAssetData,
   savePayable,
   saveReceivable,
@@ -43,7 +45,7 @@ import {
   saveUtilityReading,
   saveVacancyRecord
 } from "@/lib/assets-repository";
-import type { AssetAnalytics, CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { AssetAnalytics, CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LandBankArea, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 
 export function NexaWorkspace() {
   const authRequired = process.env.NEXT_PUBLIC_AUTH_REQUIRED === "true";
@@ -63,6 +65,7 @@ export function NexaWorkspace() {
   const [serviceOrderRows, setServiceOrderRows] = useState<ServiceOrder[]>(seedServiceOrders);
   const [documentRows, setDocumentRows] = useState<DocumentRecord[]>(seedDocumentRecords);
   const [legalRows, setLegalRows] = useState<LegalCase[]>(seedLegalCases);
+  const [landBankRows, setLandBankRows] = useState<LandBankArea[]>(seedLandBankAreas);
   const [analytics, setAnalytics] = useState<AssetAnalytics | null>(null);
   const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -97,6 +100,7 @@ export function NexaWorkspace() {
       setServiceOrderRows(mergeSeedRows(seedServiceOrders, localData.serviceOrders));
       setDocumentRows(mergeSeedRows(seedDocumentRecords, localData.documentRecords));
       setLegalRows(mergeSeedRows(seedLegalCases, localData.legalCases));
+      setLandBankRows(mergeSeedRows(seedLandBankAreas, localData.landBankAreas));
       setAnalytics(localData.analytics);
     }
     setStorageReady(true);
@@ -147,6 +151,7 @@ export function NexaWorkspace() {
         setServiceOrderRows(data.serviceOrders);
         setDocumentRows(data.documentRecords);
         setLegalRows(data.legalCases);
+        setLandBankRows(data.landBankAreas);
         setAnalytics(data.analytics);
         setDataSource("supabase");
         setSyncError(data.analytics?.error ?? null);
@@ -175,10 +180,11 @@ export function NexaWorkspace() {
         serviceOrders: serviceOrderRows,
         documentRecords: documentRows,
         legalCases: legalRows,
+        landBankAreas: landBankRows,
         analytics
       });
     }
-  }, [analytics, commercialLeadRows, contractRows, dataSource, delinquencyRows, documentRows, enterpriseRows, fppRows, legalRows, payableRows, receivableRows, revenueAuditRows, serviceOrderRows, storageReady, storeRows, tenantRows, utilityRows, vacancyRows]);
+  }, [analytics, commercialLeadRows, contractRows, dataSource, delinquencyRows, documentRows, enterpriseRows, fppRows, landBankRows, legalRows, payableRows, receivableRows, revenueAuditRows, serviceOrderRows, storageReady, storeRows, tenantRows, utilityRows, vacancyRows]);
 
   return (
     <AuthGate>
@@ -240,6 +246,7 @@ export function NexaWorkspace() {
                 setServiceOrderRows(seedServiceOrders);
                 setDocumentRows(seedDocumentRecords);
                 setLegalRows(seedLegalCases);
+                setLandBankRows(seedLandBankAreas);
                 setAnalytics(null);
                 setDataSource("mock");
                 setSyncError(null);
@@ -409,9 +416,21 @@ export function NexaWorkspace() {
               return exists ? current.map((item) => item.id === record.id ? saved : item) : [saved, ...current];
             });
           }}
+          landBankAreas={landBankRows}
+          onSaveLandBankArea={async (area) => {
+            const saved = await saveLandBankArea(area).catch((error: unknown) => {
+              setSyncError(error instanceof Error ? error.message : "Falha ao salvar area");
+              return area;
+            });
+
+            setLandBankRows((current) => {
+              const exists = current.some((item) => item.id === area.id);
+              return exists ? current.map((item) => item.id === area.id ? saved : item) : [saved, ...current];
+            });
+          }}
         />
-      )}
-    </AppShell>
+          )}
+        </AppShell>
       )}
     </AuthGate>
   );

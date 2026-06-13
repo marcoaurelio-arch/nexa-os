@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LandBankArea, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 import type { Database } from "./types";
 
 type EnterpriseRow = Database["public"]["Tables"]["empreendimentos"]["Row"];
@@ -16,6 +16,31 @@ type UtilityReadingRow = Database["public"]["Tables"]["consumos"]["Row"];
 type ServiceOrderRow = Database["public"]["Tables"]["ordens_servico"]["Row"];
 type DocumentRow = Database["public"]["Tables"]["documentos"]["Row"];
 type LegalCaseRow = Database["public"]["Tables"]["juridico"]["Row"];
+type LandBankAreaRow = {
+  id: string;
+  empreendimento_id: string;
+  codigo: string;
+  nome: string;
+  cidade: string;
+  estado: string;
+  bairro: string | null;
+  endereco_completo: string;
+  latitude: number;
+  longitude: number;
+  area_total_m2: number;
+  frente_m: number | null;
+  zoneamento: string | null;
+  status: string;
+  valor_pedido: number | null;
+  valor_m2: number | null;
+  valor_potencial: number | null;
+  viavel_bts: boolean;
+  viavel_strip_mall: boolean;
+  viavel_sale_leaseback: boolean;
+  prioridade: string;
+  origem: string | null;
+  observacoes: string | null;
+};
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -255,5 +280,38 @@ export function mapLegalCaseRow(row: LegalCaseRow): LegalCase {
     responsavel: row.responsavel ?? "",
     historico: row.historico ?? "",
     proximaAcao: row.proxima_acao ?? ""
+  };
+}
+
+export function mapLandBankAreaRow(row: LandBankAreaRow): LandBankArea {
+  return {
+    id: row.id,
+    empreendimentoId: row.empreendimento_id,
+    codigo: row.codigo,
+    nome: row.nome,
+    cidade: row.cidade,
+    estado: row.estado,
+    bairro: row.bairro ?? "",
+    enderecoCompleto: row.endereco_completo,
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    areaTotalM2: Number(row.area_total_m2),
+    frenteM: Number(row.frente_m ?? 0),
+    zoneamento: row.zoneamento ?? "",
+    status: row.status as LandBankArea["status"],
+    valorPedido: Number(row.valor_pedido ?? 0),
+    valorM2: Number(row.valor_m2 ?? 0),
+    valorPotencial: Number(row.valor_potencial ?? 0),
+    viavelBts: Boolean(row.viavel_bts),
+    viavelStripMall: Boolean(row.viavel_strip_mall),
+    viavelSaleLeaseback: Boolean(row.viavel_sale_leaseback),
+    prioridade: row.prioridade as LandBankArea["prioridade"],
+    origem: row.origem ?? "",
+    responsavel: "Desenvolvimento",
+    proximaAcao: "Atualizar pipeline da area",
+    dataProximaAcao: "",
+    score: 0,
+    classificacao: "sem score",
+    observacoes: row.observacoes ?? ""
   };
 }

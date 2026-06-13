@@ -7,6 +7,7 @@ import {
   mapDocumentRow,
   mapEnterpriseRow,
   mapFppRow,
+  mapLandBankAreaRow,
   mapLegalCaseRow,
   mapPayableRow,
   mapReceivableRow,
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
       serviceOrders: [],
       documentRecords: [],
       legalCases: [],
+      landBankAreas: [],
       analytics: emptyAnalytics()
     });
   }
@@ -69,7 +71,7 @@ export async function GET(request: Request) {
     return enterpriseIds ? query.in(column, enterpriseIds) : query;
   };
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult, legalResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult, legalResult, landBankResult] = await Promise.all([
     scope(client.from("empreendimentos").select("*").is("deleted_at", null), "id").order("nome", { ascending: true }),
     scope(client.from("lojas").select("*").is("deleted_at", null)).order("codigo", { ascending: true }),
     scope(client.from("lojistas").select("*").is("deleted_at", null)).order("nome_fantasia", { ascending: true }),
@@ -84,13 +86,18 @@ export async function GET(request: Request) {
     scope(client.from("consumos").select("*").is("deleted_at", null)).order("competencia", { ascending: false }),
     scope(client.from("ordens_servico").select("*").is("deleted_at", null)).order("prazo", { ascending: true }),
     scope(client.from("documentos").select("*").is("deleted_at", null)).order("vencimento", { ascending: true }),
-    scope(client.from("juridico").select("*").is("deleted_at", null)).order("prazo", { ascending: true })
+    scope(client.from("juridico").select("*").is("deleted_at", null)).order("prazo", { ascending: true }),
+    scope(client.from("land_bank_areas").select("*").is("deleted_at", null)).order("prioridade", { ascending: true })
   ]);
 
   const failed = [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult, legalResult].find((result) => result.error);
 
   if (failed?.error) {
     return NextResponse.json({ error: failed.error.message }, { status: 500 });
+  }
+
+  if (landBankResult.error && !isMissingRelationError(landBankResult.error)) {
+    return NextResponse.json({ error: landBankResult.error.message }, { status: 500 });
   }
 
   const scopedStoreIds = new Set((storeResult.data ?? []).map((store: { id: string }) => store.id));
@@ -115,8 +122,13 @@ export async function GET(request: Request) {
     serviceOrders: serviceOrderResult.data.map(mapServiceOrderRow),
     documentRecords: documentResult.data.map(mapDocumentRow),
     legalCases: legalResult.data.map(mapLegalCaseRow),
+    landBankAreas: (landBankResult.data ?? []).map(mapLandBankAreaRow),
     analytics
   });
+}
+
+function isMissingRelationError(error: { code?: string; message?: string }) {
+  return error.code === "42P01" || /does not exist/i.test(error.message ?? "");
 }
 
 async function fetchAnalytics({

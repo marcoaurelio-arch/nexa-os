@@ -24,6 +24,7 @@ Este pacote operacional implementa a Fase 1 do NEXA OS como secretaria virtual a
 | GitHub real | Issues criadas | Ver `github/ISSUES_CRIADAS_GITHUB.md` |
 | Execucao | Plano semanal criado | Ver `PLANO_EXECUCAO_SEMANAL_FASE_1.md` |
 | Notion real | Parcialmente implantado | Bases confirmadas, tarefas atualizadas e relatorio PMO criado |
+| n8n local | Homologacao tecnica aprovada | Workflows 01 e 02 com 58 checks aprovados e 0 reprovados; n8n real ainda depende de credenciais |
 
 ## Regra central
 
@@ -55,6 +56,8 @@ O NEXA OS pode preparar, organizar, classificar, resumir e sugerir. Nenhuma mens
 - `n8n/workflows/02_FOLLOWUP_AUTOMATICO_CRM.workflow.json`: scaffold importavel do Workflow 02.
 - `n8n/RUNBOOK_IMPORTACAO_WORKFLOW_02.md`: runbook de importacao e homologacao do Workflow 02.
 - `n8n/logs/TESTE_WORKFLOW_02_2026-06-12.md`: evidencias dos testes manuais de follow-up hoje e vencido.
+- `scripts/homologate-n8n-workflows.mjs`: homologacao tecnica local repetivel dos Workflows 01 e 02.
+- `n8n/logs/HOMOLOGACAO_TECNICA_WORKFLOWS_01_02_2026-06-12.md`: relatorio de homologacao tecnica local.
 - `gmail/RASCUNHOS_NOTIFICACAO.md`: rascunhos internos.
 - `calendar/ROTINA_OPERACIONAL.md`: agenda operacional recomendada.
 - `calendar/EVENTOS_CRIADOS_GOOGLE_CALENDAR.md`: eventos recorrentes ja criados.

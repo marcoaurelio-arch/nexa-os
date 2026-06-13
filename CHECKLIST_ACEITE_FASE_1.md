@@ -19,7 +19,7 @@
 
 - [x] Pasta raiz criada.
 - [x] Primeira camada do Drive criada: `00_Admin` a `08_NEXA_OS`.
-- [ ] Arvore de subpastas criada.
+- [x] Arvore de subpastas criada.
 - [x] Templates criados em Google Docs.
 - [x] Politica de aprovacao publicada em Google Docs.
 - [x] Planilhas `Mapa_Credenciais_n8n` e `LOG_Execucoes_Criticas` criadas.
@@ -54,6 +54,7 @@
 - [ ] Workflow 02 homologado no n8n real com follow-up hoje/vencido.
 - [ ] Workflow 03 gera pauta semanal.
 - [x] Log do teste manual do Workflow 02 registrado.
+- [x] Homologacao tecnica local dos Workflows 01 e 02 aprovada com 58 checks e 0 reprovados.
 - [ ] Logs registram sucesso e erro no n8n real.
 - [ ] `Envio externo = Nao` em todos os workflows da Fase 1.
 
