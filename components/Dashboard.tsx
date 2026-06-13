@@ -27,7 +27,7 @@ import {
 import { buildContractAlerts } from "@/lib/contracts";
 import { contracts, enterprises, serviceOrders, tenants } from "@/lib/data";
 import { brl, chartRows, filterByEnterprise, getDashboardMetrics, numberPt, percent } from "@/lib/metrics";
-import type { AssetAnalytics, CentralAlertView, Contract, Enterprise, Payable, Receivable, ServiceOrder, Store, Tenant } from "@/lib/types";
+import type { AssetAnalytics, CentralAlertView, CommercialLead, Contract, Enterprise, Payable, Receivable, ServiceOrder, Store, Tenant } from "@/lib/types";
 
 type MetricCardProps = {
   label: string;
@@ -72,6 +72,7 @@ export function Dashboard({
   receivableRows,
   payableRows,
   serviceOrderRows = serviceOrders,
+  commercialLeadRows,
   analytics
 }: {
   enterpriseRows?: Enterprise[];
@@ -81,10 +82,11 @@ export function Dashboard({
   receivableRows?: Receivable[];
   payableRows?: Payable[];
   serviceOrderRows?: ServiceOrder[];
+  commercialLeadRows?: CommercialLead[];
   analytics?: AssetAnalytics | null;
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
-  const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows, receivableRows, payableRows, analytics), [analytics, enterpriseId, enterpriseRows, payableRows, receivableRows, storeRows]);
+  const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows, receivableRows, payableRows, analytics, commercialLeadRows), [analytics, commercialLeadRows, enterpriseId, enterpriseRows, payableRows, receivableRows, storeRows]);
   const filteredOrders = filterByEnterprise(serviceOrderRows, enterpriseId);
   const filteredAlerts = filterByEnterprise(buildContractAlerts(contractRows, storeRows, tenantRows), enterpriseId);
   const selectedEnterpriseNames = new Set(

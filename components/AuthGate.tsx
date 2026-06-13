@@ -214,7 +214,7 @@ export function AuthGate({ children }: AuthGateProps) {
       email,
       options: {
         shouldCreateUser: false,
-        emailRedirectTo: window.location.origin
+        emailRedirectTo: getAuthRedirectUrl("/auth/callback")
       }
     });
 
@@ -234,7 +234,7 @@ export function AuthGate({ children }: AuthGateProps) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: getAuthRedirectUrl()
+        redirectTo: getAuthRedirectUrl("/auth/callback")
       }
     });
 
@@ -259,7 +259,7 @@ export function AuthGate({ children }: AuthGateProps) {
     setMessage(null);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: getAuthRedirectUrl()
+      redirectTo: getAuthRedirectUrl("/auth/callback?type=recovery")
     });
 
     setSubmitting(false);
@@ -315,6 +315,7 @@ export function AuthGate({ children }: AuthGateProps) {
     await supabase?.auth.signOut();
     setUser(null);
     setStatus("login");
+    window.location.assign("/login");
   }
 
   if (!authRequired && user) {
@@ -489,12 +490,12 @@ export function AuthGate({ children }: AuthGateProps) {
   );
 }
 
-function getAuthRedirectUrl() {
+function getAuthRedirectUrl(path = "/auth/callback") {
   if (typeof window === "undefined") {
-    return process.env.NEXT_PUBLIC_APP_URL ?? "https://app.nexamalls.com.br";
+    return `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.nexamalls.com.br"}${path}`;
   }
 
-  return window.location.origin;
+  return `${window.location.origin}${path}`;
 }
 
 function parseOAuthProviders(value?: string): Provider[] {

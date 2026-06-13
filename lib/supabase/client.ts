@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "./types";
 
 export function hasSupabaseEnv() {
@@ -13,13 +13,12 @@ export function createBrowserSupabaseClient() {
     return null;
   }
 
-  return createClient<Database>(url, anonKey, {
+  return createBrowserClient<Database>(url, anonKey, {
     auth: {
       autoRefreshToken: true,
       detectSessionInUrl: true,
       flowType: "pkce",
-      persistSession: true,
-      storageKey: "nexa-os.auth"
+      persistSession: true
     }
   });
 }

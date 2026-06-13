@@ -1,5 +1,5 @@
 import { enterprises, revenues, stores } from "./data";
-import type { AssetAnalytics, Enterprise, Payable, Receivable, Store } from "./types";
+import type { AssetAnalytics, CommercialLead, Enterprise, Payable, Receivable, Store } from "./types";
 
 export function brl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -33,7 +33,8 @@ export function getDashboardMetrics(
   storeRows: Store[] = stores,
   receivableRows?: Receivable[],
   payableRows?: Payable[],
-  analytics?: AssetAnalytics | null
+  analytics?: AssetAnalytics | null,
+  commercialLeadRows?: CommercialLead[]
 ) {
   const selectedEnterprises =
     enterpriseId === "all"
@@ -44,6 +45,7 @@ export function getDashboardMetrics(
   const selectedRevenues = revenues.filter((revenue) => selectedEnterpriseIds.has(revenue.empreendimentoId));
   const selectedReceivables = receivableRows?.filter((receivable) => selectedEnterpriseIds.has(receivable.empreendimentoId) && receivable.status !== "cancelado") ?? [];
   const selectedPayables = payableRows?.filter((payable) => selectedEnterpriseIds.has(payable.empreendimentoId) && payable.status !== "cancelado") ?? [];
+  const selectedCommercialLeads = commercialLeadRows?.filter((lead) => selectedEnterpriseIds.has(lead.empreendimentoId)) ?? [];
 
   const totalAbl = selectedEnterprises.reduce((sum, item) => sum + item.abl, 0);
   const occupiedAbl = selectedStores
@@ -111,8 +113,8 @@ export function getDashboardMetrics(
     financialVacancyRate: potentialRevenue > 0 ? lostRevenue / potentialRevenue : 0,
     lojasDisponiveis: selectedStores.filter((store) => store.status === "disponivel").length,
     lojasNegociacao: selectedStores.filter((store) => store.status === "negociacao").length,
-    propostasEnviadas: 14,
-    contratosElaboracao: 5,
+    propostasEnviadas: selectedCommercialLeads.filter((lead) => lead.etapa === "proposta").length,
+    contratosElaboracao: selectedCommercialLeads.filter((lead) => lead.etapa === "contrato").length,
     receitaTotal: aluguel + condominio + fundo + fpp,
     saldoOperacional: aluguel + condominio + fundo + fpp - revenue.pagar,
     ...revenue,

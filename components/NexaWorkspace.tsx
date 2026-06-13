@@ -47,7 +47,17 @@ import {
 } from "@/lib/assets-repository";
 import type { AssetAnalytics, CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LandBankArea, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 
-export function NexaWorkspace() {
+type NexaWorkspaceProps = {
+  initialAnalytics?: AssetAnalytics | null;
+  initialDataSource?: "mock" | "supabase";
+  initialSyncError?: string | null;
+};
+
+export function NexaWorkspace({
+  initialAnalytics = null,
+  initialDataSource = "mock",
+  initialSyncError = null
+}: NexaWorkspaceProps) {
   const authRequired = process.env.NEXT_PUBLIC_AUTH_REQUIRED === "true";
   const [activeModule, setActiveModule] = useState("Dashboard");
   const [enterpriseRows, setEnterpriseRows] = useState<Enterprise[]>(seedEnterprises);
@@ -66,9 +76,9 @@ export function NexaWorkspace() {
   const [documentRows, setDocumentRows] = useState<DocumentRecord[]>(seedDocumentRecords);
   const [legalRows, setLegalRows] = useState<LegalCase[]>(seedLegalCases);
   const [landBankRows, setLandBankRows] = useState<LandBankArea[]>(seedLandBankAreas);
-  const [analytics, setAnalytics] = useState<AssetAnalytics | null>(null);
-  const [dataSource, setDataSource] = useState<"mock" | "supabase">("mock");
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<AssetAnalytics | null>(initialAnalytics);
+  const [dataSource, setDataSource] = useState<"mock" | "supabase">(initialDataSource);
+  const [syncError, setSyncError] = useState<string | null>(initialSyncError);
   const [storageReady, setStorageReady] = useState(false);
 
   useEffect(() => {
@@ -84,7 +94,7 @@ export function NexaWorkspace() {
     let mounted = true;
     const localData = loadLocalAssetData();
 
-    if (localData) {
+    if (localData && initialDataSource !== "supabase") {
       setEnterpriseRows(mergeSeedRows(seedEnterprises, localData.enterprises));
       setStoreRows(mergeSeedRows(seedStores, localData.stores));
       setTenantRows(mergeSeedRows(seedTenants, localData.tenants));
@@ -112,7 +122,7 @@ export function NexaWorkspace() {
     return () => {
       mounted = false;
     };
-  }, [authRequired]);
+  }, [authRequired, initialDataSource]);
 
   useEffect(() => {
     if (!authRequired) return;
@@ -206,6 +216,7 @@ export function NexaWorkspace() {
               receivableRows={receivableRows}
               payableRows={payableRows}
               serviceOrderRows={serviceOrderRows}
+              commercialLeadRows={commercialLeadRows}
               analytics={analytics}
             />
           ) : (
