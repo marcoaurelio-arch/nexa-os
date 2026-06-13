@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Building2, Copy, Droplets, FileText, Gavel, Mail, Phone, Plus, Printer, Search, Users, Wrench, Zap } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { createContext, FormEvent, useContext, useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -90,6 +90,8 @@ type ModulePageProps = {
   onSaveLegalCase: (record: LegalCase) => void | Promise<void>;
   onSaveLandBankArea: (area: LandBankArea) => void | Promise<void>;
 };
+
+const ModuleSearchContext = createContext("");
 
 const statusLabel: Record<string, string> = {
   ocupada: "Ocupada",
@@ -932,36 +934,43 @@ function Shell({
   const [searchTerm, setSearchTerm] = useState("");
 
   return (
-    <div>
-      <header className="border-b border-border bg-background/95 px-4 py-4 lg:px-7">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-xl font-bold uppercase leading-7 text-primary">{title}</h1>
-            <p className="text-sm text-muted-foreground">{description}</p>
+    <ModuleSearchContext.Provider value={searchTerm}>
+      <div>
+        <header className="border-b border-border bg-background/95 px-4 py-4 lg:px-7">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h1 className="text-xl font-bold uppercase leading-7 text-primary">{title}</h1>
+              <p className="text-sm text-muted-foreground">{description}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className="control inline-flex items-center gap-2" type="button" onClick={() => setSearchOpen((current) => !current)} aria-expanded={searchOpen}>
+                <Search className="h-4 w-4" />
+                Buscar
+              </button>
+              {action}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button className="control inline-flex items-center gap-2" type="button" onClick={() => setSearchOpen((current) => !current)} aria-expanded={searchOpen}>
-              <Search className="h-4 w-4" />
-              Buscar
-            </button>
-            {action}
-          </div>
-        </div>
-        {searchOpen ? (
-          <div className="mt-3">
-            <label className="sr-only" htmlFor={`${title}-module-search`}>Buscar no modulo</label>
-            <input
-              id={`${title}-module-search`}
-              className="control w-full max-w-xl"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder={`Buscar em ${title}`}
-            />
-          </div>
-        ) : null}
-      </header>
-      <div className="space-y-5 px-4 py-5 lg:px-7">{children}</div>
-    </div>
+          {searchOpen ? (
+            <div className="mt-3 flex max-w-xl gap-2">
+              <label className="sr-only" htmlFor={`${title}-module-search`}>Buscar no modulo</label>
+              <input
+                id={`${title}-module-search`}
+                className="control w-full"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder={`Buscar em ${title}`}
+              />
+              {searchTerm ? (
+                <button className="control" type="button" onClick={() => setSearchTerm("")}>
+                  Limpar
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </header>
+        <div className="space-y-5 px-4 py-5 lg:px-7">{children}</div>
+      </div>
+    </ModuleSearchContext.Provider>
   );
 }
 
@@ -4408,6 +4417,11 @@ function DataTable({
   rows: string[][];
   onAction?: (rowIndex: number, cellIndex: number) => void;
 }) {
+  const searchTerm = useContext(ModuleSearchContext).trim().toLowerCase();
+  const visibleRows = rows
+    .map((row, rowIndex) => ({ row, rowIndex }))
+    .filter(({ row }) => !searchTerm || row.some((cell) => cell.toLowerCase().includes(searchTerm)));
+
   return (
     <div className="panel overflow-hidden">
       <div className="overflow-x-auto">
@@ -4420,8 +4434,8 @@ function DataTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, rowIndex) => (
-              <tr key={row.join("-")} className="border-t border-border">
+            {visibleRows.map(({ row, rowIndex }) => (
+              <tr key={`${rowIndex}-${row.join("-")}`} className="border-t border-border">
                 {row.map((cell, cellIndex) => (
                   <td key={`${cell}-${cellIndex}`} className="px-4 py-3 font-medium">
                     {onAction && cellIndex === row.length - 1 ? (
@@ -4439,6 +4453,13 @@ function DataTable({
                 ))}
               </tr>
             ))}
+            {visibleRows.length === 0 ? (
+              <tr className="border-t border-border">
+                <td className="px-4 py-6 text-sm text-muted-foreground" colSpan={columns.length}>
+                  Nenhum registro encontrado.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
