@@ -56,6 +56,14 @@ type LandBankScoreRow = {
   score_total: number;
   classificacao: string;
 };
+type LandBankOwnerRow = {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  tipo: string;
+};
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -298,7 +306,7 @@ export function mapLegalCaseRow(row: LegalCaseRow): LegalCase {
   };
 }
 
-export function mapLandBankAreaRow(row: LandBankAreaRow, pipeline?: LandBankPipelineRow | null, scoreRow?: LandBankScoreRow | null): LandBankArea {
+export function mapLandBankAreaRow(row: LandBankAreaRow, pipeline?: LandBankPipelineRow | null, scoreRow?: LandBankScoreRow | null, owner?: LandBankOwnerRow | null): LandBankArea {
   const metadata = pipeline?.metadata ?? {};
   const responsavel = typeof metadata.responsavel === "string" ? metadata.responsavel : "Desenvolvimento";
   const metadataScore = typeof metadata.score === "number" ? metadata.score : Number(metadata.score ?? 0);
@@ -330,6 +338,11 @@ export function mapLandBankAreaRow(row: LandBankAreaRow, pipeline?: LandBankPipe
     prioridade: row.prioridade as LandBankArea["prioridade"],
     etapa: normalizeLandBankStage(pipeline?.etapa ?? fallbackLandBankStage(row.status)),
     origem: row.origem ?? "",
+    contatoNome: owner?.nome ?? "",
+    contatoTipo: normalizeLandBankContactType(owner?.tipo ?? "proprietario"),
+    contatoTelefone: owner?.telefone ?? "",
+    contatoWhatsapp: owner?.whatsapp ?? "",
+    contatoEmail: owner?.email ?? "",
     responsavel,
     proximaAcao: pipeline?.proxima_acao ?? "Atualizar pipeline da area",
     dataProximaAcao: pipeline?.data_proxima_acao ?? "",
@@ -337,6 +350,11 @@ export function mapLandBankAreaRow(row: LandBankAreaRow, pipeline?: LandBankPipe
     classificacao,
     observacoes: row.observacoes ?? ""
   };
+}
+
+function normalizeLandBankContactType(tipo: string): LandBankArea["contatoTipo"] {
+  const validTypes: LandBankArea["contatoTipo"][] = ["proprietario", "representante", "corretor", "empresa"];
+  return validTypes.includes(tipo as LandBankArea["contatoTipo"]) ? tipo as LandBankArea["contatoTipo"] : "proprietario";
 }
 
 function fallbackLandBankStage(status: string): LandBankArea["etapa"] {

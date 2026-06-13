@@ -100,7 +100,12 @@ export function resetLocalAssetData() {
 function normalizeStoredLandBankArea(area: LandBankArea): LandBankArea {
   return {
     ...area,
-    etapa: area.etapa ?? fallbackLandBankStage(area.status)
+    etapa: area.etapa ?? fallbackLandBankStage(area.status),
+    contatoNome: area.contatoNome ?? "",
+    contatoTipo: area.contatoTipo ?? "proprietario",
+    contatoTelefone: area.contatoTelefone ?? "",
+    contatoWhatsapp: area.contatoWhatsapp ?? "",
+    contatoEmail: area.contatoEmail ?? ""
   };
 }
 
@@ -132,7 +137,7 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult, legalResult, landBankResult, landPipelineResult, landScoreResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult, legalResult, landBankResult, landPipelineResult, landScoreResult, landOwnerResult, landOwnerLinkResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -221,7 +226,16 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
     client
       .from("land_bank_scores")
       .select("*")
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: false }),
+    client
+      .from("land_bank_proprietarios")
+      .select("*")
+      .is("deleted_at", null)
+      .order("nome", { ascending: true }),
+    client
+      .from("land_bank_area_proprietarios")
+      .select("*")
+      .order("principal", { ascending: false })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
@@ -242,9 +256,12 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
   if (landBankResult.error && !isMissingRelationError(landBankResult.error)) throw landBankResult.error;
   if (landPipelineResult.error && !isMissingRelationError(landPipelineResult.error)) throw landPipelineResult.error;
   if (landScoreResult.error && !isMissingRelationError(landScoreResult.error)) throw landScoreResult.error;
+  if (landOwnerResult.error && !isMissingRelationError(landOwnerResult.error)) throw landOwnerResult.error;
+  if (landOwnerLinkResult.error && !isMissingRelationError(landOwnerLinkResult.error)) throw landOwnerLinkResult.error;
 
   const landPipelineByArea = new Map<string, any>((landPipelineResult.data ?? []).map((row: { area_id: string }) => [row.area_id, row]));
   const landScoreByArea = latestLandScoresByArea(landScoreResult.data ?? []);
+  const landOwnerByArea = landOwnersByArea(landOwnerResult.data ?? [], landOwnerLinkResult.data ?? []);
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
@@ -262,7 +279,7 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
     serviceOrders: serviceOrderResult.data.map(mapServiceOrderRow),
     documentRecords: documentResult.data.map(mapDocumentRow),
     legalCases: legalResult.data.map(mapLegalCaseRow),
-    landBankAreas: (landBankResult.data ?? []).map((row: any) => mapLandBankAreaRow(row, landPipelineByArea.get(row.id), landScoreByArea.get(row.id))),
+    landBankAreas: (landBankResult.data ?? []).map((row: any) => mapLandBankAreaRow(row, landPipelineByArea.get(row.id), landScoreByArea.get(row.id), landOwnerByArea.get(row.id))),
     analytics: null
   };
 }
@@ -793,11 +810,44 @@ export async function saveLandBankArea(area: LandBankArea) {
     .single();
 
   if (pipelineResult.error && !isMissingRelationError(pipelineResult.error)) throw pipelineResult.error;
-  const mapped = mapLandBankAreaRow(data, pipelineResult.data ?? null);
+  const scoreValue = Math.max(0, Math.min(100, Math.round(area.score)));
+  const scoreResult = await client
+    .from("land_bank_scores")
+    .insert({
+      area_id: data.id,
+      empreendimento_id: area.empreendimentoId,
+      fluxo_score: scoreValue,
+      renda_score: scoreValue,
+      densidade_score: scoreValue,
+      concorrencia_score: scoreValue,
+      acesso_score: scoreValue,
+      visibilidade_score: scoreValue,
+      urbanistico_score: scoreValue,
+      score_total: scoreValue,
+      classificacao: normalizeLandBankScoreClassification(area.classificacao, scoreValue),
+      confidence_score: 70,
+      fontes: ["nexa-os"],
+      premissas: {
+        classificacao_operacional: area.classificacao,
+        score_operacional: area.score
+      },
+      calculado_por: "nexa-os"
+    })
+    .select()
+    .single();
+
+  if (scoreResult.error && !isMissingRelationError(scoreResult.error)) throw scoreResult.error;
+  const ownerData = await saveLandBankOwner(client, data.id, area);
+  const mapped = mapLandBankAreaRow(data, pipelineResult.data ?? null, scoreResult.data ?? null, ownerData);
 
   return {
     ...mapped,
     responsavel: area.responsavel,
+    contatoNome: area.contatoNome,
+    contatoTipo: area.contatoTipo,
+    contatoTelefone: area.contatoTelefone,
+    contatoWhatsapp: area.contatoWhatsapp,
+    contatoEmail: area.contatoEmail,
     proximaAcao: area.proximaAcao,
     dataProximaAcao: area.dataProximaAcao,
     score: area.score,
@@ -808,6 +858,113 @@ export async function saveLandBankArea(area: LandBankArea) {
 
 function isMissingRelationError(error: { code?: string; message?: string }) {
   return error.code === "42P01" || /does not exist/i.test(error.message ?? "");
+}
+
+function latestLandScoresByArea(rows: any[]) {
+  const scoresByArea = new Map<string, any>();
+
+  for (const row of rows) {
+    if (!scoresByArea.has(row.area_id)) {
+      scoresByArea.set(row.area_id, row);
+    }
+  }
+
+  return scoresByArea;
+}
+
+function landOwnersByArea(owners: any[], links: any[]) {
+  const ownersById = new Map<string, any>(owners.map((owner) => [owner.id, owner]));
+  const ownersByArea = new Map<string, any>();
+
+  for (const link of links) {
+    const owner = ownersById.get(link.proprietario_id);
+    if (owner && !ownersByArea.has(link.area_id)) {
+      ownersByArea.set(link.area_id, owner);
+    }
+  }
+
+  return ownersByArea;
+}
+
+async function saveLandBankOwner(client: any, areaId: string, area: LandBankArea) {
+  if (!area.contatoNome.trim()) {
+    return null;
+  }
+
+  const payload = {
+    empreendimento_id: area.empreendimentoId,
+    nome: area.contatoNome,
+    telefone: area.contatoTelefone || null,
+    whatsapp: area.contatoWhatsapp || null,
+    email: area.contatoEmail || null,
+    tipo: area.contatoTipo,
+    observacoes: `Contato principal da area ${area.codigo}`
+  };
+
+  const existingLink = await client
+    .from("land_bank_area_proprietarios")
+    .select("proprietario_id")
+    .eq("area_id", areaId)
+    .order("principal", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingLink.error) {
+    if (isMissingRelationError(existingLink.error)) return null;
+    throw existingLink.error;
+  }
+
+  if (existingLink.data?.proprietario_id) {
+    const ownerResult = await client
+      .from("land_bank_proprietarios")
+      .update(payload)
+      .eq("id", existingLink.data.proprietario_id)
+      .select()
+      .single();
+
+    if (ownerResult.error) {
+      if (isMissingRelationError(ownerResult.error)) return null;
+      throw ownerResult.error;
+    }
+
+    return ownerResult.data;
+  }
+
+  const ownerResult = await client
+    .from("land_bank_proprietarios")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (ownerResult.error) {
+    if (isMissingRelationError(ownerResult.error)) return null;
+    throw ownerResult.error;
+  }
+
+  const linkResult = await client
+    .from("land_bank_area_proprietarios")
+    .insert({
+      area_id: areaId,
+      proprietario_id: ownerResult.data.id,
+      empreendimento_id: area.empreendimentoId,
+      percentual_posse: 100,
+      papel: area.contatoTipo,
+      principal: true
+    });
+
+  if (linkResult.error && !isMissingRelationError(linkResult.error)) throw linkResult.error;
+
+  return ownerResult.data;
+}
+
+function normalizeLandBankScoreClassification(classificacao: string, score: number) {
+  const value = classificacao.toLowerCase().trim();
+  if (["excelente", "boa", "media", "baixa", "descartar"].includes(value)) return value;
+  if (score >= 85) return "excelente";
+  if (score >= 70) return "boa";
+  if (score >= 50) return "media";
+  if (score >= 35) return "baixa";
+  return "descartar";
 }
 
 function isUuid(value: string) {

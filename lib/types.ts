@@ -245,6 +245,7 @@ export type LegalCase = {
 
 export type LandBankAreaStatus = "disponivel" | "em_negociacao" | "contrato_assinado" | "descartada";
 export type LandBankPriority = "alta" | "media" | "baixa";
+export type LandBankContactType = "proprietario" | "representante" | "corretor" | "empresa";
 export type LandBankPipelineStage =
   | "lead"
   | "contato_realizado"
@@ -280,6 +281,11 @@ export type LandBankArea = {
   prioridade: LandBankPriority;
   etapa: LandBankPipelineStage;
   origem: string;
+  contatoNome: string;
+  contatoTipo: LandBankContactType;
+  contatoTelefone: string;
+  contatoWhatsapp: string;
+  contatoEmail: string;
   responsavel: string;
   proximaAcao: string;
   dataProximaAcao: string;
