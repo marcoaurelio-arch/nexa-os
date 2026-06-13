@@ -93,6 +93,25 @@ A estrutura completa definida em `BLUEPRINT_DRIVE_N8N_FASE_1.md` foi criada dent
 | NEXA OS - Templates Operacionais Fase 1 | Google Docs | `08_NEXA_OS/02_Playbooks` |
 | NEXA OS - Plano de Execucao Semanal Fase 1 | Google Docs | `08_NEXA_OS/03_Rotinas` |
 
+## Validacao de permissoes
+
+Validacao realizada em 2026-06-13 pelo conector Google Drive.
+
+Escopo validado:
+
+- Pasta raiz `Nexa Malls - Sistema Operacional`.
+- Primeira camada `00_Admin` a `08_NEXA_OS`.
+- Documentos sensiveis: `Politica_Aprovacao_Mensagens`, `Mapa_Credenciais_n8n`, `LOG_Execucoes_Criticas`.
+- Templates e documentos operacionais publicados.
+
+Resultado:
+
+- `shared = false` em todos os itens verificados.
+- Nenhuma permissao publica do tipo `anyone`.
+- Nenhuma permissao ampla por dominio.
+- Permissao explicita encontrada apenas para o proprietario `marcoaurelio@planejarimoveis.com.br`.
+- Documentos mantidos como Google Docs/Sheets nativos nos destinos oficiais.
+
 ## Documento mestre
 
 | Documento | ID | Link |

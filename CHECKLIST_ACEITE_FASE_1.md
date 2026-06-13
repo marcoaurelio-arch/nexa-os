@@ -23,6 +23,7 @@
 - [x] Templates criados em Google Docs.
 - [x] Politica de aprovacao publicada em Google Docs.
 - [x] Planilhas `Mapa_Credenciais_n8n` e `LOG_Execucoes_Criticas` criadas.
+- [x] Permissoes do Drive validadas: raiz, primeira camada, documentos sensiveis e modelos sem compartilhamento publico.
 - [x] Nenhuma credencial ou segredo salvo em texto aberto nos artefatos criados nesta rodada.
 - [x] Conector Google Drive com escrita validada.
 - [x] Links dos documentos de templates registrados no sistema.
