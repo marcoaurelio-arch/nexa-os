@@ -117,7 +117,14 @@ Documentos oficiais movidos/publicados:
 | `NEXA OS - Templates Operacionais Fase 1` | `08_NEXA_OS/02_Playbooks` |
 | `NEXA OS - Plano de Execucao Semanal Fase 1` | `08_NEXA_OS/03_Rotinas` |
 
-Proxima acao: revisar permissoes compartilhadas no Drive e iniciar homologacao dos workflows no n8n real.
+Permissoes validadas em 2026-06-13:
+
+- Pasta raiz, primeira camada, documentos sensiveis e modelos publicados com `shared = false`.
+- Sem permissao publica `anyone`.
+- Sem permissao ampla por dominio.
+- Permissao explicita apenas para `marcoaurelio@planejarimoveis.com.br`.
+
+Proxima acao: iniciar homologacao dos workflows no n8n real.
 
 ## n8n - prosseguimento 2026-06-10
 

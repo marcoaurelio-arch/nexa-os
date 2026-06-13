@@ -41,6 +41,29 @@ type LandBankAreaRow = {
   origem: string | null;
   observacoes: string | null;
 };
+type LandBankPipelineRow = {
+  area_id: string;
+  etapa: string;
+  titulo: string;
+  probabilidade: number | null;
+  valor_potencial: number | null;
+  proxima_acao: string | null;
+  data_proxima_acao: string | null;
+  metadata: Record<string, unknown> | null;
+};
+type LandBankScoreRow = {
+  area_id: string;
+  score_total: number;
+  classificacao: string;
+};
+type LandBankOwnerRow = {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  tipo: string;
+};
 
 export function mapEnterpriseRow(row: EnterpriseRow): Enterprise {
   return {
@@ -283,7 +306,14 @@ export function mapLegalCaseRow(row: LegalCaseRow): LegalCase {
   };
 }
 
-export function mapLandBankAreaRow(row: LandBankAreaRow): LandBankArea {
+export function mapLandBankAreaRow(row: LandBankAreaRow, pipeline?: LandBankPipelineRow | null, scoreRow?: LandBankScoreRow | null, owner?: LandBankOwnerRow | null): LandBankArea {
+  const metadata = pipeline?.metadata ?? {};
+  const responsavel = typeof metadata.responsavel === "string" ? metadata.responsavel : "Desenvolvimento";
+  const metadataScore = typeof metadata.score === "number" ? metadata.score : Number(metadata.score ?? 0);
+  const metadataClassificacao = typeof metadata.classificacao === "string" ? metadata.classificacao : "sem score";
+  const score = scoreRow ? Number(scoreRow.score_total) : metadataScore;
+  const classificacao = scoreRow?.classificacao ?? metadataClassificacao;
+
   return {
     id: row.id,
     empreendimentoId: row.empreendimento_id,
@@ -301,18 +331,51 @@ export function mapLandBankAreaRow(row: LandBankAreaRow): LandBankArea {
     status: row.status as LandBankArea["status"],
     valorPedido: Number(row.valor_pedido ?? 0),
     valorM2: Number(row.valor_m2 ?? 0),
-    valorPotencial: Number(row.valor_potencial ?? 0),
+    valorPotencial: Number(pipeline?.valor_potencial ?? row.valor_potencial ?? 0),
     viavelBts: Boolean(row.viavel_bts),
     viavelStripMall: Boolean(row.viavel_strip_mall),
     viavelSaleLeaseback: Boolean(row.viavel_sale_leaseback),
     prioridade: row.prioridade as LandBankArea["prioridade"],
-    etapa: "lead",
+    etapa: normalizeLandBankStage(pipeline?.etapa ?? fallbackLandBankStage(row.status)),
     origem: row.origem ?? "",
-    responsavel: "Desenvolvimento",
-    proximaAcao: "Atualizar pipeline da area",
-    dataProximaAcao: "",
-    score: 0,
-    classificacao: "sem score",
+    contatoNome: owner?.nome ?? "",
+    contatoTipo: normalizeLandBankContactType(owner?.tipo ?? "proprietario"),
+    contatoTelefone: owner?.telefone ?? "",
+    contatoWhatsapp: owner?.whatsapp ?? "",
+    contatoEmail: owner?.email ?? "",
+    responsavel,
+    proximaAcao: pipeline?.proxima_acao ?? "Atualizar pipeline da area",
+    dataProximaAcao: pipeline?.data_proxima_acao ?? "",
+    score,
+    classificacao,
     observacoes: row.observacoes ?? ""
   };
+}
+
+function normalizeLandBankContactType(tipo: string): LandBankArea["contatoTipo"] {
+  const validTypes: LandBankArea["contatoTipo"][] = ["proprietario", "representante", "corretor", "empresa"];
+  return validTypes.includes(tipo as LandBankArea["contatoTipo"]) ? tipo as LandBankArea["contatoTipo"] : "proprietario";
+}
+
+function fallbackLandBankStage(status: string): LandBankArea["etapa"] {
+  if (status === "em_negociacao") return "negociacao";
+  if (status === "contrato_assinado") return "contrato";
+  if (status === "descartada") return "cancelado";
+  return "lead";
+}
+
+function normalizeLandBankStage(stage: string): LandBankArea["etapa"] {
+  const validStages: LandBankArea["etapa"][] = [
+    "lead",
+    "contato_realizado",
+    "visita",
+    "estudo",
+    "proposta",
+    "negociacao",
+    "contrato",
+    "implantado",
+    "cancelado"
+  ];
+
+  return validStages.includes(stage as LandBankArea["etapa"]) ? stage as LandBankArea["etapa"] : "lead";
 }

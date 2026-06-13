@@ -26,6 +26,7 @@ import type {
   FppRecord,
   LandBankArea,
   LandBankAreaStatus,
+  LandBankContactType,
   LandBankPipelineStage,
   LandBankPriority,
   LegalCase,
@@ -268,6 +269,13 @@ const landBankPriorityLabel: Record<LandBankPriority, string> = {
   baixa: "Baixa"
 };
 
+const landBankContactTypeLabel: Record<LandBankContactType, string> = {
+  proprietario: "Proprietario",
+  representante: "Representante",
+  corretor: "Corretor",
+  empresa: "Empresa"
+};
+
 const landBankPipelineStageLabel: Record<LandBankPipelineStage, string> = {
   lead: "Lead",
   contato_realizado: "Contato realizado",
@@ -282,6 +290,7 @@ const landBankPipelineStageLabel: Record<LandBankPipelineStage, string> = {
 
 const landBankStatuses: LandBankAreaStatus[] = ["disponivel", "em_negociacao", "contrato_assinado", "descartada"];
 const landBankPriorities: LandBankPriority[] = ["alta", "media", "baixa"];
+const landBankContactTypes: LandBankContactType[] = ["proprietario", "representante", "corretor", "empresa"];
 const landBankPipelineStages: LandBankPipelineStage[] = ["lead", "contato_realizado", "visita", "estudo", "proposta", "negociacao", "contrato", "implantado", "cancelado"];
 
 const enterpriseSchema = z.object({
@@ -519,6 +528,11 @@ const landBankAreaSchema = z.object({
   prioridade: z.enum(["alta", "media", "baixa"]),
   etapa: z.enum(["lead", "contato_realizado", "visita", "estudo", "proposta", "negociacao", "contrato", "implantado", "cancelado"]),
   origem: z.string().trim(),
+  contatoNome: z.string().trim(),
+  contatoTipo: z.enum(["proprietario", "representante", "corretor", "empresa"]),
+  contatoTelefone: z.string().trim(),
+  contatoWhatsapp: z.string().trim(),
+  contatoEmail: z.string().trim(),
   responsavel: z.string().trim().min(2, "Informe o responsavel."),
   proximaAcao: z.string().trim().min(2, "Informe a proxima acao."),
   dataProximaAcao: z.string().trim().min(8, "Informe a data da proxima acao."),
@@ -3736,7 +3750,7 @@ function LandBankPage({
             </div>
           </div>
           <DataTable
-            columns={["Codigo", "Area", "Empreendimento", "Etapa", "Status", "Score", "Potencial", "Mapa", "Acoes"]}
+            columns={["Codigo", "Area", "Empreendimento", "Etapa", "Status", "Score", "Potencial", "Contato", "Mapa", "Acoes"]}
             rows={sortedAreas.map((area) => [
                 area.codigo,
                 area.nome,
@@ -3745,12 +3759,13 @@ function LandBankPage({
                 landBankStatusLabel[area.status],
                 `${numberPt(area.score)}/100`,
                 brl(area.valorPotencial),
+                area.contatoNome || "Sem contato",
                 "Abrir",
                 "Editar"
               ])}
             onAction={(rowIndex, cellIndex) => {
               const area = sortedAreas[rowIndex];
-              if (cellIndex === 7) {
+              if (cellIndex === 8) {
                 window.open(landBankMapUrl(area), "_blank", "noopener,noreferrer");
                 return;
               }
@@ -5295,6 +5310,17 @@ function LandBankAreaForm({
           <FormInput label="Score" type="number" error={errors.score?.message} {...register("score")} />
           <FormInput label="Classificacao" error={errors.classificacao?.message} {...register("classificacao")} />
           <FormInput label="Origem" error={errors.origem?.message} {...register("origem")} />
+          <FormInput label="Contato externo" error={errors.contatoNome?.message} {...register("contatoNome")} />
+          <FormSelect
+            label="Tipo contato"
+            error={errors.contatoTipo?.message}
+            options={landBankContactTypes}
+            optionLabels={landBankContactTypeLabel}
+            {...register("contatoTipo")}
+          />
+          <FormInput label="Telefone contato" error={errors.contatoTelefone?.message} {...register("contatoTelefone")} />
+          <FormInput label="WhatsApp contato" error={errors.contatoWhatsapp?.message} {...register("contatoWhatsapp")} />
+          <FormInput label="E-mail contato" type="email" error={errors.contatoEmail?.message} {...register("contatoEmail")} />
           <FormInput label="Cidade" error={errors.cidade?.message} {...register("cidade")} />
           <FormInput label="Estado" maxLength={2} error={errors.estado?.message} {...register("estado")} />
           <FormInput label="Bairro" error={errors.bairro?.message} {...register("bairro")} />
@@ -6178,6 +6204,7 @@ function landBankCommitteeAgenda(rows: Array<{ area: LandBankArea; decision: { l
       `${index + 1}. ${area.codigo} - ${area.nome}`,
       `Empreendimento: ${enterpriseLabel(enterprises, area.empreendimentoId)}`,
       `Cidade: ${area.cidade}/${area.estado}`,
+      `Contato: ${area.contatoNome || "sem contato"}${area.contatoWhatsapp ? ` - ${area.contatoWhatsapp}` : ""}`,
       `Decisao sugerida: ${decision.label}`,
       `Motivo: ${decision.detail}`,
       `Score: ${numberPt(area.score)}/100 | Potencial mensal: ${brl(area.valorPotencial)}`,
@@ -6193,17 +6220,21 @@ function landBankMapUrl(area: LandBankArea) {
 }
 
 function landBankCsv(areas: LandBankArea[], enterprises: Enterprise[]) {
-  const header = ["codigo", "nome", "empreendimento", "cidade", "estado", "status", "prioridade", "score", "valor_potencial", "proxima_acao", "data_proxima_acao", "mapa"];
+  const header = ["codigo", "nome", "empreendimento", "cidade", "estado", "etapa", "status", "prioridade", "score", "valor_potencial", "contato_nome", "contato_tipo", "contato_whatsapp", "proxima_acao", "data_proxima_acao", "mapa"];
   const rows = areas.map((area) => [
     area.codigo,
     area.nome,
     enterpriseLabel(enterprises, area.empreendimentoId),
     area.cidade,
     area.estado,
+    landBankPipelineStageLabel[area.etapa],
     landBankStatusLabel[area.status],
     landBankPriorityLabel[area.prioridade],
     String(area.score),
     String(area.valorPotencial),
+    area.contatoNome,
+    landBankContactTypeLabel[area.contatoTipo],
+    area.contatoWhatsapp,
     area.proximaAcao,
     area.dataProximaAcao,
     landBankMapUrl(area)
@@ -6412,6 +6443,11 @@ function emptyLandBankArea(empreendimentoId: string): LandBankArea {
     prioridade: "media",
     etapa: "lead",
     origem: "Prospeccao ativa",
+    contatoNome: "",
+    contatoTipo: "proprietario",
+    contatoTelefone: "",
+    contatoWhatsapp: "",
+    contatoEmail: "",
     responsavel: "Desenvolvimento",
     proximaAcao: "Completar dados cadastrais e validar vocacao",
     dataProximaAcao: new Date().toISOString().slice(0, 10),
