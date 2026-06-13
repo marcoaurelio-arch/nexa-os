@@ -243,6 +243,40 @@ export type LegalCase = {
   proximaAcao: string;
 };
 
+export type LandBankAreaStatus = "disponivel" | "em_negociacao" | "contrato_assinado" | "descartada";
+export type LandBankPriority = "alta" | "media" | "baixa";
+
+export type LandBankArea = {
+  id: string;
+  empreendimentoId: string;
+  codigo: string;
+  nome: string;
+  cidade: string;
+  estado: string;
+  bairro: string;
+  enderecoCompleto: string;
+  latitude: number;
+  longitude: number;
+  areaTotalM2: number;
+  frenteM: number;
+  zoneamento: string;
+  status: LandBankAreaStatus;
+  valorPedido: number;
+  valorM2: number;
+  valorPotencial: number;
+  viavelBts: boolean;
+  viavelStripMall: boolean;
+  viavelSaleLeaseback: boolean;
+  prioridade: LandBankPriority;
+  origem: string;
+  responsavel: string;
+  proximaAcao: string;
+  dataProximaAcao: string;
+  score: number;
+  classificacao: string;
+  observacoes: string;
+};
+
 export type Revenue = {
   empreendimentoId: string;
   competencia: string;

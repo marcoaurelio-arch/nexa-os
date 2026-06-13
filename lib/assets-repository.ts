@@ -6,6 +6,7 @@ import {
   mapDocumentRow,
   mapEnterpriseRow,
   mapFppRow,
+  mapLandBankAreaRow,
   mapLegalCaseRow,
   mapPayableRow,
   mapReceivableRow,
@@ -16,7 +17,7 @@ import {
   mapUtilityReadingRow,
   mapVacancyRow
 } from "@/lib/supabase/mappers";
-import type { AssetAnalytics, CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
+import type { AssetAnalytics, CommercialLead, Contract, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LandBankArea, LegalCase, Payable, Receivable, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "@/lib/types";
 
 export type AssetData = {
   enterprises: Enterprise[];
@@ -34,6 +35,7 @@ export type AssetData = {
   serviceOrders: ServiceOrder[];
   documentRecords: DocumentRecord[];
   legalCases: LegalCase[];
+  landBankAreas: LandBankArea[];
   analytics: AssetAnalytics | null;
 };
 
@@ -71,6 +73,7 @@ export function loadLocalAssetData(): AssetData | null {
       serviceOrders: Array.isArray(parsed.serviceOrders) ? parsed.serviceOrders : [],
       documentRecords: Array.isArray(parsed.documentRecords) ? parsed.documentRecords : [],
       legalCases: Array.isArray(parsed.legalCases) ? parsed.legalCases : [],
+      landBankAreas: Array.isArray(parsed.landBankAreas) ? parsed.landBankAreas : [],
       analytics: parsed.analytics ?? null
     };
   } catch {
@@ -115,7 +118,7 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult, legalResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult, legalResult, landBankResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -190,7 +193,12 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
       .from("juridico")
       .select("*")
       .is("deleted_at", null)
-      .order("prazo", { ascending: true })
+      .order("prazo", { ascending: true }),
+    client
+      .from("land_bank_areas")
+      .select("*")
+      .is("deleted_at", null)
+      .order("prioridade", { ascending: true })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
@@ -208,6 +216,7 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
   if (serviceOrderResult.error) throw serviceOrderResult.error;
   if (documentResult.error) throw documentResult.error;
   if (legalResult.error) throw legalResult.error;
+  if (landBankResult.error && !isMissingRelationError(landBankResult.error)) throw landBankResult.error;
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
@@ -225,6 +234,7 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
     serviceOrders: serviceOrderResult.data.map(mapServiceOrderRow),
     documentRecords: documentResult.data.map(mapDocumentRow),
     legalCases: legalResult.data.map(mapLegalCaseRow),
+    landBankAreas: (landBankResult.data ?? []).map(mapLandBankAreaRow),
     analytics: null
   };
 }
@@ -693,6 +703,60 @@ export async function saveLegalCase(record: LegalCase) {
 
   if (error) throw error;
   return mapLegalCaseRow(data);
+}
+
+export async function saveLandBankArea(area: LandBankArea) {
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    return area;
+  }
+  const client = supabase as any;
+
+  const { data, error } = await client
+    .from("land_bank_areas")
+    .upsert({
+      ...(isUuid(area.id) ? { id: area.id } : {}),
+      empreendimento_id: area.empreendimentoId,
+      codigo: area.codigo,
+      nome: area.nome,
+      cidade: area.cidade,
+      estado: area.estado,
+      bairro: area.bairro || null,
+      endereco_completo: area.enderecoCompleto,
+      latitude: area.latitude,
+      longitude: area.longitude,
+      area_total_m2: area.areaTotalM2,
+      frente_m: area.frenteM || null,
+      zoneamento: area.zoneamento || null,
+      status: area.status,
+      valor_pedido: area.valorPedido || null,
+      valor_m2: area.valorM2 || null,
+      valor_potencial: area.valorPotencial || null,
+      viavel_bts: area.viavelBts,
+      viavel_strip_mall: area.viavelStripMall,
+      viavel_sale_leaseback: area.viavelSaleLeaseback,
+      prioridade: area.prioridade,
+      origem: area.origem || null,
+      observacoes: area.observacoes || null
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  const mapped = mapLandBankAreaRow(data);
+  return {
+    ...mapped,
+    responsavel: area.responsavel,
+    proximaAcao: area.proximaAcao,
+    dataProximaAcao: area.dataProximaAcao,
+    score: area.score,
+    classificacao: area.classificacao
+  };
+}
+
+function isMissingRelationError(error: { code?: string; message?: string }) {
+  return error.code === "42P01" || /does not exist/i.test(error.message ?? "");
 }
 
 function isUuid(value: string) {

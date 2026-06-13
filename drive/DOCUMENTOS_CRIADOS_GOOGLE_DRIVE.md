@@ -11,27 +11,29 @@ A pasta raiz `Nexa Malls - Sistema Operacional` foi criada no Meu Drive por oper
 
 Em nova tentativa assistida, foi criada a primeira camada completa da arvore oficial: `00_Admin`, `01_CRM_Lojistas`, `02_Projetos`, `03_Banco_de_Terrenos`, `04_Propostas_Comerciais`, `05_Reunioes`, `06_Relatorios`, `07_Automacoes_n8n` e `08_NEXA_OS`.
 
+Depois, a arvore completa de subpastas foi criada via `rclone` autenticado e os documentos oficiais foram movidos/publicados nas pastas operacionais corretas.
+
 ## 2. Diagnostico
 
 O conector do Google Drive permite criar e editar documentos nativos. Nesta sessao, nao foi exposta uma ferramenta direta para criar pastas. A criacao da pasta raiz foi realizada via interface do Google Drive com apoio do Computador local.
 
 ## 3. Oportunidades
 
-- Usar o documento criado como ponto de alinhamento executivo.
-- Mover o documento para a pasta raiz quando a estrutura Drive for criada.
-- Criar os templates oficiais em seguida.
+- Usar os documentos publicados como ponto de partida operacional.
+- Manter os modelos oficiais nos destinos definidos para evitar duplicidade.
+- Revisar permissoes compartilhadas antes de liberar uso recorrente.
 
 ## 4. Riscos
 
 | Risco | Mitigacao |
 |---|---|
-| Documento ficar solto no Drive raiz | Mover para `Nexa Malls - Sistema Operacional/08_NEXA_OS` |
-| Subpastas ainda nao existirem | Criar arvore conforme `BLUEPRINT_DRIVE_N8N_FASE_1.md` |
+| Documento ficar solto no Drive raiz | Documentos oficiais movidos para as pastas operacionais |
+| Subpastas ainda nao existirem | Arvore criada conforme `BLUEPRINT_DRIVE_N8N_FASE_1.md` |
 | Duplicidade de documentos | Usar este link como versao inicial |
 
 ## 5. Recomendacao
 
-Criar a arvore de subpastas dentro da pasta raiz e mover este documento para `08_NEXA_OS/02_Playbooks` ou `08_NEXA_OS/03_Rotinas`.
+Validar permissoes compartilhadas, manter os documentos em seus destinos oficiais e usar a estrutura criada como repositorio da Fase 1.
 
 ## 6. Plano de Acao
 
@@ -39,6 +41,7 @@ Criar a arvore de subpastas dentro da pasta raiz e mover este documento para `08
 |-------|------------|--------|------------|
 | Criar pasta raiz no Drive | Lara | Hoje | Concluido |
 | Criar pasta `08_NEXA_OS` | Lara | Hoje | Concluido |
+| Criar arvore de subpastas | Lara | Hoje | Concluido |
 | Mover documento criado | Lara / Marco | D+1 | Documento arquivado |
 | Criar templates oficiais | Lara / Marco | D+2 | Templates publicados |
 
@@ -61,6 +64,34 @@ Criar a arvore de subpastas dentro da pasta raiz e mover este documento para `08
 | 06_Relatorios | `1u3R4aNdTNf9a-9oIAAdgqX2jEdNJ_ykf` | https://drive.google.com/drive/folders/1u3R4aNdTNf9a-9oIAAdgqX2jEdNJ_ykf |
 | 07_Automacoes_n8n | `1YRBRtGVBhVyRZWANoV8zbBYtJazBrwQP` | https://drive.google.com/drive/folders/1YRBRtGVBhVyRZWANoV8zbBYtJazBrwQP |
 | 08_NEXA_OS | `1wOZv0XpE6BRlfYKUrpQjUEnGqX9NiYMe` | https://drive.google.com/drive/folders/1wOZv0XpE6BRlfYKUrpQjUEnGqX9NiYMe |
+
+## Arvore de subpastas criada
+
+A estrutura completa definida em `BLUEPRINT_DRIVE_N8N_FASE_1.md` foi criada dentro da pasta raiz. A validacao cobriu:
+
+- `00_Admin`: `Credenciais_e_Acessos`, `Templates`, `Governanca`.
+- `01_CRM_Lojistas`: `Leads`, `Redes_em_Expansao`, `Historico_de_Contato`, `Materiais_Enviados`.
+- `02_Projetos`: projetos iniciais e subpastas internas por empreendimento.
+- `03_Banco_de_Terrenos`: `Mapas`, `Fotos`, `Matriculas_e_Documentos`, `Estudos`.
+- `04_Propostas_Comerciais`: `01_Rascunhos`, `02_Em_Revisao`, `03_Aprovadas`, `04_Enviadas`, `05_Modelos`.
+- `05_Reunioes`: `PMO_Semanal`, `Comercial`, `Ativos`, `Diretoria`.
+- `06_Relatorios`: `Diario_Executivo`, `Mensal_de_Ativos`, `Comercial`, `PMO`.
+- `07_Automacoes_n8n`: `Documentacao`, `Logs`, `Backups`.
+- `08_NEXA_OS`: `01_Prompts`, `02_Playbooks`, `03_Rotinas`, `04_Logs`, `05_Dashboards`.
+
+## Documentos publicados nos destinos oficiais
+
+| Documento | Tipo | Destino |
+|---|---|---|
+| Politica_Aprovacao_Mensagens | Google Docs | `00_Admin/Governanca` |
+| Mapa_Credenciais_n8n | Google Sheets | `00_Admin/Credenciais_e_Acessos` |
+| LOG_Execucoes_Criticas | Google Sheets | `07_Automacoes_n8n/Logs` |
+| TEMPLATE_Proposta_Comercial_Nexa_Malls | Google Docs | `04_Propostas_Comerciais/05_Modelos` |
+| TEMPLATE_Ata_Reuniao_Nexa_Malls | Google Docs | `05_Reunioes/PMO_Semanal` |
+| TEMPLATE_Relatorio_Executivo_Diario | Google Docs | `06_Relatorios/Diario_Executivo` |
+| TEMPLATE_Relatorio_Mensal_Ativos | Google Docs | `06_Relatorios/Mensal_de_Ativos` |
+| NEXA OS - Templates Operacionais Fase 1 | Google Docs | `08_NEXA_OS/02_Playbooks` |
+| NEXA OS - Plano de Execucao Semanal Fase 1 | Google Docs | `08_NEXA_OS/03_Rotinas` |
 
 ## Documento mestre
 

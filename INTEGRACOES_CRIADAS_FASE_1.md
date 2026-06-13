@@ -90,7 +90,7 @@ Documento validado:
 - `NEXA OS - Plano de Execucao Semanal Fase 1`: https://docs.google.com/document/d/1NP5DgUkLp5HNnOnOIANjkAJfMmAx-Ms4FppjzaE577U
 - `NEXA OS - Templates Operacionais Fase 1`: https://docs.google.com/document/d/11ZblAyvpmbi1vhKPsYbstMEx-6RlGLuuXNukKwO8Bsw
 
-Limite atual: nesta sessao, nao ha ferramenta direta exposta para criar pastas no Drive pelo conector. A pasta raiz e a primeira camada foram criadas por interface; a arvore completa de subpastas ainda deve ser criada manualmente ou por outro conector/script autorizado.
+Limite atual: nesta sessao, nao ha ferramenta direta exposta para criar pastas no Drive pelo conector. A pasta raiz e a primeira camada foram criadas por interface; a arvore completa de subpastas foi criada posteriormente via `rclone` autenticado e validada por listagem do Google Drive.
 
 A estrutura Drive segue implementada como pacote local pronto:
 
@@ -101,7 +101,23 @@ A estrutura Drive segue implementada como pacote local pronto:
 - `drive/templates/TEMPLATE_Relatorio_Mensal_Ativos.md`
 - `drive/templates/Politica_Aprovacao_Mensagens.md`
 
-Proxima acao: criar as subpastas internas, mover os documentos criados para as pastas corretas e publicar os templates oficiais.
+Subpastas internas criadas conforme `BLUEPRINT_DRIVE_N8N_FASE_1.md`.
+
+Documentos oficiais movidos/publicados:
+
+| Documento | Destino |
+|---|---|
+| `Politica_Aprovacao_Mensagens` | `00_Admin/Governanca` |
+| `Mapa_Credenciais_n8n` | `00_Admin/Credenciais_e_Acessos` |
+| `LOG_Execucoes_Criticas` | `07_Automacoes_n8n/Logs` |
+| `TEMPLATE_Proposta_Comercial_Nexa_Malls` | `04_Propostas_Comerciais/05_Modelos` |
+| `TEMPLATE_Ata_Reuniao_Nexa_Malls` | `05_Reunioes/PMO_Semanal` |
+| `TEMPLATE_Relatorio_Executivo_Diario` | `06_Relatorios/Diario_Executivo` |
+| `TEMPLATE_Relatorio_Mensal_Ativos` | `06_Relatorios/Mensal_de_Ativos` |
+| `NEXA OS - Templates Operacionais Fase 1` | `08_NEXA_OS/02_Playbooks` |
+| `NEXA OS - Plano de Execucao Semanal Fase 1` | `08_NEXA_OS/03_Rotinas` |
+
+Proxima acao: revisar permissoes compartilhadas no Drive e iniciar homologacao dos workflows no n8n real.
 
 ## n8n - prosseguimento 2026-06-10
 

@@ -33,6 +33,7 @@ export const accessProfiles: AccessProfile[] = [
       "FPP",
       "Auditoria",
       "Comercial",
+      "Banco de Areas",
       "Vacancia",
       "Operacoes",
       "Energia e Agua",
@@ -46,7 +47,7 @@ export const accessProfiles: AccessProfile[] = [
     id: "administrativo",
     label: "Administrativo",
     description: "Cadastro, documentos, contratos operacionais e fechamento gerencial.",
-    modules: ["Dashboard", "BI", "Empreendimentos", "Lojas", "Lojistas", "Contratos", "Condominio", "Documentos", "Relatorios", "Configuracoes"]
+    modules: ["Dashboard", "BI", "Empreendimentos", "Lojas", "Lojistas", "Contratos", "Condominio", "Banco de Areas", "Documentos", "Relatorios", "Configuracoes"]
   },
   {
     id: "financeiro",
@@ -58,7 +59,7 @@ export const accessProfiles: AccessProfile[] = [
     id: "comercial",
     label: "Comercial",
     description: "Lojas, lojistas, contratos comerciais, pipeline e vacancia.",
-    modules: ["Dashboard", "BI", "Lojas", "Lojistas", "Contratos", "Comercial", "Vacancia", "Relatorios"]
+    modules: ["Dashboard", "BI", "Lojas", "Lojistas", "Contratos", "Comercial", "Banco de Areas", "Vacancia", "Relatorios"]
   },
   {
     id: "operacoes",

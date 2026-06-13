@@ -1,4 +1,4 @@
-import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LegalCase, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "./types";
+import type { CommercialLead, Contract, ContractAlert, DelinquencyRecord, DocumentRecord, Enterprise, FppRecord, LandBankArea, LegalCase, Payable, Receivable, Revenue, RevenueAuditRecord, ServiceOrder, Store, Tenant, UtilityReading, VacancyRecord } from "./types";
 
 export const enterprises: Enterprise[] = [
   {
@@ -858,6 +858,99 @@ export const legalCases: LegalCase[] = [
     responsavel: "Administrativo",
     historico: "Pendencia documental identificada no checklist mensal.",
     proximaAcao: "Solicitar apolice complementar atualizada."
+  }
+];
+
+export const landBankAreas: LandBankArea[] = [
+  {
+    id: "land-rondon-pacheco",
+    empreendimentoId: "boulevard-naves",
+    codigo: "UDI-RP-001",
+    nome: "Terreno Rondon Pacheco",
+    cidade: "Uberlandia",
+    estado: "MG",
+    bairro: "Tibery",
+    enderecoCompleto: "Av. Rondon Pacheco, Uberlandia/MG",
+    latitude: -18.91264,
+    longitude: -48.25794,
+    areaTotalM2: 4200,
+    frenteM: 68,
+    zoneamento: "Eixo comercial",
+    status: "disponivel",
+    valorPedido: 5800000,
+    valorM2: 1381,
+    valorPotencial: 92000,
+    viavelBts: true,
+    viavelStripMall: true,
+    viavelSaleLeaseback: false,
+    prioridade: "alta",
+    origem: "Prospeccao ativa",
+    responsavel: "Desenvolvimento",
+    proximaAcao: "Validar zoneamento e premissas de acesso",
+    dataProximaAcao: "2026-06-18",
+    score: 86,
+    classificacao: "excelente",
+    observacoes: "Frente estrategica em corredor de fluxo, com vocacao para strip mall e BTS."
+  },
+  {
+    id: "land-nicomedes-bts",
+    empreendimentoId: "piazza-nicomedes",
+    codigo: "UDI-NIC-002",
+    nome: "Area Nicomedes BTS Saude",
+    cidade: "Uberlandia",
+    estado: "MG",
+    bairro: "Morada da Colina",
+    enderecoCompleto: "Av. Nicomedes Alves dos Santos, Uberlandia/MG",
+    latitude: -18.94482,
+    longitude: -48.29112,
+    areaTotalM2: 2600,
+    frenteM: 42,
+    zoneamento: "Uso misto",
+    status: "em_negociacao",
+    valorPedido: 3900000,
+    valorM2: 1500,
+    valorPotencial: 64000,
+    viavelBts: true,
+    viavelStripMall: false,
+    viavelSaleLeaseback: false,
+    prioridade: "media",
+    origem: "Corretor parceiro",
+    responsavel: "Comercial",
+    proximaAcao: "Solicitar matrícula e confirmar disponibilidade",
+    dataProximaAcao: "2026-06-20",
+    score: 74,
+    classificacao: "boa",
+    observacoes: "Boa aderencia para clinicas, servicos de saude e operadores de conveniencia."
+  },
+  {
+    id: "land-rondonopolis-ancora",
+    empreendimentoId: "bluemall-rondon",
+    codigo: "ROO-ANC-003",
+    nome: "Area expansao ancora Rondonopolis",
+    cidade: "Rondonopolis",
+    estado: "MT",
+    bairro: "Vila Aurora",
+    enderecoCompleto: "Região central de Rondonopolis/MT",
+    latitude: -16.46932,
+    longitude: -54.63711,
+    areaTotalM2: 6100,
+    frenteM: 80,
+    zoneamento: "Comercial",
+    status: "disponivel",
+    valorPedido: 7200000,
+    valorM2: 1180,
+    valorPotencial: 115000,
+    viavelBts: true,
+    viavelStripMall: true,
+    viavelSaleLeaseback: true,
+    prioridade: "alta",
+    origem: "Indicacao",
+    responsavel: "Diretoria Nexa",
+    proximaAcao: "Agendar visita técnica e mapear concorrência",
+    dataProximaAcao: "2026-06-24",
+    score: 81,
+    classificacao: "boa",
+    observacoes: "Area com potencial para expansao regional e composicao com operador ancora."
   }
 ];
 

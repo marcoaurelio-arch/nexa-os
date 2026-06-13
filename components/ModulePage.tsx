@@ -24,6 +24,9 @@ import type {
   Enterprise,
   FinancialStatus,
   FppRecord,
+  LandBankArea,
+  LandBankAreaStatus,
+  LandBankPriority,
   LegalCase,
   LegalCaseStatus,
   LegalCaseType,
@@ -64,6 +67,7 @@ type ModulePageProps = {
   serviceOrders: ServiceOrder[];
   documentRecords: DocumentRecord[];
   legalCases: LegalCase[];
+  landBankAreas: LandBankArea[];
   analytics: AssetAnalytics | null;
   dataSource: "mock" | "supabase";
   syncError: string | null;
@@ -83,6 +87,7 @@ type ModulePageProps = {
   onSaveServiceOrder: (order: ServiceOrder) => void | Promise<void>;
   onSaveDocumentRecord: (record: DocumentRecord) => void | Promise<void>;
   onSaveLegalCase: (record: LegalCase) => void | Promise<void>;
+  onSaveLandBankArea: (area: LandBankArea) => void | Promise<void>;
 };
 
 const statusLabel: Record<string, string> = {
@@ -246,6 +251,22 @@ const legalRiskLabel: Record<LegalRisk, string> = {
 };
 
 const legalCaseTypes: LegalCaseType[] = ["notificacao", "acao_judicial", "garantia", "contrato", "renovacao", "pendencia"];
+
+const landBankStatusLabel: Record<LandBankAreaStatus, string> = {
+  disponivel: "Disponivel",
+  em_negociacao: "Em negociacao",
+  contrato_assinado: "Contrato assinado",
+  descartada: "Descartada"
+};
+
+const landBankPriorityLabel: Record<LandBankPriority, string> = {
+  alta: "Alta",
+  media: "Media",
+  baixa: "Baixa"
+};
+
+const landBankStatuses: LandBankAreaStatus[] = ["disponivel", "em_negociacao", "contrato_assinado", "descartada"];
+const landBankPriorities: LandBankPriority[] = ["alta", "media", "baixa"];
 
 const enterpriseSchema = z.object({
   id: z.string().min(1),
@@ -458,6 +479,37 @@ const legalCaseSchema = z.object({
   proximaAcao: z.string().trim().min(2, "Informe a proxima acao.")
 });
 
+const landBankAreaSchema = z.object({
+  id: z.string().min(1),
+  empreendimentoId: z.string().trim().min(1, "Selecione o empreendimento."),
+  codigo: z.string().trim().min(2, "Informe o codigo."),
+  nome: z.string().trim().min(2, "Informe o nome da area."),
+  cidade: z.string().trim().min(2, "Informe a cidade."),
+  estado: z.string().trim().length(2, "Use a sigla do estado com 2 letras.").transform((value) => value.toUpperCase()),
+  bairro: z.string().trim(),
+  enderecoCompleto: z.string().trim().min(4, "Informe o endereco."),
+  latitude: z.coerce.number().min(-90).max(90),
+  longitude: z.coerce.number().min(-180).max(180),
+  areaTotalM2: z.coerce.number().min(1, "Informe uma area maior que zero."),
+  frenteM: z.coerce.number().min(0, "Informe zero ou mais."),
+  zoneamento: z.string().trim(),
+  status: z.enum(["disponivel", "em_negociacao", "contrato_assinado", "descartada"]),
+  valorPedido: z.coerce.number().min(0, "Informe zero ou mais."),
+  valorM2: z.coerce.number().min(0, "Informe zero ou mais."),
+  valorPotencial: z.coerce.number().min(0, "Informe zero ou mais."),
+  viavelBts: z.coerce.boolean(),
+  viavelStripMall: z.coerce.boolean(),
+  viavelSaleLeaseback: z.coerce.boolean(),
+  prioridade: z.enum(["alta", "media", "baixa"]),
+  origem: z.string().trim(),
+  responsavel: z.string().trim().min(2, "Informe o responsavel."),
+  proximaAcao: z.string().trim().min(2, "Informe a proxima acao."),
+  dataProximaAcao: z.string().trim().min(8, "Informe a data da proxima acao."),
+  score: z.coerce.number().min(0).max(100),
+  classificacao: z.string().trim().min(2, "Informe a classificacao."),
+  observacoes: z.string().trim()
+});
+
 type EnterpriseFormValues = z.infer<typeof enterpriseSchema>;
 type StoreFormValues = z.infer<typeof storeSchema>;
 type TenantFormValues = z.infer<typeof tenantSchema>;
@@ -473,6 +525,7 @@ type UtilityReadingFormValues = z.infer<typeof utilityReadingSchema>;
 type ServiceOrderFormValues = z.infer<typeof serviceOrderSchema>;
 type DocumentFormValues = z.infer<typeof documentSchema>;
 type LegalCaseFormValues = z.infer<typeof legalCaseSchema>;
+type LandBankAreaFormValues = z.infer<typeof landBankAreaSchema>;
 
 type SupabaseHealth = {
   status: "ok" | "not_configured" | "error";
@@ -596,6 +649,7 @@ export function ModulePage({
   serviceOrders,
   documentRecords,
   legalCases,
+  landBankAreas,
   analytics,
   dataSource,
   syncError,
@@ -614,7 +668,8 @@ export function ModulePage({
   onSaveUtilityReading,
   onSaveServiceOrder,
   onSaveDocumentRecord,
-  onSaveLegalCase
+  onSaveLegalCase,
+  onSaveLandBankArea
 }: ModulePageProps) {
   if (module === "Empreendimentos") {
     return (
@@ -751,6 +806,18 @@ export function ModulePage({
         leads={commercialLeads}
         analytics={analytics}
         onSaveLead={onSaveCommercialLead}
+      />
+    );
+  }
+  if (module === "Banco de Areas") {
+    return (
+      <LandBankPage
+        enterprises={enterprises}
+        areas={landBankAreas}
+        dataSource={dataSource}
+        syncError={syncError}
+        onResetLocalData={onResetLocalData}
+        onSaveArea={onSaveLandBankArea}
       />
     );
   }
@@ -3453,6 +3520,251 @@ function CommercialPage({
   );
 }
 
+function LandBankPage({
+  enterprises,
+  areas,
+  dataSource,
+  syncError,
+  onResetLocalData,
+  onSaveArea
+}: {
+  enterprises: Enterprise[];
+  areas: LandBankArea[];
+  dataSource: "mock" | "supabase";
+  syncError: string | null;
+  onResetLocalData: () => void;
+  onSaveArea: (area: LandBankArea) => void | Promise<void>;
+}) {
+  const [enterpriseId, setEnterpriseId] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | LandBankAreaStatus>("all");
+  const [priorityFilter, setPriorityFilter] = useState<"all" | LandBankPriority>("all");
+  const [editingArea, setEditingArea] = useState<LandBankArea | null>(null);
+  const selectedEnterpriseIds = new Set(enterpriseId === "all" ? enterprises.map((item) => item.id) : [enterpriseId]);
+  const selectedAreas = areas.filter((area) => selectedEnterpriseIds.has(area.empreendimentoId));
+  const filteredAreas = selectedAreas.filter((area) => (
+    (statusFilter === "all" || area.status === statusFilter) &&
+    (priorityFilter === "all" || area.prioridade === priorityFilter)
+  ));
+  const totalArea = filteredAreas.reduce((sum, area) => sum + area.areaTotalM2, 0);
+  const totalPotential = filteredAreas.reduce((sum, area) => sum + area.valorPotencial, 0);
+  const hotAreas = filteredAreas.filter((area) => area.prioridade === "alta" && area.status !== "descartada");
+  const averageScore = filteredAreas.length ? filteredAreas.reduce((sum, area) => sum + area.score, 0) / filteredAreas.length : 0;
+  const enterpriseOptions = useMemo(() => enterprises.map((enterprise) => enterprise.id), [enterprises]);
+  const firstEnterpriseId = enterpriseId === "all" ? enterprises[0]?.id ?? "" : enterpriseId;
+  const sortedAreas = filteredAreas.slice().sort((a, b) => b.score - a.score);
+  const today = new Date();
+  const overdueFollowUps = filteredAreas.filter((area) => area.dataProximaAcao && new Date(`${area.dataProximaAcao}T00:00:00`) < today && area.status !== "descartada" && area.status !== "contrato_assinado");
+  const nextFollowUps = filteredAreas
+    .filter((area) => area.status !== "descartada" && area.status !== "contrato_assinado")
+    .slice()
+    .sort((a, b) => a.dataProximaAcao.localeCompare(b.dataProximaAcao));
+  const citySummaries = summarizeLandBankBy(filteredAreas, (area) => `${area.cidade} - ${area.estado}`).slice(0, 5);
+  const ownerSummaries = summarizeLandBankBy(filteredAreas, (area) => area.responsavel || "Sem responsavel").slice(0, 5);
+  const decisionRows = sortedAreas.map((area) => ({
+    area,
+    decision: landBankDecision(area, overdueFollowUps.some((item) => item.id === area.id))
+  }));
+  const csvExport = landBankCsv(sortedAreas, enterprises);
+  const executiveSummary = [
+    `Areas filtradas: ${numberPt(filteredAreas.length)}`,
+    `Potencial mensal: ${brl(totalPotential)}`,
+    `Score medio: ${numberPt(Math.round(averageScore))}/100`,
+    `Follow-ups vencidos: ${numberPt(overdueFollowUps.length)}`,
+    `Alta prioridade: ${numberPt(hotAreas.length)}`,
+    "Top recomendacoes:",
+    ...decisionRows.slice(0, 3).map(({ area, decision }) => `${area.codigo} - ${decision.label}: ${decision.detail}`)
+  ].join("\n");
+
+  return (
+    <Shell
+      title="Banco de Areas"
+      description="Land Bank da Nexa Malls para terrenos, imoveis, vocacao, score e pipeline de desenvolvimento."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <select className="control min-w-[190px]" value={enterpriseId} onChange={(event) => setEnterpriseId(event.target.value)}>
+            <option value="all">Todos os empreendimentos</option>
+            {enterprises.map((enterprise) => (
+              <option key={enterprise.id} value={enterprise.id}>{enterprise.nome}</option>
+            ))}
+          </select>
+          <select className="control min-w-[150px]" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | LandBankAreaStatus)}>
+            <option value="all">Todos os status</option>
+            {landBankStatuses.map((status) => (
+              <option key={status} value={status}>{landBankStatusLabel[status]}</option>
+            ))}
+          </select>
+          <select className="control min-w-[140px]" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as "all" | LandBankPriority)}>
+            <option value="all">Todas prioridades</option>
+            {landBankPriorities.map((priority) => (
+              <option key={priority} value={priority}>{landBankPriorityLabel[priority]}</option>
+            ))}
+          </select>
+          <button className="control inline-flex items-center gap-2" onClick={() => void navigator.clipboard?.writeText(executiveSummary)}>
+            <Copy className="h-4 w-4" />
+            Copiar resumo
+          </button>
+          <button className="control inline-flex items-center gap-2" onClick={() => void navigator.clipboard?.writeText(csvExport)}>
+            <Copy className="h-4 w-4" />
+            Copiar CSV
+          </button>
+          <NewButton onClick={() => setEditingArea(emptyLandBankArea(firstEnterpriseId))} />
+        </div>
+      }
+    >
+      <SyncBanner dataSource={dataSource} syncError={syncError} onResetLocalData={onResetLocalData} />
+      <div className="grid gap-3 md:grid-cols-4">
+        <Kpi label="Areas monitoradas" value={numberPt(filteredAreas.length)} />
+        <Kpi label="Metragem total" value={`${numberPt(totalArea)} m2`} />
+        <Kpi label="Potencial mensal" value={brl(totalPotential)} tone="success" />
+        <Kpi label="Follow-ups vencidos" value={numberPt(overdueFollowUps.length)} tone={overdueFollowUps.length ? "danger" : "success"} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="panel p-4">
+              <div className="metric-label">Score medio</div>
+              <div className={`mt-2 text-2xl font-bold ${averageScore >= 75 ? "text-success" : "text-primary"}`}>{numberPt(Math.round(averageScore))}/100</div>
+              <p className="mt-1 text-xs text-muted-foreground">Corte minimo sugerido: 70 pontos</p>
+            </div>
+            <div className="panel p-4">
+              <div className="metric-label">Alta prioridade</div>
+              <div className="mt-2 text-2xl font-bold text-primary">{numberPt(hotAreas.length)}</div>
+              <p className="mt-1 text-xs text-muted-foreground">{brl(hotAreas.reduce((sum, area) => sum + area.valorPotencial, 0))} potencial</p>
+            </div>
+            <div className="panel p-4">
+              <div className="metric-label">Em negociacao</div>
+              <div className="mt-2 text-2xl font-bold text-primary">{numberPt(filteredAreas.filter((area) => area.status === "em_negociacao").length)}</div>
+              <p className="mt-1 text-xs text-muted-foreground">Pipeline ativo de proprietarios</p>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            {landBankStatuses.map((status) => {
+              const statusAreas = filteredAreas.filter((area) => area.status === status);
+              return (
+                <div key={status} className="panel p-4">
+                  <div className="metric-label">{landBankStatusLabel[status]}</div>
+                  <div className="mt-2 text-2xl font-bold text-primary">{numberPt(statusAreas.length)}</div>
+                  <p className="mt-1 text-xs text-muted-foreground">{brl(statusAreas.reduce((sum, area) => sum + area.valorPotencial, 0))} potencial</p>
+                </div>
+              );
+            })}
+          </div>
+          <DataTable
+            columns={["Codigo", "Area", "Empreendimento", "Cidade", "Status", "Score", "Potencial", "Mapa", "Acoes"]}
+            rows={sortedAreas.map((area) => [
+                area.codigo,
+                area.nome,
+                enterpriseLabel(enterprises, area.empreendimentoId),
+                `${area.cidade} - ${area.estado}`,
+                landBankStatusLabel[area.status],
+                `${numberPt(area.score)}/100`,
+                brl(area.valorPotencial),
+                "Abrir",
+                "Editar"
+              ])}
+            onAction={(rowIndex, cellIndex) => {
+              const area = sortedAreas[rowIndex];
+              if (cellIndex === 7) {
+                window.open(landBankMapUrl(area), "_blank", "noopener,noreferrer");
+                return;
+              }
+              setEditingArea(area);
+            }}
+          />
+        </div>
+        <div className="space-y-3">
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Decisao sugerida</h2>
+            <div className="mt-4 space-y-2">
+              {decisionRows.slice(0, 5).map(({ area, decision }) => (
+                <button key={area.id} className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm" onClick={() => setEditingArea(area)}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-bold text-primary">{area.codigo}</span>
+                    <span className={decision.tone === "success" ? "font-bold text-success" : decision.tone === "danger" ? "font-bold text-danger" : "font-bold"}>{decision.label}</span>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">{decision.detail}</p>
+                </button>
+              ))}
+              {decisionRows.length === 0 ? <p className="text-sm text-muted-foreground">Sem areas no filtro para recomendar.</p> : null}
+            </div>
+          </div>
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Follow-ups</h2>
+            <div className="mt-4 space-y-2">
+              {nextFollowUps.slice(0, 5).map((area) => {
+                const dueDate = new Date(`${area.dataProximaAcao}T00:00:00`);
+                const isOverdue = dueDate < today;
+                return (
+                  <button key={area.id} className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm" onClick={() => setEditingArea(area)}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-bold text-primary">{area.nome}</span>
+                      <span className={isOverdue ? "font-bold text-danger" : "font-bold"}>{area.dataProximaAcao || "-"}</span>
+                    </div>
+                    <p className="mt-1 text-muted-foreground">{area.proximaAcao}</p>
+                  </button>
+                );
+              })}
+              {nextFollowUps.length === 0 ? <p className="text-sm text-muted-foreground">Sem follow-ups ativos no filtro.</p> : null}
+            </div>
+          </div>
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Prioridades</h2>
+            <div className="mt-4 space-y-2">
+              {hotAreas.slice(0, 5).map((area) => (
+                <button key={area.id} className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm" onClick={() => setEditingArea(area)}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-bold text-primary">{area.nome}</span>
+                    <span className="font-bold">{numberPt(area.score)}</span>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">{area.proximaAcao}</p>
+                </button>
+              ))}
+              {hotAreas.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma area de alta prioridade no filtro.</p> : null}
+            </div>
+          </div>
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Vocacao</h2>
+            <div className="mt-4 grid gap-3">
+              <Mini label="BTS" value={numberPt(filteredAreas.filter((area) => area.viavelBts).length)} />
+              <Mini label="Strip mall" value={numberPt(filteredAreas.filter((area) => area.viavelStripMall).length)} />
+              <Mini label="Sale leaseback" value={numberPt(filteredAreas.filter((area) => area.viavelSaleLeaseback).length)} />
+              <Mini label="Valor pedido" value={brl(filteredAreas.reduce((sum, area) => sum + area.valorPedido, 0))} />
+            </div>
+          </div>
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Cidades</h2>
+            <div className="mt-4 space-y-2">
+              {citySummaries.map((summary) => (
+                <Mini key={summary.label} label={summary.label} value={`${numberPt(summary.count)} | ${brl(summary.potential)}`} />
+              ))}
+            </div>
+          </div>
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Responsaveis</h2>
+            <div className="mt-4 space-y-2">
+              {ownerSummaries.map((summary) => (
+                <Mini key={summary.label} label={summary.label} value={`${numberPt(summary.count)} | ${brl(summary.potential)}`} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      {editingArea ? (
+        <LandBankAreaForm
+          area={editingArea}
+          enterprises={enterprises}
+          enterpriseOptions={enterpriseOptions}
+          onClose={() => setEditingArea(null)}
+          onSave={async (area) => {
+            await onSaveArea(area);
+            setEditingArea(null);
+          }}
+        />
+      ) : null}
+    </Shell>
+  );
+}
+
 function VacancyPage({
   enterprises,
   stores,
@@ -4002,7 +4314,7 @@ function DataTable({
 }: {
   columns: string[];
   rows: string[][];
-  onAction?: (rowIndex: number) => void;
+  onAction?: (rowIndex: number, cellIndex: number) => void;
 }) {
   return (
     <div className="panel overflow-hidden">
@@ -4021,7 +4333,11 @@ function DataTable({
                 {row.map((cell, cellIndex) => (
                   <td key={`${cell}-${cellIndex}`} className="px-4 py-3 font-medium">
                     {onAction && cellIndex === row.length - 1 ? (
-                      <button className="text-xs font-bold uppercase text-primary" onClick={() => onAction(rowIndex)}>
+                      <button className="text-xs font-bold uppercase text-primary" onClick={() => onAction(rowIndex, cellIndex)}>
+                        {cell}
+                      </button>
+                    ) : onAction && cell === "Abrir" ? (
+                      <button className="text-xs font-bold uppercase text-primary" onClick={() => onAction(rowIndex, cellIndex)}>
                         {cell}
                       </button>
                     ) : (
@@ -4802,6 +5118,101 @@ function CommercialLeadForm({
   );
 }
 
+function LandBankAreaForm({
+  area,
+  enterprises,
+  enterpriseOptions,
+  onClose,
+  onSave
+}: {
+  area: LandBankArea;
+  enterprises: Enterprise[];
+  enterpriseOptions: string[];
+  onClose: () => void;
+  onSave: (area: LandBankArea) => void;
+}) {
+  const enterpriseLabels = useMemo(
+    () => Object.fromEntries(enterprises.map((enterprise) => [enterprise.id, enterprise.nome])),
+    [enterprises]
+  );
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<LandBankAreaFormValues>({
+    resolver: zodResolver(landBankAreaSchema),
+    defaultValues: area
+  });
+
+  return (
+    <Modal title="Area do Land Bank" onClose={onClose}>
+      <form onSubmit={handleSubmit((values) => onSave(values))}>
+        <input type="hidden" {...register("id")} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormInput label="Codigo" error={errors.codigo?.message} {...register("codigo")} />
+          <FormInput label="Nome" error={errors.nome?.message} {...register("nome")} />
+          <FormSelect
+            label="Empreendimento"
+            error={errors.empreendimentoId?.message}
+            options={enterpriseOptions}
+            optionLabels={enterpriseLabels}
+            {...register("empreendimentoId")}
+          />
+          <FormSelect
+            label="Status"
+            error={errors.status?.message}
+            options={landBankStatuses}
+            optionLabels={landBankStatusLabel}
+            {...register("status")}
+          />
+          <FormSelect
+            label="Prioridade"
+            error={errors.prioridade?.message}
+            options={landBankPriorities}
+            optionLabels={landBankPriorityLabel}
+            {...register("prioridade")}
+          />
+          <FormInput label="Score" type="number" error={errors.score?.message} {...register("score")} />
+          <FormInput label="Classificacao" error={errors.classificacao?.message} {...register("classificacao")} />
+          <FormInput label="Origem" error={errors.origem?.message} {...register("origem")} />
+          <FormInput label="Cidade" error={errors.cidade?.message} {...register("cidade")} />
+          <FormInput label="Estado" maxLength={2} error={errors.estado?.message} {...register("estado")} />
+          <FormInput label="Bairro" error={errors.bairro?.message} {...register("bairro")} />
+          <FormInput label="Endereco" error={errors.enderecoCompleto?.message} {...register("enderecoCompleto")} />
+          <FormInput label="Latitude" type="number" step="0.0000001" error={errors.latitude?.message} {...register("latitude")} />
+          <FormInput label="Longitude" type="number" step="0.0000001" error={errors.longitude?.message} {...register("longitude")} />
+          <FormInput label="Area total m2" type="number" error={errors.areaTotalM2?.message} {...register("areaTotalM2")} />
+          <FormInput label="Frente m" type="number" error={errors.frenteM?.message} {...register("frenteM")} />
+          <FormInput label="Zoneamento" error={errors.zoneamento?.message} {...register("zoneamento")} />
+          <FormInput label="Valor pedido" type="number" error={errors.valorPedido?.message} {...register("valorPedido")} />
+          <FormInput label="Valor m2" type="number" error={errors.valorM2?.message} {...register("valorM2")} />
+          <FormInput label="Potencial mensal" type="number" error={errors.valorPotencial?.message} {...register("valorPotencial")} />
+          <FormInput label="Responsavel" error={errors.responsavel?.message} {...register("responsavel")} />
+          <FormInput label="Data proxima acao" type="date" error={errors.dataProximaAcao?.message} {...register("dataProximaAcao")} />
+          <FormInput label="Proxima acao" error={errors.proximaAcao?.message} {...register("proximaAcao")} />
+          <FormInput label="Observacoes" error={errors.observacoes?.message} {...register("observacoes")} />
+          <div className="grid gap-2 rounded-lg border border-border p-3 md:col-span-2">
+            <p className="text-sm font-semibold text-primary">Vocacao preliminar</p>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" {...register("viavelBts")} />
+              BTS
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" {...register("viavelStripMall")} />
+              Strip mall
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" {...register("viavelSaleLeaseback")} />
+              Sale leaseback
+            </label>
+          </div>
+        </div>
+        <FormActions onClose={onClose} isSubmitting={isSubmitting} />
+      </form>
+    </Modal>
+  );
+}
+
 function VacancyForm({
   record,
   stores,
@@ -5532,6 +5943,104 @@ function documentEffectiveStatus(record: DocumentRecord): DocumentStatus {
   return record.status;
 }
 
+function summarizeLandBankBy(areas: LandBankArea[], getLabel: (area: LandBankArea) => string) {
+  const summaries = new Map<string, { label: string; count: number; potential: number; score: number }>();
+
+  for (const area of areas) {
+    const label = getLabel(area);
+    const current = summaries.get(label) ?? { label, count: 0, potential: 0, score: 0 };
+    current.count += 1;
+    current.potential += area.valorPotencial;
+    current.score += area.score;
+    summaries.set(label, current);
+  }
+
+  return [...summaries.values()]
+    .map((summary) => ({
+      ...summary,
+      score: summary.count ? summary.score / summary.count : 0
+    }))
+    .sort((a, b) => b.potential - a.potential);
+}
+
+function landBankDecision(area: LandBankArea, followUpOverdue: boolean): { label: string; detail: string; tone: "success" | "default" | "danger" } {
+  if (area.status === "descartada") {
+    return {
+      label: "Arquivar",
+      detail: "Area descartada; manter historico e evitar retrabalho comercial.",
+      tone: "default"
+    };
+  }
+
+  if (area.status === "contrato_assinado") {
+    return {
+      label: "Implantar",
+      detail: "Contrato assinado; mover para acompanhamento de desenvolvimento e operacoes.",
+      tone: "success"
+    };
+  }
+
+  if (followUpOverdue) {
+    return {
+      label: "Cobrar hoje",
+      detail: "Follow-up vencido; atualizar proprietario, documentos e proxima etapa.",
+      tone: "danger"
+    };
+  }
+
+  if (area.score >= 85 && area.prioridade === "alta") {
+    return {
+      label: "Comite",
+      detail: "Score alto e prioridade alta; levar para decisao de proposta ou diligencia formal.",
+      tone: "success"
+    };
+  }
+
+  if (area.score >= 70) {
+    return {
+      label: "Diligencia",
+      detail: "Boa oportunidade; validar matricula, acesso, concorrencia e premissas comerciais.",
+      tone: "default"
+    };
+  }
+
+  return {
+    label: "Revisar",
+    detail: "Score abaixo do corte; revisar premissas antes de consumir agenda comercial.",
+    tone: "danger"
+  };
+}
+
+function landBankMapUrl(area: LandBankArea) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${area.latitude},${area.longitude}`)}`;
+}
+
+function landBankCsv(areas: LandBankArea[], enterprises: Enterprise[]) {
+  const header = ["codigo", "nome", "empreendimento", "cidade", "estado", "status", "prioridade", "score", "valor_potencial", "proxima_acao", "data_proxima_acao", "mapa"];
+  const rows = areas.map((area) => [
+    area.codigo,
+    area.nome,
+    enterpriseLabel(enterprises, area.empreendimentoId),
+    area.cidade,
+    area.estado,
+    landBankStatusLabel[area.status],
+    landBankPriorityLabel[area.prioridade],
+    String(area.score),
+    String(area.valorPotencial),
+    area.proximaAcao,
+    area.dataProximaAcao,
+    landBankMapUrl(area)
+  ]);
+
+  return [header, ...rows]
+    .map((row) => row.map(csvCell).join(","))
+    .join("\n");
+}
+
+function csvCell(value: string) {
+  return `"${value.replaceAll("\"", "\"\"")}"`;
+}
+
 function emptyEnterprise(): Enterprise {
   const id = crypto.randomUUID();
 
@@ -5698,6 +6207,39 @@ function emptyCommercialLead(store?: StoreType): CommercialLead {
     historico: "",
     etapa: "lead",
     valorProposta: store?.aluguel ?? 0
+  };
+}
+
+function emptyLandBankArea(empreendimentoId: string): LandBankArea {
+  return {
+    id: crypto.randomUUID(),
+    empreendimentoId,
+    codigo: "AREA-NOVA",
+    nome: "Nova area",
+    cidade: "Uberlandia",
+    estado: "MG",
+    bairro: "",
+    enderecoCompleto: "",
+    latitude: -18.9186,
+    longitude: -48.2772,
+    areaTotalM2: 1000,
+    frenteM: 0,
+    zoneamento: "",
+    status: "disponivel",
+    valorPedido: 0,
+    valorM2: 0,
+    valorPotencial: 0,
+    viavelBts: true,
+    viavelStripMall: true,
+    viavelSaleLeaseback: false,
+    prioridade: "media",
+    origem: "Prospeccao ativa",
+    responsavel: "Desenvolvimento",
+    proximaAcao: "Completar dados cadastrais e validar vocacao",
+    dataProximaAcao: new Date().toISOString().slice(0, 10),
+    score: 50,
+    classificacao: "em avaliacao",
+    observacoes: ""
   };
 }
 
