@@ -6193,13 +6193,14 @@ function landBankMapUrl(area: LandBankArea) {
 }
 
 function landBankCsv(areas: LandBankArea[], enterprises: Enterprise[]) {
-  const header = ["codigo", "nome", "empreendimento", "cidade", "estado", "status", "prioridade", "score", "valor_potencial", "proxima_acao", "data_proxima_acao", "mapa"];
+  const header = ["codigo", "nome", "empreendimento", "cidade", "estado", "etapa", "status", "prioridade", "score", "valor_potencial", "proxima_acao", "data_proxima_acao", "mapa"];
   const rows = areas.map((area) => [
     area.codigo,
     area.nome,
     enterpriseLabel(enterprises, area.empreendimentoId),
     area.cidade,
     area.estado,
+    landBankPipelineStageLabel[area.etapa],
     landBankStatusLabel[area.status],
     landBankPriorityLabel[area.prioridade],
     String(area.score),

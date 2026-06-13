@@ -73,7 +73,7 @@ export function loadLocalAssetData(): AssetData | null {
       serviceOrders: Array.isArray(parsed.serviceOrders) ? parsed.serviceOrders : [],
       documentRecords: Array.isArray(parsed.documentRecords) ? parsed.documentRecords : [],
       legalCases: Array.isArray(parsed.legalCases) ? parsed.legalCases : [],
-      landBankAreas: Array.isArray(parsed.landBankAreas) ? parsed.landBankAreas : [],
+      landBankAreas: Array.isArray(parsed.landBankAreas) ? parsed.landBankAreas.map(normalizeStoredLandBankArea) : [],
       analytics: parsed.analytics ?? null
     };
   } catch {
@@ -97,6 +97,20 @@ export function resetLocalAssetData() {
   window.localStorage.removeItem(LOCAL_ASSET_DATA_KEY);
 }
 
+function normalizeStoredLandBankArea(area: LandBankArea): LandBankArea {
+  return {
+    ...area,
+    etapa: area.etapa ?? fallbackLandBankStage(area.status)
+  };
+}
+
+function fallbackLandBankStage(status: LandBankArea["status"]): LandBankArea["etapa"] {
+  if (status === "em_negociacao") return "negociacao";
+  if (status === "contrato_assinado") return "contrato";
+  if (status === "descartada") return "cancelado";
+  return "lead";
+}
+
 export async function fetchAssetData(accessToken?: string): Promise<AssetData | null> {
   if (typeof window !== "undefined") {
     const headers = await getAuthHeaders(accessToken);
@@ -118,7 +132,7 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
 
   const client = supabase as any;
 
-  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult, legalResult, landBankResult] = await Promise.all([
+  const [enterpriseResult, storeResult, tenantResult, contractResult, receivableResult, payableResult, delinquencyResult, fppResult, auditResult, commercialResult, vacancyResult, utilityResult, serviceOrderResult, documentResult, legalResult, landBankResult, landPipelineResult, landScoreResult] = await Promise.all([
     client
       .from("empreendimentos")
       .select("*")
@@ -198,7 +212,16 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
       .from("land_bank_areas")
       .select("*")
       .is("deleted_at", null)
-      .order("prioridade", { ascending: true })
+      .order("prioridade", { ascending: true }),
+    client
+      .from("land_bank_pipeline")
+      .select("*")
+      .is("deleted_at", null)
+      .order("posicao", { ascending: true }),
+    client
+      .from("land_bank_scores")
+      .select("*")
+      .order("created_at", { ascending: false })
   ]);
 
   if (enterpriseResult.error) throw enterpriseResult.error;
@@ -217,6 +240,11 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
   if (documentResult.error) throw documentResult.error;
   if (legalResult.error) throw legalResult.error;
   if (landBankResult.error && !isMissingRelationError(landBankResult.error)) throw landBankResult.error;
+  if (landPipelineResult.error && !isMissingRelationError(landPipelineResult.error)) throw landPipelineResult.error;
+  if (landScoreResult.error && !isMissingRelationError(landScoreResult.error)) throw landScoreResult.error;
+
+  const landPipelineByArea = new Map<string, any>((landPipelineResult.data ?? []).map((row: { area_id: string }) => [row.area_id, row]));
+  const landScoreByArea = latestLandScoresByArea(landScoreResult.data ?? []);
 
   return {
     enterprises: enterpriseResult.data.map(mapEnterpriseRow),
@@ -234,7 +262,7 @@ export async function fetchAssetData(accessToken?: string): Promise<AssetData | 
     serviceOrders: serviceOrderResult.data.map(mapServiceOrderRow),
     documentRecords: documentResult.data.map(mapDocumentRow),
     legalCases: legalResult.data.map(mapLegalCaseRow),
-    landBankAreas: (landBankResult.data ?? []).map(mapLandBankAreaRow),
+    landBankAreas: (landBankResult.data ?? []).map((row: any) => mapLandBankAreaRow(row, landPipelineByArea.get(row.id), landScoreByArea.get(row.id))),
     analytics: null
   };
 }
@@ -744,7 +772,29 @@ export async function saveLandBankArea(area: LandBankArea) {
     .single();
 
   if (error) throw error;
-  const mapped = mapLandBankAreaRow(data);
+  const pipelineResult = await client
+    .from("land_bank_pipeline")
+    .upsert({
+      area_id: data.id,
+      empreendimento_id: area.empreendimentoId,
+      etapa: area.etapa,
+      titulo: area.nome,
+      valor_potencial: area.valorPotencial || null,
+      proxima_acao: area.proximaAcao || null,
+      data_proxima_acao: area.dataProximaAcao || null,
+      metadata: {
+        responsavel: area.responsavel,
+        origem: area.origem,
+        classificacao: area.classificacao,
+        score: area.score
+      }
+    }, { onConflict: "area_id" })
+    .select()
+    .single();
+
+  if (pipelineResult.error && !isMissingRelationError(pipelineResult.error)) throw pipelineResult.error;
+  const mapped = mapLandBankAreaRow(data, pipelineResult.data ?? null);
+
   return {
     ...mapped,
     responsavel: area.responsavel,
