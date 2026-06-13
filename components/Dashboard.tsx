@@ -11,7 +11,7 @@ import {
   Plus,
   Search
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -92,21 +92,38 @@ export function Dashboard({
   onNavigate?: (module: string) => void;
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
+  const periodOptions = useMemo(
+    () => dashboardPeriodOptions(receivableRows, payableRows),
+    [payableRows, receivableRows]
+  );
+  const [selectedPeriod, setSelectedPeriod] = useState(() => periodOptions[0]?.value ?? "all");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [alertSearchOpen, setAlertSearchOpen] = useState(false);
   const [alertSearch, setAlertSearch] = useState("");
-  const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows, receivableRows, payableRows, analytics, commercialLeadRows), [analytics, commercialLeadRows, enterpriseId, enterpriseRows, payableRows, receivableRows, storeRows]);
-  const filteredOrders = filterByEnterprise(serviceOrderRows, enterpriseId);
+  const periodReceivables = filterRowsByCompetence(receivableRows, selectedPeriod);
+  const periodPayables = filterRowsByCompetence(payableRows, selectedPeriod);
+  const periodAnalytics = selectedPeriod === "all" ? analytics : analytics ? { ...analytics, financialKpis: null } : analytics;
+  const selectedPeriodLabel = selectedPeriod === "all" ? "Todos os periodos" : competenceShortLabel(selectedPeriod);
+  const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows, periodReceivables, periodPayables, periodAnalytics, commercialLeadRows), [commercialLeadRows, enterpriseId, enterpriseRows, periodAnalytics, periodPayables, periodReceivables, storeRows]);
+  const filteredOrders = filterByEnterprise(serviceOrderRows, enterpriseId).filter((order) => selectedPeriod === "all" || order.prazo.startsWith(selectedPeriod));
   const filteredAlerts = filterByEnterprise(buildContractAlerts(contractRows, storeRows, tenantRows), enterpriseId);
   const selectedEnterpriseNames = new Set(
     (enterpriseId === "all" ? enterpriseRows : enterpriseRows.filter((enterprise) => enterprise.id === enterpriseId)).map((enterprise) => enterprise.nome)
   );
-  const centralAlerts = (analytics?.centralAlerts ?? []).filter((alert) => enterpriseId === "all" || selectedEnterpriseNames.has(alert.empreendimento));
-  const charts = chartRows(enterpriseRows, storeRows, receivableRows, analytics);
+  const centralAlerts = (analytics?.centralAlerts ?? []).filter((alert) => (
+    (enterpriseId === "all" || selectedEnterpriseNames.has(alert.empreendimento)) &&
+    (selectedPeriod === "all" || alert.prazoData?.startsWith(selectedPeriod))
+  ));
+  const charts = chartRows(enterpriseRows, storeRows, periodReceivables, periodAnalytics);
   const normalizedAlertSearch = alertSearch.trim().toLowerCase();
   const visibleCentralAlerts = centralAlerts.filter((alert) => matchesSearch([alert.tipo, alert.empreendimento, alert.referencia, alert.detalhe, alert.prazoData, alert.risco, alert.severidade], normalizedAlertSearch));
   const visibleContractAlerts = filteredAlerts.filter((alert) => matchesSearch([alert.loja, alert.lojista, alert.risco, `${alert.meses} meses`], normalizedAlertSearch));
   const visibleOrders = filteredOrders.filter((order) => matchesSearch([serviceOrderLocation(order, storeRows), serviceOrderCategoryLabel(order.categoria), order.prazo, order.prioridade], normalizedAlertSearch));
+
+  useEffect(() => {
+    if (periodOptions.some((option) => option.value === selectedPeriod)) return;
+    setSelectedPeriod(periodOptions[0]?.value ?? "all");
+  }, [periodOptions, selectedPeriod]);
 
   return (
     <AppViewport>
@@ -133,10 +150,20 @@ export function Dashboard({
                 </option>
               ))}
             </select>
-            <button className="control inline-flex items-center gap-2" type="button" onClick={() => setFiltersOpen((current) => !current)}>
+            <div className="control inline-flex items-center gap-2">
               <CalendarDays className="h-4 w-4" />
-              Maio/2026
-            </button>
+              <label className="sr-only" htmlFor="dashboard-period">Competencia</label>
+              <select
+                id="dashboard-period"
+                className="bg-transparent text-sm font-medium outline-none"
+                value={selectedPeriod}
+                onChange={(event) => setSelectedPeriod(event.target.value)}
+              >
+                {periodOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
             <button className="control inline-flex items-center gap-2" type="button" onClick={() => setFiltersOpen((current) => !current)} aria-expanded={filtersOpen}>
               <Filter className="h-4 w-4" />
               Filtros
@@ -151,7 +178,7 @@ export function Dashboard({
           <div className="mt-3 grid gap-3 rounded-lg border border-border bg-white p-3 text-sm shadow-sm md:grid-cols-3">
             <div>
               <div className="metric-label">Periodo</div>
-              <div className="mt-1 font-semibold text-primary">Maio/2026</div>
+              <div className="mt-1 font-semibold text-primary">{selectedPeriodLabel}</div>
             </div>
             <div>
               <div className="metric-label">Empreendimento</div>
@@ -187,7 +214,7 @@ export function Dashboard({
             </div>
           </div>
           <div className="panel p-4">
-            <SectionTitle title="Financeiro" action="Exportar" onAction={() => exportDashboardCsv(metrics, enterpriseId, enterpriseRows)} />
+            <SectionTitle title="Financeiro" action="Exportar" onAction={() => exportDashboardCsv(metrics, enterpriseId, enterpriseRows, selectedPeriodLabel)} />
             <div className="grid gap-3 sm:grid-cols-2">
               <MetricCard label="Contas a receber" value={brl(metrics.receber)} />
               <MetricCard label="Contas vencidas" value={brl(metrics.vencidas)} tone="danger" />
@@ -337,11 +364,45 @@ function matchesSearch(values: Array<string | number | null | undefined>, search
   return values.some((value) => String(value ?? "").toLowerCase().includes(search));
 }
 
-function exportDashboardCsv(metrics: ReturnType<typeof getDashboardMetrics>, enterpriseId: string, enterpriseRows: Enterprise[]) {
+function dashboardPeriodOptions(
+  receivableRows: Receivable[] | undefined,
+  payableRows: Payable[] | undefined
+) {
+  const values = new Set<string>();
+
+  receivableRows?.forEach((row) => values.add(row.competencia));
+  payableRows?.forEach((row) => values.add(row.competencia));
+
+  const periods = Array.from(values)
+    .filter((value) => /^\d{4}-\d{2}$/.test(value))
+    .sort((a, b) => b.localeCompare(a))
+    .map((value) => ({ value, label: competenceShortLabel(value) }));
+
+  return periods.length ? [...periods, { value: "all", label: "Todos os periodos" }] : [{ value: "all", label: "Todos os periodos" }];
+}
+
+function filterRowsByCompetence<T extends { competencia: string }>(rows: T[] | undefined, period: string) {
+  if (!rows || period === "all") return rows;
+  return rows.filter((row) => row.competencia === period);
+}
+
+function competenceShortLabel(competencia: string) {
+  const [year, month] = competencia.split("-");
+  if (!year || !month) return competencia;
+
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(date);
+  const normalizedMonth = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+
+  return `${normalizedMonth}/${year}`;
+}
+
+function exportDashboardCsv(metrics: ReturnType<typeof getDashboardMetrics>, enterpriseId: string, enterpriseRows: Enterprise[], periodLabel: string) {
   const enterprise = enterpriseId === "all" ? "Todos os empreendimentos" : enterpriseRows.find((item) => item.id === enterpriseId)?.nome ?? "Selecionado";
   downloadCsv("nexa-os-dashboard-financeiro.csv", [
     {
       empreendimento: enterprise,
+      periodo: periodLabel,
       aluguel: metrics.aluguel,
       condominio: metrics.condominio,
       fundo_promocao: metrics.fundo,
