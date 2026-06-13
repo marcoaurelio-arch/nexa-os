@@ -55,11 +55,15 @@ function MetricCard({ label, value, helper, tone = "default" }: MetricCardProps)
   );
 }
 
-function SectionTitle({ title, action }: { title: string; action?: string }) {
+function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
   return (
     <div className="mb-3 flex items-center justify-between">
       <h2 className="text-base font-bold leading-6">{title}</h2>
-      {action ? <button className="text-xs font-semibold text-primary">{action}</button> : null}
+      {action ? (
+        <button className="text-xs font-semibold text-primary" type="button" onClick={onAction}>
+          {action}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -73,7 +77,8 @@ export function Dashboard({
   payableRows,
   serviceOrderRows = serviceOrders,
   commercialLeadRows,
-  analytics
+  analytics,
+  onNavigate
 }: {
   enterpriseRows?: Enterprise[];
   storeRows: Store[];
@@ -84,8 +89,12 @@ export function Dashboard({
   serviceOrderRows?: ServiceOrder[];
   commercialLeadRows?: CommercialLead[];
   analytics?: AssetAnalytics | null;
+  onNavigate?: (module: string) => void;
 }) {
   const [enterpriseId, setEnterpriseId] = useState("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [alertSearchOpen, setAlertSearchOpen] = useState(false);
+  const [alertSearch, setAlertSearch] = useState("");
   const metrics = useMemo(() => getDashboardMetrics(enterpriseId, enterpriseRows, storeRows, receivableRows, payableRows, analytics, commercialLeadRows), [analytics, commercialLeadRows, enterpriseId, enterpriseRows, payableRows, receivableRows, storeRows]);
   const filteredOrders = filterByEnterprise(serviceOrderRows, enterpriseId);
   const filteredAlerts = filterByEnterprise(buildContractAlerts(contractRows, storeRows, tenantRows), enterpriseId);
@@ -94,6 +103,10 @@ export function Dashboard({
   );
   const centralAlerts = (analytics?.centralAlerts ?? []).filter((alert) => enterpriseId === "all" || selectedEnterpriseNames.has(alert.empreendimento));
   const charts = chartRows(enterpriseRows, storeRows, receivableRows, analytics);
+  const normalizedAlertSearch = alertSearch.trim().toLowerCase();
+  const visibleCentralAlerts = centralAlerts.filter((alert) => matchesSearch([alert.tipo, alert.empreendimento, alert.referencia, alert.detalhe, alert.prazoData, alert.risco, alert.severidade], normalizedAlertSearch));
+  const visibleContractAlerts = filteredAlerts.filter((alert) => matchesSearch([alert.loja, alert.lojista, alert.risco, `${alert.meses} meses`], normalizedAlertSearch));
+  const visibleOrders = filteredOrders.filter((order) => matchesSearch([serviceOrderLocation(order, storeRows), serviceOrderCategoryLabel(order.categoria), order.prazo, order.prioridade], normalizedAlertSearch));
 
   return (
     <AppViewport>
@@ -120,20 +133,38 @@ export function Dashboard({
                 </option>
               ))}
             </select>
-            <button className="control inline-flex items-center gap-2">
+            <button className="control inline-flex items-center gap-2" type="button" onClick={() => setFiltersOpen((current) => !current)}>
               <CalendarDays className="h-4 w-4" />
               Maio/2026
             </button>
-            <button className="control inline-flex items-center gap-2">
+            <button className="control inline-flex items-center gap-2" type="button" onClick={() => setFiltersOpen((current) => !current)} aria-expanded={filtersOpen}>
               <Filter className="h-4 w-4" />
               Filtros
             </button>
-            <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground">
+            <button className="control inline-flex items-center gap-2 bg-primary text-primary-foreground" type="button" onClick={() => onNavigate?.("Comercial")}>
               <Plus className="h-4 w-4" />
               Novo registro
             </button>
           </div>
         </div>
+        {filtersOpen ? (
+          <div className="mt-3 grid gap-3 rounded-lg border border-border bg-white p-3 text-sm shadow-sm md:grid-cols-3">
+            <div>
+              <div className="metric-label">Periodo</div>
+              <div className="mt-1 font-semibold text-primary">Maio/2026</div>
+            </div>
+            <div>
+              <div className="metric-label">Empreendimento</div>
+              <div className="mt-1 font-semibold text-primary">
+                {enterpriseId === "all" ? "Todos os empreendimentos" : enterpriseRows.find((enterprise) => enterprise.id === enterpriseId)?.nome ?? "Selecionado"}
+              </div>
+            </div>
+            <div>
+              <div className="metric-label">Fonte</div>
+              <div className="mt-1 font-semibold text-primary">{analytics?.error ? "Supabase com alerta" : analytics ? "Supabase/views" : "Dados locais"}</div>
+            </div>
+          </div>
+        ) : null}
       </header>
 
       <div className="space-y-6 px-4 py-5 lg:px-7">
@@ -146,7 +177,7 @@ export function Dashboard({
 
         <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="panel p-4">
-            <SectionTitle title="Receita imobiliaria" action="Ver financeiro" />
+            <SectionTitle title="Receita imobiliaria" action="Ver financeiro" onAction={() => onNavigate?.("Financeiro")} />
             <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-5">
               <MetricCard label="Aluguel" value={brl(metrics.aluguel)} />
               <MetricCard label="Condominio" value={brl(metrics.condominio)} />
@@ -156,7 +187,7 @@ export function Dashboard({
             </div>
           </div>
           <div className="panel p-4">
-            <SectionTitle title="Financeiro" action="Exportar" />
+            <SectionTitle title="Financeiro" action="Exportar" onAction={() => exportDashboardCsv(metrics, enterpriseId, enterpriseRows)} />
             <div className="grid gap-3 sm:grid-cols-2">
               <MetricCard label="Contas a receber" value={brl(metrics.receber)} />
               <MetricCard label="Contas vencidas" value={brl(metrics.vencidas)} tone="danger" />
@@ -168,7 +199,7 @@ export function Dashboard({
 
         <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
           <div className="panel min-h-[330px] p-4">
-            <SectionTitle title="Receita por empreendimento" action="Detalhar" />
+            <SectionTitle title="Receita por empreendimento" action="Detalhar" onAction={() => onNavigate?.("BI")} />
             <div className="h-[265px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={charts}>
@@ -183,7 +214,7 @@ export function Dashboard({
           </div>
 
           <div className="panel min-h-[330px] p-4">
-            <SectionTitle title="Ocupacao x vacancia" action="Ver ranking" />
+            <SectionTitle title="Ocupacao x vacancia" action="Ver ranking" onAction={() => onNavigate?.("Vacancia")} />
             <div className="h-[265px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={charts}>
@@ -218,16 +249,28 @@ export function Dashboard({
                 <p className="text-xs text-muted-foreground">Contratos, inadimplencia, OS e divergencias</p>
               </div>
               <div className="flex gap-2">
-                <button className="control inline-flex items-center gap-2">
+                <button className="control inline-flex items-center gap-2" type="button" onClick={() => setAlertSearchOpen((current) => !current)} aria-expanded={alertSearchOpen}>
                   <Search className="h-4 w-4" />
                   Buscar
                 </button>
-                <button className="control inline-flex items-center gap-2">
+                <button className="control inline-flex items-center gap-2" type="button" onClick={() => exportAlertsCsv(visibleCentralAlerts, visibleContractAlerts, visibleOrders, storeRows)}>
                   <Download className="h-4 w-4" />
                   CSV
                 </button>
               </div>
             </div>
+            {alertSearchOpen ? (
+              <div className="border-b border-border p-4">
+                <label className="sr-only" htmlFor="alert-search">Buscar alertas</label>
+                <input
+                  id="alert-search"
+                  className="control w-full"
+                  value={alertSearch}
+                  onChange={(event) => setAlertSearch(event.target.value)}
+                  placeholder="Buscar por tipo, ativo, referencia ou risco"
+                />
+              </div>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[620px] border-collapse text-left text-sm">
                 <thead className="bg-muted text-xs uppercase text-muted-foreground">
@@ -240,7 +283,7 @@ export function Dashboard({
                   </tr>
                 </thead>
                 <tbody>
-                  {centralAlerts.length ? centralAlerts.slice(0, 8).map((alert) => <CentralAlertRow key={`${alert.tipo}-${alert.referencia}-${alert.prazoData}`} alert={alert} />) : filteredAlerts.map((alert) => (
+                  {centralAlerts.length ? visibleCentralAlerts.slice(0, 8).map((alert) => <CentralAlertRow key={`${alert.tipo}-${alert.referencia}-${alert.prazoData}`} alert={alert} />) : visibleContractAlerts.map((alert) => (
                     <tr key={alert.id} className="border-t border-border">
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-2 font-medium">
@@ -256,7 +299,7 @@ export function Dashboard({
                       </td>
                     </tr>
                   ))}
-                  {filteredOrders.slice(0, 3).map((order) => (
+                  {visibleOrders.slice(0, 3).map((order) => (
                     <tr key={order.id} className="border-t border-border">
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-2 font-medium">
@@ -272,6 +315,13 @@ export function Dashboard({
                       </td>
                     </tr>
                   ))}
+                  {((centralAlerts.length ? visibleCentralAlerts.length : visibleContractAlerts.length) + visibleOrders.length) === 0 ? (
+                    <tr className="border-t border-border">
+                      <td className="px-4 py-6 text-sm text-muted-foreground" colSpan={5}>
+                        Nenhum alerta encontrado.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -280,6 +330,79 @@ export function Dashboard({
       </div>
     </AppViewport>
   );
+}
+
+function matchesSearch(values: Array<string | number | null | undefined>, search: string) {
+  if (!search) return true;
+  return values.some((value) => String(value ?? "").toLowerCase().includes(search));
+}
+
+function exportDashboardCsv(metrics: ReturnType<typeof getDashboardMetrics>, enterpriseId: string, enterpriseRows: Enterprise[]) {
+  const enterprise = enterpriseId === "all" ? "Todos os empreendimentos" : enterpriseRows.find((item) => item.id === enterpriseId)?.nome ?? "Selecionado";
+  downloadCsv("nexa-os-dashboard-financeiro.csv", [
+    {
+      empreendimento: enterprise,
+      aluguel: metrics.aluguel,
+      condominio: metrics.condominio,
+      fundo_promocao: metrics.fundo,
+      fpp: metrics.fpp,
+      receita_total: metrics.receitaTotal,
+      contas_a_receber: metrics.receber,
+      contas_vencidas: metrics.vencidas,
+      contas_a_pagar: metrics.pagar,
+      saldo_operacional: metrics.saldoOperacional
+    }
+  ]);
+}
+
+function exportAlertsCsv(
+  centralAlerts: CentralAlertView[],
+  contractAlerts: ReturnType<typeof buildContractAlerts>,
+  orders: ServiceOrder[],
+  stores: Store[]
+) {
+  const centralRows = centralAlerts.map((alert) => ({
+    tipo: alert.tipo || "Alerta",
+    ativo: alert.empreendimento,
+    referencia: alert.referencia || alert.detalhe,
+    prazo: alert.dias ? `${alert.dias} dias` : alert.prazoData,
+    risco: alert.risco || alert.severidade
+  }));
+  const contractRows = contractAlerts.map((alert) => ({
+    tipo: "Contrato",
+    ativo: alert.loja,
+    referencia: alert.lojista,
+    prazo: `${alert.meses} meses`,
+    risco: alert.risco
+  }));
+  const orderRows = orders.slice(0, 20).map((order) => ({
+    tipo: "OS",
+    ativo: serviceOrderLocation(order, stores),
+    referencia: serviceOrderCategoryLabel(order.categoria),
+    prazo: order.prazo,
+    risco: order.prioridade
+  }));
+
+  downloadCsv("nexa-os-central-alertas.csv", [...centralRows, ...contractRows, ...orderRows]);
+}
+
+function downloadCsv(filename: string, rows: Array<Record<string, string | number>>) {
+  if (!rows.length) return;
+
+  const headers = Object.keys(rows[0]);
+  const csv = [headers.join(";"), ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(";"))].join("\n");
+  const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value: string | number | undefined) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
 function RiskBadge({ risk }: { risk: "baixo" | "medio" | "alto" }) {

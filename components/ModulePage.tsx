@@ -928,6 +928,9 @@ function Shell({
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
   return (
     <div>
       <header className="border-b border-border bg-background/95 px-4 py-4 lg:px-7">
@@ -937,13 +940,25 @@ function Shell({
             <p className="text-sm text-muted-foreground">{description}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="control inline-flex items-center gap-2">
+            <button className="control inline-flex items-center gap-2" type="button" onClick={() => setSearchOpen((current) => !current)} aria-expanded={searchOpen}>
               <Search className="h-4 w-4" />
               Buscar
             </button>
             {action}
           </div>
         </div>
+        {searchOpen ? (
+          <div className="mt-3">
+            <label className="sr-only" htmlFor={`${title}-module-search`}>Buscar no modulo</label>
+            <input
+              id={`${title}-module-search`}
+              className="control w-full max-w-xl"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder={`Buscar em ${title}`}
+            />
+          </div>
+        ) : null}
       </header>
       <div className="space-y-5 px-4 py-5 lg:px-7">{children}</div>
     </div>

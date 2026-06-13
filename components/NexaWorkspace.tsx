@@ -81,6 +81,16 @@ export function NexaWorkspace({
   const [syncError, setSyncError] = useState<string | null>(initialSyncError);
   const [storageReady, setStorageReady] = useState(false);
 
+  function handleModuleChange(module: string) {
+    setActiveModule(module);
+
+    if (typeof window === "undefined") return;
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("module", module);
+    window.history.pushState({}, "", nextUrl.toString());
+  }
+
   useEffect(() => {
     const requestedModule = new URLSearchParams(window.location.search).get("module");
     const moduleExists = navItems.some((item) => item.label === requestedModule);
@@ -201,7 +211,7 @@ export function NexaWorkspace({
       {(user, signOut) => (
         <AppShell
           activeModule={activeModule}
-          onModuleChange={setActiveModule}
+          onModuleChange={handleModuleChange}
           userProfileId={user.authenticated ? user.perfil : undefined}
           userName={user.nome}
           userEmail={user.email}
@@ -218,6 +228,7 @@ export function NexaWorkspace({
               serviceOrderRows={serviceOrderRows}
               commercialLeadRows={commercialLeadRows}
               analytics={analytics}
+              onNavigate={handleModuleChange}
             />
           ) : (
             <ModulePage
