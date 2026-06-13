@@ -306,6 +306,7 @@ export function mapLandBankAreaRow(row: LandBankAreaRow): LandBankArea {
     viavelStripMall: Boolean(row.viavel_strip_mall),
     viavelSaleLeaseback: Boolean(row.viavel_sale_leaseback),
     prioridade: row.prioridade as LandBankArea["prioridade"],
+    etapa: "lead",
     origem: row.origem ?? "",
     responsavel: "Desenvolvimento",
     proximaAcao: "Atualizar pipeline da area",

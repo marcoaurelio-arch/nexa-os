@@ -245,6 +245,16 @@ export type LegalCase = {
 
 export type LandBankAreaStatus = "disponivel" | "em_negociacao" | "contrato_assinado" | "descartada";
 export type LandBankPriority = "alta" | "media" | "baixa";
+export type LandBankPipelineStage =
+  | "lead"
+  | "contato_realizado"
+  | "visita"
+  | "estudo"
+  | "proposta"
+  | "negociacao"
+  | "contrato"
+  | "implantado"
+  | "cancelado";
 
 export type LandBankArea = {
   id: string;
@@ -268,6 +278,7 @@ export type LandBankArea = {
   viavelStripMall: boolean;
   viavelSaleLeaseback: boolean;
   prioridade: LandBankPriority;
+  etapa: LandBankPipelineStage;
   origem: string;
   responsavel: string;
   proximaAcao: string;

@@ -26,6 +26,7 @@ import type {
   FppRecord,
   LandBankArea,
   LandBankAreaStatus,
+  LandBankPipelineStage,
   LandBankPriority,
   LegalCase,
   LegalCaseStatus,
@@ -265,8 +266,21 @@ const landBankPriorityLabel: Record<LandBankPriority, string> = {
   baixa: "Baixa"
 };
 
+const landBankPipelineStageLabel: Record<LandBankPipelineStage, string> = {
+  lead: "Lead",
+  contato_realizado: "Contato realizado",
+  visita: "Visita",
+  estudo: "Estudo",
+  proposta: "Proposta",
+  negociacao: "Negociacao",
+  contrato: "Contrato",
+  implantado: "Implantado",
+  cancelado: "Cancelado"
+};
+
 const landBankStatuses: LandBankAreaStatus[] = ["disponivel", "em_negociacao", "contrato_assinado", "descartada"];
 const landBankPriorities: LandBankPriority[] = ["alta", "media", "baixa"];
+const landBankPipelineStages: LandBankPipelineStage[] = ["lead", "contato_realizado", "visita", "estudo", "proposta", "negociacao", "contrato", "implantado", "cancelado"];
 
 const enterpriseSchema = z.object({
   id: z.string().min(1),
@@ -501,6 +515,7 @@ const landBankAreaSchema = z.object({
   viavelStripMall: z.coerce.boolean(),
   viavelSaleLeaseback: z.coerce.boolean(),
   prioridade: z.enum(["alta", "media", "baixa"]),
+  etapa: z.enum(["lead", "contato_realizado", "visita", "estudo", "proposta", "negociacao", "contrato", "implantado", "cancelado"]),
   origem: z.string().trim(),
   responsavel: z.string().trim().min(2, "Informe o responsavel."),
   proximaAcao: z.string().trim().min(2, "Informe a proxima acao."),
@@ -3560,11 +3575,16 @@ function LandBankPage({
     .sort((a, b) => a.dataProximaAcao.localeCompare(b.dataProximaAcao));
   const citySummaries = summarizeLandBankBy(filteredAreas, (area) => `${area.cidade} - ${area.estado}`).slice(0, 5);
   const ownerSummaries = summarizeLandBankBy(filteredAreas, (area) => area.responsavel || "Sem responsavel").slice(0, 5);
+  const stageSummaries = summarizeLandBankBy(filteredAreas, (area) => landBankPipelineStageLabel[area.etapa]).slice(0, 6);
   const decisionRows = sortedAreas.map((area) => ({
     area,
     decision: landBankDecision(area, overdueFollowUps.some((item) => item.id === area.id))
   }));
+  const committeeGroups = landBankCommitteeGroups(decisionRows);
+  const topDecisionArea = decisionRows[0]?.area ?? null;
+  const diligenceItems = topDecisionArea ? landBankDiligenceChecklist(topDecisionArea) : [];
   const csvExport = landBankCsv(sortedAreas, enterprises);
+  const committeeAgenda = landBankCommitteeAgenda(decisionRows, enterprises);
   const executiveSummary = [
     `Areas filtradas: ${numberPt(filteredAreas.length)}`,
     `Potencial mensal: ${brl(totalPotential)}`,
@@ -3606,6 +3626,10 @@ function LandBankPage({
           <button className="control inline-flex items-center gap-2" onClick={() => void navigator.clipboard?.writeText(csvExport)}>
             <Copy className="h-4 w-4" />
             Copiar CSV
+          </button>
+          <button className="control inline-flex items-center gap-2" onClick={() => void navigator.clipboard?.writeText(committeeAgenda)}>
+            <Copy className="h-4 w-4" />
+            Copiar pauta
           </button>
           <NewButton onClick={() => setEditingArea(emptyLandBankArea(firstEnterpriseId))} />
         </div>
@@ -3649,13 +3673,51 @@ function LandBankPage({
               );
             })}
           </div>
+          <div className="panel p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="font-bold uppercase">Comite de decisao</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Carteira agrupada pela proxima decisao recomendada.</p>
+              </div>
+              <Badge>{numberPt(decisionRows.length)} areas</Badge>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+              {committeeGroups.map((group) => (
+                <div key={group.label} className="rounded-lg border border-border p-3">
+                  <div className="metric-label">{group.label}</div>
+                  <div className={`mt-2 text-xl font-bold ${group.tone === "success" ? "text-success" : group.tone === "danger" ? "text-danger" : "text-primary"}`}>
+                    {numberPt(group.count)}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{brl(group.potential)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="panel p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="font-bold uppercase">Pipeline de areas</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Distribuicao por etapa comercial e desenvolvimento.</p>
+              </div>
+              <Badge>{numberPt(filteredAreas.length)} registros</Badge>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+              {stageSummaries.map((summary) => (
+                <div key={summary.label} className="rounded-lg border border-border p-3">
+                  <div className="metric-label">{summary.label}</div>
+                  <div className="mt-2 text-xl font-bold text-primary">{numberPt(summary.count)}</div>
+                  <p className="mt-1 text-xs text-muted-foreground">{brl(summary.potential)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
           <DataTable
-            columns={["Codigo", "Area", "Empreendimento", "Cidade", "Status", "Score", "Potencial", "Mapa", "Acoes"]}
+            columns={["Codigo", "Area", "Empreendimento", "Etapa", "Status", "Score", "Potencial", "Mapa", "Acoes"]}
             rows={sortedAreas.map((area) => [
                 area.codigo,
                 area.nome,
                 enterpriseLabel(enterprises, area.empreendimentoId),
-                `${area.cidade} - ${area.estado}`,
+                landBankPipelineStageLabel[area.etapa],
                 landBankStatusLabel[area.status],
                 `${numberPt(area.score)}/100`,
                 brl(area.valorPotencial),
@@ -3687,6 +3749,21 @@ function LandBankPage({
               ))}
               {decisionRows.length === 0 ? <p className="text-sm text-muted-foreground">Sem areas no filtro para recomendar.</p> : null}
             </div>
+          </div>
+          <div className="panel p-5">
+            <h2 className="font-bold uppercase">Checklist diligencia</h2>
+            {topDecisionArea ? (
+              <>
+                <p className="mt-1 text-sm text-muted-foreground">{topDecisionArea.codigo} - {topDecisionArea.nome}</p>
+                <div className="mt-4 space-y-2">
+                  {diligenceItems.map((item) => (
+                    <div key={item} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">{item}</div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">Sem area prioritaria no filtro.</p>
+            )}
           </div>
           <div className="panel p-5">
             <h2 className="font-bold uppercase">Follow-ups</h2>
@@ -5172,6 +5249,13 @@ function LandBankAreaForm({
             optionLabels={landBankPriorityLabel}
             {...register("prioridade")}
           />
+          <FormSelect
+            label="Etapa pipeline"
+            error={errors.etapa?.message}
+            options={landBankPipelineStages}
+            optionLabels={landBankPipelineStageLabel}
+            {...register("etapa")}
+          />
           <FormInput label="Score" type="number" error={errors.score?.message} {...register("score")} />
           <FormInput label="Classificacao" error={errors.classificacao?.message} {...register("classificacao")} />
           <FormInput label="Origem" error={errors.origem?.message} {...register("origem")} />
@@ -6011,6 +6095,63 @@ function landBankDecision(area: LandBankArea, followUpOverdue: boolean): { label
   };
 }
 
+function landBankCommitteeGroups(rows: Array<{ area: LandBankArea; decision: { label: string; tone: "success" | "default" | "danger" } }>) {
+  const order = ["Comite", "Cobrar hoje", "Diligencia", "Revisar", "Implantar", "Arquivar"];
+  const groups = new Map<string, { label: string; count: number; potential: number; tone: "success" | "default" | "danger" }>();
+
+  for (const { area, decision } of rows) {
+    const current = groups.get(decision.label) ?? {
+      label: decision.label,
+      count: 0,
+      potential: 0,
+      tone: decision.tone
+    };
+    current.count += 1;
+    current.potential += area.valorPotencial;
+    groups.set(decision.label, current);
+  }
+
+  return order.map((label) => groups.get(label) ?? { label, count: 0, potential: 0, tone: "default" as const });
+}
+
+function landBankDiligenceChecklist(area: LandBankArea) {
+  const items = [
+    "Validar matricula, propriedade e eventuais onus reais.",
+    "Confirmar zoneamento, coeficiente, taxa de ocupacao e recuos.",
+    "Checar acesso, testada, visibilidade e restricoes viarias.",
+    "Mapear concorrencia, polos geradores e operadores ancora no entorno.",
+    "Atualizar valor pedido, valor por m2 e potencial de locacao.",
+    "Registrar fotos, videos, croqui e documentos na pasta oficial."
+  ];
+
+  if (area.viavelBts) items.push("Preparar premissas BTS: operador alvo, prazo, capex e aluguel estimado.");
+  if (area.viavelStripMall) items.push("Preparar estudo preliminar de mix para strip mall e vagas.");
+  if (area.score < 70) items.push("Revisar score antes de levar para proposta formal.");
+
+  return items;
+}
+
+function landBankCommitteeAgenda(rows: Array<{ area: LandBankArea; decision: { label: string; detail: string } }>, enterprises: Enterprise[]) {
+  const selectedRows = rows.slice(0, 8);
+
+  return [
+    "Pauta - Comite Banco de Areas Nexa Malls",
+    `Areas em pauta: ${numberPt(selectedRows.length)}`,
+    "",
+    ...selectedRows.flatMap(({ area, decision }, index) => [
+      `${index + 1}. ${area.codigo} - ${area.nome}`,
+      `Empreendimento: ${enterpriseLabel(enterprises, area.empreendimentoId)}`,
+      `Cidade: ${area.cidade}/${area.estado}`,
+      `Decisao sugerida: ${decision.label}`,
+      `Motivo: ${decision.detail}`,
+      `Score: ${numberPt(area.score)}/100 | Potencial mensal: ${brl(area.valorPotencial)}`,
+      `Proxima acao: ${area.proximaAcao} (${area.dataProximaAcao || "sem data"})`,
+      `Mapa: ${landBankMapUrl(area)}`,
+      ""
+    ])
+  ].join("\n");
+}
+
 function landBankMapUrl(area: LandBankArea) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${area.latitude},${area.longitude}`)}`;
 }
@@ -6233,6 +6374,7 @@ function emptyLandBankArea(empreendimentoId: string): LandBankArea {
     viavelStripMall: true,
     viavelSaleLeaseback: false,
     prioridade: "media",
+    etapa: "lead",
     origem: "Prospeccao ativa",
     responsavel: "Desenvolvimento",
     proximaAcao: "Completar dados cadastrais e validar vocacao",

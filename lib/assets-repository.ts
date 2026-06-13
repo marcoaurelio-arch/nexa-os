@@ -751,7 +751,8 @@ export async function saveLandBankArea(area: LandBankArea) {
     proximaAcao: area.proximaAcao,
     dataProximaAcao: area.dataProximaAcao,
     score: area.score,
-    classificacao: area.classificacao
+    classificacao: area.classificacao,
+    etapa: area.etapa
   };
 }
 
