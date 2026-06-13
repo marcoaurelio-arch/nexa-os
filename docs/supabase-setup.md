@@ -9,7 +9,7 @@ Preparar o Supabase/PostgreSQL como fonte oficial do Nexa OS, substituindo o moc
 1. Criar projeto no Supabase.
 2. Copiar `.env.example` para `.env.local`.
 3. Preencher `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-4. Aplicar as migrations em `supabase/migrations` na ordem `001` a `009`.
+4. Aplicar as migrations em `supabase/migrations` na ordem `001` a `012`.
 5. Reiniciar o servidor Next.js.
 6. Abrir `Configuracoes` e confirmar que a fonte de dados mudou para `Supabase`.
 
@@ -49,6 +49,30 @@ Quando `SUPABASE_ACCESS_TOKEN` e `SUPABASE_PROJECT_REF` estiverem definidos no a
 npm run supabase:apply
 ```
 
+Para aplicar apenas o pacote incremental do Banco de Terrenos em ambiente que ja recebeu `001` a `010`:
+
+```bash
+npm run supabase:apply -- --from=011
+```
+
+Para conferir a selecao sem enviar SQL ao Supabase:
+
+```bash
+npm run supabase:apply -- --from=011 --dry-run
+```
+
+Opcionalmente, o mesmo filtro pode ser definido por ambiente:
+
+```bash
+SUPABASE_MIGRATION_FROM=011 npm run supabase:apply
+```
+
+## Exposicao Data API
+
+Projetos Supabase novos podem nao expor tabelas publicas novas automaticamente na Data API. Por isso, a migration `012_land_bank_data_api_grants.sql` concede acesso explicito apenas para `authenticated` e `service_role` nas tabelas do Banco de Terrenos.
+
+Nao liberar `anon` para as tabelas `land_bank_*`. A protecao por empreendimento continua sendo feita por RLS na migration `011_nexa_land_bank.sql`.
+
 ## Ordem das migrations
 
 - `001_nexa_os_core.sql`
@@ -60,6 +84,9 @@ npm run supabase:apply
 - `007_documents_management.sql`
 - `008_legal_management.sql`
 - `009_reporting_access_notion.sql`
+- `010_notion_workspace_binding.sql`
+- `011_nexa_land_bank.sql`
+- `012_land_bank_data_api_grants.sql`
 
 ## Observacao
 
