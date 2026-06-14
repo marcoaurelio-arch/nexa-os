@@ -67,6 +67,29 @@ Opcionalmente, o mesmo filtro pode ser definido por ambiente:
 SUPABASE_MIGRATION_FROM=011 npm run supabase:apply
 ```
 
+## Verificacao pos-aplicacao do Banco de Terrenos
+
+Depois de aplicar `011` e `012`, valide se a Data API consegue consultar as tabelas principais do Banco de Terrenos com a chave server-side:
+
+```bash
+npm run supabase:verify:land-bank
+```
+
+Esse comando exige:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+Para validar tambem RLS com um usuario real, defina um JWT de usuario autenticado vinculado a pelo menos um empreendimento e rode:
+
+```bash
+SUPABASE_USER_JWT=<jwt-do-usuario> npm run supabase:verify:land-bank -- --require-user-jwt
+```
+
+O script nao imprime tokens. Ele apenas informa quais tabelas `land_bank_*` aceitaram consulta pela Data API.
+
 ## Exposicao Data API
 
 Projetos Supabase novos podem nao expor tabelas publicas novas automaticamente na Data API. Por isso, a migration `012_land_bank_data_api_grants.sql` concede acesso explicito apenas para `authenticated` e `service_role` nas tabelas do Banco de Terrenos.
