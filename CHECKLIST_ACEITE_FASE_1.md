@@ -63,6 +63,7 @@
 
 - [x] Migration `011_nexa_land_bank.sql` criada para Banco de Terrenos.
 - [x] Migration `012_land_bank_data_api_grants.sql` criada para grants explicitos da Data API sem liberar `anon`.
+- [x] Verificador pos-aplicacao `npm run supabase:verify:land-bank` criado.
 - [ ] Migrations `011` e `012` aplicadas no projeto Supabase real.
 - [ ] Acesso Data API validado para `land_bank_areas`, `land_bank_pipeline`, `land_bank_scores`, `land_bank_proprietarios` e `land_bank_area_proprietarios`.
 - [ ] RLS validado com usuario autenticado vinculado a empreendimento.

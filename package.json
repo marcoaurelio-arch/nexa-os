@@ -12,7 +12,8 @@
     "env:check:strict": "node scripts/check-production-env.mjs --strict",
     "n8n:homologate": "node scripts/homologate-n8n-workflows.mjs",
     "supabase:check": "node scripts/check-supabase-setup.mjs",
-    "supabase:apply": "node scripts/apply-supabase-migrations.mjs"
+    "supabase:apply": "node scripts/apply-supabase-migrations.mjs",
+    "supabase:verify:land-bank": "node scripts/verify-land-bank-supabase.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
